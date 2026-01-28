@@ -3,6 +3,7 @@ package stockmarket
 import (
 	"encoding/json"
 	"estudocoin/internal/database"
+	"estudocoin/pkg/config"
 	"log"
 	"os"
 	"time"
@@ -56,7 +57,7 @@ func checkMarket(s *discordgo.Session) {
 			continue
 		}
 
-		// Update price in DB
+		// Update price in DB (store real price)
 		err = database.SetStockPriceDB(company.Ticker, data.Price)
 		if err != nil {
 			log.Printf("Error updating price for %s: %v", company.Ticker, err)
@@ -70,8 +71,11 @@ func checkMarket(s *discordgo.Session) {
 		}
 
 		if data.Price > oldPrice {
-			diff := data.Price - oldPrice
-			
+			// Calculate diff using adjusted prices for payouts
+			adjustedOldPrice := config.Economy.GetAdjustedStockPrice(oldPrice)
+			adjustedNewPrice := config.Economy.GetAdjustedStockPrice(data.Price)
+			diff := adjustedNewPrice - adjustedOldPrice
+
 			// Distribute rewards
 			investments, err := database.GetAllInvestmentsByTicker(company.Ticker)
 			if err != nil {
@@ -80,14 +84,13 @@ func checkMarket(s *discordgo.Session) {
 			}
 
 			for _, inv := range investments {
-				// Payout = Shares * PriceDiff
+				// Payout = Shares * Adjusted PriceDiff
 				payout := int(inv.Shares * diff)
 				if payout > 0 {
 					err := database.AddCoins(inv.UserID, payout)
 					if err != nil {
 						log.Printf("Failed to pay dividends to %s: %v", inv.UserID, err)
 					}
-					// Optional: Notify user? Maybe too spammy.
 				}
 			}
 			log.Printf("Distributed dividends for %s (Growth: %.2f)", company.Ticker, diff)

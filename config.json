@@ -4,5 +4,7 @@
   "currency_symbol": "EC",
   "enable_api": true,
   "api_port": ":8080",
-  "allowed_channels": []
+  "allowed_channels": 
+["1466169270269640900",
+"1333491369204781197"]
 }
