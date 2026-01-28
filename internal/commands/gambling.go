@@ -29,7 +29,9 @@ func CmdBet(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
 		games.StartAviatorText(s, m, amount)
 	case "cups":
 		games.StartCupGameText(s, m, amount)
+	case "blackjack":
+		games.StartBlackjackTextMessage(s, m, amount)
 	default:
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Game not found. Try: `aviator`, `cups`"))
+		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Game not found. Try: `aviator`, `cups`, `blackjack`"))
 	}
 }

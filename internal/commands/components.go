@@ -18,5 +18,7 @@ func ComponentsHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		games.HandleButton(s, i)
 	} else if strings.HasPrefix(customID, "cup_") {
 		games.HandleCupInteraction(s, i)
+	} else if strings.HasPrefix(customID, "blackjack_") {
+		games.HandleBlackjackInteraction(s, i)
 	}
 }

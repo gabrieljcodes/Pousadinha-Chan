@@ -204,6 +204,20 @@ var SlashCommands = []*discordgo.ApplicationCommand{
 					},
 				},
 			},
+			{
+				Name:        "blackjack",
+				Description: "Play a game of Blackjack",
+				Type:        discordgo.ApplicationCommandOptionSubCommand,
+				Options: []*discordgo.ApplicationCommandOption{
+					{
+						Type:        discordgo.ApplicationCommandOptionInteger,
+						Name:        "amount",
+						Description: "Amount to bet (Min 100)",
+						Required:    true,
+						MinValue:    &minAmount,
+					},
+				},
+			},
 		},
 	},
 }

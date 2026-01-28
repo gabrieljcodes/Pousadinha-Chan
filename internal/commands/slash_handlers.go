@@ -60,6 +60,9 @@ func handleSlashBet(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	case "cups":
 		amount := int(options[0].Options[0].IntValue())
 		games.StartCupGameInteraction(s, i, amount)
+	case "blackjack":
+		amount := int(options[0].Options[0].IntValue())
+		games.StartBlackjackInteraction(s, i, amount)
 	}
 }
 
