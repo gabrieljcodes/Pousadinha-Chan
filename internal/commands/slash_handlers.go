@@ -48,6 +48,8 @@ func SlashHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		HandleSlashWebhook(s, i)
 	case "bet":
 		handleSlashBet(s, i)
+	case "blackjack":
+		handleSlashBlackjack(s, i)
 	}
 }
 
@@ -63,6 +65,13 @@ func handleSlashBet(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		amount := int(options[0].Options[0].IntValue())
 		games.StartCupGameInteraction(s, i, amount)
 	}
+}
+
+func handleSlashBlackjack(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	options := i.ApplicationCommandData().Options
+	bet := int(options[0].IntValue())
+	
+	games.StartBlackjackGame(s, i, bet)
 }
 
 func handleSlashDaily(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -146,21 +155,16 @@ func handleSlashPay(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 func handleSlashShop(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	sym := config.Bot.CurrencySymbol
-	desc := fmt.Sprintf(`
-**Available Items:**
-
-1. **Change Own Nickname**
-   Cost: %d %s
-   Command: `+"`/buy nickname new_name:...`"`+"`
-
-2. **Change Other's Nickname**
-   Cost: %d %s
-   Command: `+"`/buy rename user:... new_name:...`"`+"`
-
-3. **Mute/Timeout User**
-   Cost: %d %s per minute
-   Command: `+"`/buy mute user:... minutes:...`"`+"`
-`,
+	desc := fmt.Sprintf("**Available Items:**\n\n"+
+		"1. **Change Own Nickname**\n"+
+		"   Cost: %d %s\n"+
+		"   Command: `/buy nickname new_name:...`\n\n"+
+		"2. **Change Other's Nickname**\n"+
+		"   Cost: %d %s\n"+
+		"   Command: `/buy rename user:... new_name:...`\n\n"+
+		"3. **Mute/Timeout User**\n"+
+		"   Cost: %d %s per minute\n"+
+		"   Command: `/buy mute user:... minutes:...`",
 		config.Economy.CostNicknameSelf, sym, config.Economy.CostNicknameOther, sym, config.Economy.CostPerMinuteMute, sym)
 
 	respondEmbed(s, i, utils.GoldEmbed(fmt.Sprintf("🛒 %s Shop", config.Bot.BotName), desc))

@@ -32,8 +32,8 @@ func GetHelpEmbed(s *discordgo.Session) *discordgo.MessageEmbed {
 	embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
 		Name: "🛒 Shop",
 		Value: fmt.Sprintf("`!shop` / `/shop`\nView available items.\n\n"+
-				"`!buy nickname <name>`\nChange your own nickname (**%d %s**).\n\n"+
-				"`!buy rename @user <name>`\nChange someone else's nickname (**%d %s**).\n\n"+
+				"`!buy nickname <n>`\nChange your own nickname (**%d %s**).\n\n"+
+				"`!buy rename @user <n>`\nChange someone else's nickname (**%d %s**).\n\n"+
 				"`!buy mute @user <min>`\nTimeout a user for X minutes (**%d %s/min**).\n*Note: Mutes are accumulative!*",
 				config.Economy.CostNicknameSelf, sym, config.Economy.CostNicknameOther, sym, config.Economy.CostPerMinuteMute, sym),
 		Inline: false,
@@ -43,7 +43,8 @@ func GetHelpEmbed(s *discordgo.Session) *discordgo.MessageEmbed {
 	embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
 		Name: "🎲 Gambling",
 		Value: "`!bet aviator <amount>` / `/bet aviator`\nPlay the Aviator crash game. The multiplier rises every second.\n*Watch out for turbulence! Cash out before it crashes.*\n\n" +
-			"`!bet cups <amount>` / `/bet cups`\nFind the hidden coin under 6 cups.\n*Win 2x -> Double again or Cash Out.*",
+			"`!bet cups <amount>` / `/bet cups`\nFind the hidden coin under 6 cups.\n*Win 2x -> Double again or Cash Out.*\n\n" +
+			"`!bet blackjack <amount>` / `/blackjack <bet>`\nPlay classic Blackjack against the dealer.\n*Hit, Stand, Double Down, or take Insurance. Blackjack pays 3:2!*",
 		Inline: false,
 	})
 
