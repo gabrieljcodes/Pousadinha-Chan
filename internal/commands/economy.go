@@ -81,3 +81,30 @@ func CmdPay(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
 
 	s.ChannelMessageSendEmbed(m.ChannelID, utils.SuccessEmbed("Transfer Successful", fmt.Sprintf("You sent **%d %s** to **%s**.", amount, config.Bot.CurrencyName, toUser.Username)))
 }
+
+func CmdLeaderboard(s *discordgo.Session, m *discordgo.MessageCreate) {
+	users, err := database.GetLeaderboard(10)
+	if err != nil {
+		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Could not retrieve leaderboard."))
+		return
+	}
+
+	if len(users) == 0 {
+		s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("Leaderboard", "No users found."))
+		return
+	}
+
+	var description string
+	for i, u := range users {
+		// Try to get user from cache or API to display name
+		discordUser, err := s.User(u.ID)
+		name := u.ID
+		if err == nil {
+			name = discordUser.Username
+		}
+		
+		description += fmt.Sprintf("**%d.** %s - **%d %s**\n", i+1, name, u.Balance, config.Bot.CurrencyName)
+	}
+
+	s.ChannelMessageSendEmbed(m.ChannelID, utils.GoldEmbed("Richest Users", description))
+}

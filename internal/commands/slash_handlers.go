@@ -34,6 +34,8 @@ func SlashHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		handleSlashDaily(s, i)
 	case "balance":
 		handleSlashBalance(s, i)
+	case "leaderboard":
+		handleSlashLeaderboard(s, i)
 	case "pay":
 		handleSlashPay(s, i)
 	case "shop":
@@ -93,6 +95,33 @@ func handleSlashBalance(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	respondEmbed(s, i, utils.GoldEmbed("Balance", fmt.Sprintf("**%s** has **%d %s**.", targetUser.Username, balance, config.Bot.CurrencyName)))
 }
 
+func handleSlashLeaderboard(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	users, err := database.GetLeaderboard(10)
+	if err != nil {
+		respondEmbed(s, i, utils.ErrorEmbed("Could not retrieve leaderboard."))
+		return
+	}
+
+	if len(users) == 0 {
+		respondEmbed(s, i, utils.InfoEmbed("Leaderboard", "No users found."))
+		return
+	}
+
+	var description string
+	for i, u := range users {
+		// Try to get user from cache or API to display name
+		discordUser, err := s.User(u.ID)
+		name := u.ID
+		if err == nil {
+			name = discordUser.Username
+		}
+		
+description += fmt.Sprintf("**%d.** %s - **%d %s**\n", i+1, name, u.Balance, config.Bot.CurrencyName)
+	}
+
+	respondEmbed(s, i, utils.GoldEmbed("Richest Users", description))
+}
+
 func handleSlashPay(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	options := i.ApplicationCommandData().Options
 	toUser := options[0].UserValue(s)
@@ -122,16 +151,17 @@ func handleSlashShop(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 1. **Change Own Nickname**
    Cost: %d %s
-   Command: `+"`/buy nickname new_name:...`"+`
+   Command: `+"`/buy nickname new_name:...`"`+"`
 
 2. **Change Other's Nickname**
    Cost: %d %s
-   Command: `+"`/buy rename user:... new_name:...`"+`
+   Command: `+"`/buy rename user:... new_name:...`"`+"`
 
 3. **Mute/Timeout User**
    Cost: %d %s per minute
-   Command: `+"`/buy mute user:... minutes:...`"+`
-`, config.Economy.CostNicknameSelf, sym, config.Economy.CostNicknameOther, sym, config.Economy.CostPerMinuteMute, sym)
+   Command: `+"`/buy mute user:... minutes:...`"`+"`
+`,
+		config.Economy.CostNicknameSelf, sym, config.Economy.CostNicknameOther, sym, config.Economy.CostPerMinuteMute, sym)
 
 	respondEmbed(s, i, utils.GoldEmbed(fmt.Sprintf("🛒 %s Shop", config.Bot.BotName), desc))
 }

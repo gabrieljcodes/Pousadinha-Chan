@@ -60,6 +60,29 @@ func GetBalance(userID string) int {
 	return balance
 }
 
+type UserBalance struct {
+	ID      string
+	Balance int
+}
+
+func GetLeaderboard(limit int) ([]UserBalance, error) {
+	rows, err := DB.Query("SELECT id, balance FROM users ORDER BY balance DESC LIMIT ?", limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []UserBalance
+	for rows.Next() {
+		var u UserBalance
+		if err := rows.Scan(&u.ID, &u.Balance); err != nil {
+			continue
+		}
+		users = append(users, u)
+	}
+	return users, nil
+}
+
 func AddCoins(userID string, amount int) error {
 	_, err := DB.Exec("INSERT INTO users (id, balance) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET balance = balance + ?", userID, amount, amount)
 	return err
