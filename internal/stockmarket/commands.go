@@ -39,17 +39,15 @@ func handleMarket(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if multiplier <= 0 {
 		multiplier = 1
 	}
-	sb.WriteString(fmt.Sprintf("Current Market Prices (Updates every 10m, Multiplier: %.1fx):\n\n", multiplier))
+	sb.WriteString(fmt.Sprintf("Current Market Prices (Updates every 10m, Earnings Multiplier: %.1fx):\n\n", multiplier))
 
 	for _, company := range Companies {
-		realPrice, _ := database.GetStockPriceDB(company.Ticker)
-		// Display adjusted price
-		adjustedPrice := config.Economy.GetAdjustedStockPrice(realPrice)
-		priceStr := fmt.Sprintf("%.2f", adjustedPrice)
-		if realPrice == 0 {
+		price, _ := database.GetStockPriceDB(company.Ticker)
+		priceStr := fmt.Sprintf("%.2f", price)
+		if price == 0 {
 			priceStr = "Fetching..."
 		}
-		sb.WriteString(fmt.Sprintf("**%s** (%s): %s %s\n", company.Name, company.Ticker, priceStr, config.Bot.CurrencyName))
+		sb.WriteString(fmt.Sprintf("**%s** (%s): $%s\n", company.Name, company.Ticker, priceStr))
 	}
 
 	s.ChannelMessageSendEmbed(m.ChannelID, utils.GoldEmbed("Stock Market", sb.String()))
@@ -90,21 +88,19 @@ func handleBuy(s *discordgo.Session, m *discordgo.MessageCreate, args []string) 
 	}
 
 	// Get Price
-	realPrice, err := database.GetStockPriceDB(ticker)
-	if err != nil || realPrice <= 0 {
+	price, err := database.GetStockPriceDB(ticker)
+	if err != nil || price <= 0 {
 		// Try fetching live if DB is empty
 		data, err := GetStockPrice(ticker)
 		if err != nil {
 			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Could not fetch stock price. Try again later."))
 			return
 		}
-		realPrice = data.Price
-		database.SetStockPriceDB(ticker, realPrice)
+		price = data.Price
+		database.SetStockPriceDB(ticker, price)
 	}
 
-	// Use adjusted price for share calculation
-	adjustedPrice := config.Economy.GetAdjustedStockPrice(realPrice)
-	shares := float64(amount) / adjustedPrice
+	shares := float64(amount) / price
 
 	// Transaction
 	if err := database.RemoveCoins(m.Author.ID, amount); err != nil {
@@ -119,7 +115,7 @@ func handleBuy(s *discordgo.Session, m *discordgo.MessageCreate, args []string) 
 		return
 	}
 
-	s.ChannelMessageSendEmbed(m.ChannelID, utils.SuccessEmbed("Investment Successful", fmt.Sprintf("You bought **%.4f** shares of **%s** for **%d %s** (at %.2f %s/share).", shares, ticker, amount, config.Bot.CurrencyName, adjustedPrice, config.Bot.CurrencyName)))
+	s.ChannelMessageSendEmbed(m.ChannelID, utils.SuccessEmbed("Investment Successful", fmt.Sprintf("You bought **%.4f** shares of **%s** for **%d %s** (at $%.2f/share).", shares, ticker, amount, config.Bot.CurrencyName, price)))
 }
 
 func handleSell(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
@@ -169,20 +165,18 @@ func handleSell(s *discordgo.Session, m *discordgo.MessageCreate, args []string)
 	}
 
 	// Get Price
-	realPrice, err := database.GetStockPriceDB(ticker)
-	if err != nil || realPrice <= 0 {
+	price, err := database.GetStockPriceDB(ticker)
+	if err != nil || price <= 0 {
 		data, err := GetStockPrice(ticker)
 		if err != nil {
 			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Could not fetch stock price."))
 			return
 		}
-		realPrice = data.Price
-		database.SetStockPriceDB(ticker, realPrice)
+		price = data.Price
+		database.SetStockPriceDB(ticker, price)
 	}
 
-	// Calculate payout using adjusted price
-	adjustedPrice := config.Economy.GetAdjustedStockPrice(realPrice)
-	payout := int(sharesToSell * adjustedPrice)
+	payout := int(sharesToSell * price)
 
 	if err := database.RemoveShares(m.Author.ID, ticker, sharesToSell); err != nil {
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Database error."))
@@ -190,7 +184,7 @@ func handleSell(s *discordgo.Session, m *discordgo.MessageCreate, args []string)
 	}
 
 	database.AddCoins(m.Author.ID, payout)
-	s.ChannelMessageSendEmbed(m.ChannelID, utils.SuccessEmbed("Sale Successful", fmt.Sprintf("You sold **%.4f** shares of **%s** for **%d %s** (at %.2f %s/share).", sharesToSell, ticker, payout, config.Bot.CurrencyName, adjustedPrice, config.Bot.CurrencyName)))
+	s.ChannelMessageSendEmbed(m.ChannelID, utils.SuccessEmbed("Sale Successful", fmt.Sprintf("You sold **%.4f** shares of **%s** for **%d %s** (at $%.2f/share).", sharesToSell, ticker, payout, config.Bot.CurrencyName, price)))
 }
 
 func handlePortfolio(s *discordgo.Session, m *discordgo.MessageCreate) {
@@ -209,11 +203,10 @@ func handlePortfolio(s *discordgo.Session, m *discordgo.MessageCreate) {
 	totalVal := 0.0
 
 	for _, inv := range investments {
-		realPrice, _ := database.GetStockPriceDB(inv.Ticker)
-		adjustedPrice := config.Economy.GetAdjustedStockPrice(realPrice)
-		val := inv.Shares * adjustedPrice
+		price, _ := database.GetStockPriceDB(inv.Ticker)
+		val := inv.Shares * price
 		totalVal += val
-		sb.WriteString(fmt.Sprintf("**%s**: %.4f shares (~%d %s)\n", inv.Ticker, inv.Shares, int(val), config.Bot.CurrencyName))
+		sb.WriteString(fmt.Sprintf("**%s**: %.4f shares (~%d %s @ $%.2f)\n", inv.Ticker, inv.Shares, int(val), config.Bot.CurrencyName, price))
 	}
 
 	sb.WriteString(fmt.Sprintf("\n**Total Value**: ~%d %s", int(totalVal), config.Bot.CurrencyName))
