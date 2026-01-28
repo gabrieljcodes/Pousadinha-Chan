@@ -27,6 +27,18 @@ func SlashHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		return
 	}
 
+	// Check if channel is allowed
+	if !config.Bot.IsChannelAllowed(i.ChannelID) {
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Embeds: []*discordgo.MessageEmbed{utils.ErrorEmbed("❌ This bot can only be used in designated channels.")},
+				Flags:  discordgo.MessageFlagsEphemeral,
+			},
+		})
+		return
+	}
+
 	switch i.ApplicationCommandData().Name {
 	case "help":
 		HandleSlashHelp(s, i)

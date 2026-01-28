@@ -15,11 +15,12 @@ type EconomyConfig struct {
 }
 
 type GeneralConfig struct {
-	BotName        string `json:"bot_name"`
-	CurrencyName   string `json:"currency_name"`
-	CurrencySymbol string `json:"currency_symbol"`
-	EnableAPI      bool   `json:"enable_api"`
-	ApiPort        string `json:"api_port"`
+	BotName         string   `json:"bot_name"`
+	CurrencyName    string   `json:"currency_name"`
+	CurrencySymbol  string   `json:"currency_symbol"`
+	EnableAPI       bool     `json:"enable_api"`
+	ApiPort         string   `json:"api_port"`
+	AllowedChannels []string `json:"allowed_channels"`
 }
 
 var (
@@ -42,4 +43,18 @@ func loadJSON(filename string, target interface{}) {
 	if err != nil {
 		log.Fatalf("Error parsing %s: %v", filename, err)
 	}
+}
+
+// IsChannelAllowed checks if a channel ID is in the allowed channels list
+// Returns true if the list is empty (all channels allowed) or if the channel is in the list
+func (c *GeneralConfig) IsChannelAllowed(channelID string) bool {
+	if len(c.AllowedChannels) == 0 {
+		return true
+	}
+	for _, id := range c.AllowedChannels {
+		if id == channelID {
+			return true
+		}
+	}
+	return false
 }

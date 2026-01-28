@@ -2,6 +2,8 @@ package commands
 
 import (
 	"estudocoin/internal/games"
+	"estudocoin/pkg/config"
+	"estudocoin/pkg/utils"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -9,6 +11,18 @@ import (
 
 func ComponentsHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if i.Type != discordgo.InteractionMessageComponent {
+		return
+	}
+
+	// Check if channel is allowed
+	if !config.Bot.IsChannelAllowed(i.ChannelID) {
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Embeds: []*discordgo.MessageEmbed{utils.ErrorEmbed("❌ This bot can only be used in designated channels.")},
+				Flags:  discordgo.MessageFlagsEphemeral,
+			},
+		})
 		return
 	}
 
