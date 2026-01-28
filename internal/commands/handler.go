@@ -3,6 +3,8 @@ package commands
 import (
 	"estudocoin/internal/games"
 	"estudocoin/internal/stockmarket"
+	"estudocoin/pkg/utils"
+	"strconv"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -40,6 +42,17 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		CmdBet(s, m, args)
 	case "!roulette", "!roleta":
 		games.CmdRussianRoulette(s, m, args)
+	case "!slots", "!slot":
+		if len(args) < 1 {
+			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Usage: `!slots <amount>`"))
+			return
+		}
+		amount, err := strconv.Atoi(args[0])
+		if err != nil || amount <= 0 {
+			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Invalid amount."))
+			return
+		}
+		games.StartSlotsText(s, m, amount)
 	case "!stock", "!mercado", "!market":
 		stockmarket.CmdStock(s, m, args)
 	}
