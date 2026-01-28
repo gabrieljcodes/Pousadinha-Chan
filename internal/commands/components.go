@@ -18,5 +18,17 @@ func ComponentsHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		games.HandleButton(s, i)
 	} else if strings.HasPrefix(customID, "cup_") {
 		games.HandleCupInteraction(s, i)
+	} else if strings.HasPrefix(customID, "bj_hit_") {
+		userID := strings.TrimPrefix(customID, "bj_hit_")
+		games.HandleBlackjackHit(s, i, userID)
+	} else if strings.HasPrefix(customID, "bj_stand_") {
+		userID := strings.TrimPrefix(customID, "bj_stand_")
+		games.HandleBlackjackStand(s, i, userID)
+	} else if strings.HasPrefix(customID, "bj_double_") {
+		userID := strings.TrimPrefix(customID, "bj_double_")
+		games.HandleBlackjackDouble(s, i, userID)
+	} else if strings.HasPrefix(customID, "bj_insurance_") {
+		userID := strings.TrimPrefix(customID, "bj_insurance_")
+		games.HandleBlackjackInsurance(s, i, userID)
 	}
 }

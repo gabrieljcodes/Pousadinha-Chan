@@ -4,6 +4,10 @@ import "github.com/bwmarrin/discordgo"
 
 var minAmount float64 = 1.0
 
+func ptr(f float64) *float64 {
+	return &f
+}
+
 var SlashCommands = []*discordgo.ApplicationCommand{
 	{
 		Name:        "help",
@@ -190,7 +194,7 @@ var SlashCommands = []*discordgo.ApplicationCommand{
 						Name:        "amount",
 						Description: "Amount to bet (Min 100)",
 						Required:    true,
-						MinValue:    &minAmount, // Assuming minAmount is defined as float 1.0 but logic handles 100
+						MinValue:    &minAmount,
 					},
 				},
 			},
@@ -207,6 +211,19 @@ var SlashCommands = []*discordgo.ApplicationCommand{
 						MinValue:    &minAmount,
 					},
 				},
+			},
+		},
+	},
+	{
+		Name:        "blackjack",
+		Description: "Play a game of Blackjack",
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Type:        discordgo.ApplicationCommandOptionInteger,
+				Name:        "bet",
+				Description: "Amount to bet (Min 10)",
+				Required:    true,
+				MinValue:    ptr(float64(10)),
 			},
 		},
 	},
