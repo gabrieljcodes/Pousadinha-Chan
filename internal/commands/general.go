@@ -42,6 +42,7 @@ func GetHelpEmbed(s *discordgo.Session) *discordgo.MessageEmbed {
 		Value: "`!bet aviator <amount>` / `/bet aviator`\nPlay the Aviator crash game. The multiplier rises every second.\n*Watch out for turbulence! Cash out before it crashes.*\n\n" +
 			"`!bet cups <amount>` / `/bet cups`\nFind the hidden coin under 6 cups.\n*Win 2x -> Double again or Cash Out.*\n\n" +
 			"`!bet blackjack <amount>` / `/blackjack <bet>`\nPlay classic Blackjack against the dealer.\n*Hit, Stand, Double Down, or take Insurance. Blackjack pays 3:2!*\n\n" +
+			"`!bet slots <amount>` / `/slots <amount>`\nSpin the slot machine! Match symbols to win.\n*3 matching = Jackpot | 2 matching = Win | Jackpot up to 25x!*\n\n" +
 			"`!roulette @user <amount>`\nChallenge another user to Russian Roulette.\n*Players take turns pulling the trigger. Survivor takes the entire pot!*",
 		Inline: false,
 	})
