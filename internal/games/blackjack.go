@@ -331,6 +331,18 @@ func (g *BlackjackGame) createActionButtons() []discordgo.MessageComponent {
 
 // Handle Hit action
 func HandleBlackjackHit(s *discordgo.Session, i *discordgo.InteractionCreate, userID string) {
+	// Verify the user clicking is the one who started the game
+	if i.Member.User.ID != userID {
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "❌ This is not your game!",
+				Flags:   discordgo.MessageFlagsEphemeral,
+			},
+		})
+		return
+	}
+	
 	blackjackMu.Lock()
 	game, exists := activeBlackjackGames[userID]
 	blackjackMu.Unlock()
@@ -370,6 +382,18 @@ func HandleBlackjackHit(s *discordgo.Session, i *discordgo.InteractionCreate, us
 
 // Handle Stand action
 func HandleBlackjackStand(s *discordgo.Session, i *discordgo.InteractionCreate, userID string) {
+	// Verify the user clicking is the one who started the game
+	if i.Member.User.ID != userID {
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "❌ This is not your game!",
+				Flags:   discordgo.MessageFlagsEphemeral,
+			},
+		})
+		return
+	}
+	
 	blackjackMu.Lock()
 	game, exists := activeBlackjackGames[userID]
 	blackjackMu.Unlock()
@@ -389,6 +413,18 @@ func HandleBlackjackStand(s *discordgo.Session, i *discordgo.InteractionCreate, 
 
 // Handle Double Down action
 func HandleBlackjackDouble(s *discordgo.Session, i *discordgo.InteractionCreate, userID string) {
+	// Verify the user clicking is the one who started the game
+	if i.Member.User.ID != userID {
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "❌ This is not your game!",
+				Flags:   discordgo.MessageFlagsEphemeral,
+			},
+		})
+		return
+	}
+	
 	blackjackMu.Lock()
 	game, exists := activeBlackjackGames[userID]
 	blackjackMu.Unlock()
@@ -431,6 +467,18 @@ func HandleBlackjackDouble(s *discordgo.Session, i *discordgo.InteractionCreate,
 
 // Handle Insurance action
 func HandleBlackjackInsurance(s *discordgo.Session, i *discordgo.InteractionCreate, userID string) {
+	// Verify the user clicking is the one who started the game
+	if i.Member.User.ID != userID {
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "❌ This is not your game!",
+				Flags:   discordgo.MessageFlagsEphemeral,
+			},
+		})
+		return
+	}
+	
 	blackjackMu.Lock()
 	game, exists := activeBlackjackGames[userID]
 	blackjackMu.Unlock()

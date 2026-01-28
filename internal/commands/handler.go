@@ -26,6 +26,8 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		CmdDaily(s, m)
 	case "!balance", "!saldo", "!coins", "!money":
 		CmdBalance(s, m)
+	case "!leaderboard", "!top", "!rank":
+		CmdLeaderboard(s, m)
 	case "!pay", "!transfer", "!pagar":
 		CmdPay(s, m, args)
 	case "!shop", "!store", "!loja":
