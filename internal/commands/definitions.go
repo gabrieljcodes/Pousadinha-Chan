@@ -26,6 +26,10 @@ var SlashCommands = []*discordgo.ApplicationCommand{
 		},
 	},
 	{
+		Name:        "leaderboard",
+		Description: "See the richest users",
+	},
+	{
 		Name:        "pay",
 		Description: "Transfer EstudoCoins to another user",
 		Options: []*discordgo.ApplicationCommandOption{

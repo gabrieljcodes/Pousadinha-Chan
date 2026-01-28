@@ -23,6 +23,7 @@ func GetHelpEmbed(s *discordgo.Session) *discordgo.MessageEmbed {
 		Name: "💰 Economy",
 		Value: fmt.Sprintf("`!daily` / `/daily`\nCollect your daily reward (**%d %s**).\n*Shows remaining time if not available.*\n\n"+
 				"`!balance` / `/balance [user]`\nCheck your wallet or someone else's.\n\n"+
+				"`!leaderboard` / `/leaderboard`\nSee the richest users.\n\n"+
 				"`!pay` / `/pay <user> <amount>`\nTransfer coins to another user.", config.Economy.DailyAmount, sym),
 		Inline: false,
 	})
