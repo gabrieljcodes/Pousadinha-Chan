@@ -53,6 +53,7 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			return
 		}
 		games.StartSlotsText(s, m, amount)
+		return
 	case "!stock", "!mercado", "!market":
 		stockmarket.CmdStock(s, m, args)
 	}

@@ -32,5 +32,7 @@ func ComponentsHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		games.HandleBlackjackInsurance(s, i, userID)
 	} else if strings.HasPrefix(customID, "rr_") {
 		games.HandleRussianRouletteInteraction(s, i)
+	} else if strings.HasPrefix(customID, "slots_spin_") {
+		games.HandleSlotsInteraction(s, i)
 	}
 }
