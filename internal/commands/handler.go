@@ -3,6 +3,7 @@ package commands
 import (
 	"estudocoin/internal/games"
 	"estudocoin/internal/stockmarket"
+	"estudocoin/pkg/config"
 	"estudocoin/pkg/utils"
 	"strconv"
 	"strings"
@@ -16,6 +17,12 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 
 	if !strings.HasPrefix(m.Content, "!") {
+		return
+	}
+
+	// Check if channel is allowed
+	if !config.Bot.IsChannelAllowed(m.ChannelID) {
+		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("❌ This bot can only be used in designated channels."))
 		return
 	}
 

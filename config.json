@@ -3,5 +3,6 @@
   "currency_name": "EstudoCoins",
   "currency_symbol": "EC",
   "enable_api": true,
-  "api_port": ":8080"
+  "api_port": ":8080",
+  "allowed_channels": []
 }
