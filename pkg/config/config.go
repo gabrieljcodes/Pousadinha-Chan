@@ -7,11 +7,12 @@ import (
 )
 
 type EconomyConfig struct {
-	DailyAmount         int `json:"daily_amount"`
-	VoiceCoinsPerMinute int `json:"voice_coins_per_minute"`
-	CostNicknameSelf    int `json:"cost_nickname_self"`
-	CostNicknameOther   int `json:"cost_nickname_other"`
-	CostPerMinuteMute   int `json:"cost_per_minute_mute"`
+	DailyAmount          int     `json:"daily_amount"`
+	VoiceCoinsPerMinute  int     `json:"voice_coins_per_minute"`
+	CostNicknameSelf     int     `json:"cost_nickname_self"`
+	CostNicknameOther    int     `json:"cost_nickname_other"`
+	CostPerMinuteMute    int     `json:"cost_per_minute_mute"`
+	StockPriceMultiplier float64 `json:"stock_price_multiplier"`
 }
 
 type GeneralConfig struct {
@@ -57,4 +58,13 @@ func (c *GeneralConfig) IsChannelAllowed(channelID string) bool {
 		}
 	}
 	return false
+}
+
+// GetAdjustedStockPrice applies the multiplier to a real stock price
+func (e *EconomyConfig) GetAdjustedStockPrice(realPrice float64) float64 {
+	multiplier := e.StockPriceMultiplier
+	if multiplier <= 0 {
+		multiplier = 1
+	}
+	return realPrice * multiplier
 }
