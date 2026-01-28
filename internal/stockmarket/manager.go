@@ -71,10 +71,10 @@ func checkMarket(s *discordgo.Session) {
 		}
 
 		if data.Price > oldPrice {
-			// Calculate diff using adjusted prices for payouts
-			adjustedOldPrice := config.Economy.GetAdjustedStockPrice(oldPrice)
-			adjustedNewPrice := config.Economy.GetAdjustedStockPrice(data.Price)
-			diff := adjustedNewPrice - adjustedOldPrice
+			// Calculate real price difference
+			realDiff := data.Price - oldPrice
+			// Apply multiplier only to the profit/loss
+			adjustedDiff := config.Economy.GetAdjustedStockPrice(realDiff)
 
 			// Distribute rewards
 			investments, err := database.GetAllInvestmentsByTicker(company.Ticker)
@@ -84,8 +84,8 @@ func checkMarket(s *discordgo.Session) {
 			}
 
 			for _, inv := range investments {
-				// Payout = Shares * Adjusted PriceDiff
-				payout := int(inv.Shares * diff)
+				// Payout = Shares * Adjusted PriceDiff (multiplier applied to profit only)
+				payout := int(inv.Shares * adjustedDiff)
 				if payout > 0 {
 					err := database.AddCoins(inv.UserID, payout)
 					if err != nil {
@@ -93,7 +93,7 @@ func checkMarket(s *discordgo.Session) {
 					}
 				}
 			}
-			log.Printf("Distributed dividends for %s (Growth: %.2f)", company.Ticker, diff)
+			log.Printf("Distributed dividends for %s (Real Growth: $%.2f, Adjusted: %.2f)", company.Ticker, realDiff, adjustedDiff)
 		}
 	}
 }
