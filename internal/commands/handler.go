@@ -1,6 +1,8 @@
 package commands
 
 import (
+	"estudocoin/internal/games"
+	"estudocoin/internal/stockmarket"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -36,5 +38,9 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		CmdBuy(s, m, args)
 	case "!bet", "!apostar":
 		CmdBet(s, m, args)
+	case "!roulette", "!roleta":
+		games.CmdRussianRoulette(s, m, args)
+	case "!stock", "!mercado", "!market":
+		stockmarket.CmdStock(s, m, args)
 	}
 }

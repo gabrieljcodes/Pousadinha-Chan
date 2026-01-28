@@ -6,6 +6,7 @@ import (
 	"estudocoin/internal/database"
 	"estudocoin/internal/events"
 	"estudocoin/internal/api"
+	"estudocoin/internal/stockmarket"
 	"log"
 	"os"
 	"os/signal"
@@ -57,6 +58,9 @@ func main() {
 	if err != nil {
 		log.Fatal("Error opening connection: ", err)
 	}
+
+	// Start Stock Market
+	stockmarket.Start(dg)
 
 	// Register Slash Commands
 	log.Println("Registering slash commands...")
