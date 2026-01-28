@@ -44,6 +44,29 @@ func Initialize() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	createStockInvestmentsSQL := `CREATE TABLE IF NOT EXISTS stock_investments (
+		"user_id" TEXT NOT NULL,
+		"ticker" TEXT NOT NULL,
+		"shares" REAL DEFAULT 0,
+		PRIMARY KEY (user_id, ticker)
+	);`
+
+	_, err = DB.Exec(createStockInvestmentsSQL)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	createStockPricesSQL := `CREATE TABLE IF NOT EXISTS stock_prices (
+		"ticker" TEXT NOT NULL PRIMARY KEY,
+		"last_price" REAL DEFAULT 0,
+		"updated_at" DATETIME
+	);`
+
+	_, err = DB.Exec(createStockPricesSQL)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 func GetBalance(userID string) int {

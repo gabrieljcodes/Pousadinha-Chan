@@ -11,7 +11,7 @@ import (
 
 func CmdBet(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
 	if len(args) < 2 {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("Gambling", "Usage: `!bet aviator <amount>`, `!bet cups <amount>`, or `!bet blackjack <amount>`"))
+		s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("Gambling", "Usage: `!bet aviator <amount>`, `!bet cups <amount>`, `!bet blackjack <amount>`, or `!roulette @user <amount>`"))
 		return
 	}
 
@@ -32,6 +32,6 @@ func CmdBet(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
 	case "blackjack", "bj", "21":
 		games.StartBlackjackText(s, m, amount)
 	default:
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Game not found. Try: `aviator`, `cups`, `blackjack`"))
+		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Game not found. Try: `aviator`, `cups`, `blackjack`, or use `!roulette @user <amount>`"))
 	}
 }
