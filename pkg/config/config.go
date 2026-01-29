@@ -9,16 +9,15 @@ import (
 )
 
 type EconomyConfig struct {
-	DailyAmount              int     `json:"daily_amount"`
-	VoiceCoinsPerMinute      int     `json:"voice_coins_per_minute"`
-	CostNicknameSelf         int     `json:"cost_nickname_self"`
-	CostNicknameOther        int     `json:"cost_nickname_other"`
-	CostPerMinutePunishment  int     `json:"cost_per_minute_punishment"`
-	CostPerMinuteMute        int     `json:"cost_per_minute_mute"`
-	StockPriceMultiplier     float64 `json:"stock_price_multiplier"`
-	RouletteEnabled          bool    `json:"roulette_enabled"`
-	RouletteIntervalMinutes  int     `json:"roulette_interval_minutes"`
-	RouletteChannelID        string  `json:"roulette_channel_id"`
+	DailyAmount             int     `json:"daily_amount"`
+	VoiceCoinsPerMinute     int     `json:"voice_coins_per_minute"`
+	CostNicknameSelf        int     `json:"cost_nickname_self"`
+	CostNicknameOther       int     `json:"cost_nickname_other"`
+	CostPerMinutePunishment int     `json:"cost_per_minute_punishment"`
+	CostPerMinuteMute       int     `json:"cost_per_minute_mute"`
+	StockPriceMultiplier    float64 `json:"stock_price_multiplier"`
+	RouletteEnabled         bool    `json:"roulette_enabled"`
+	RouletteIntervalMinutes int     `json:"roulette_interval_minutes"`
 }
 
 type DatabaseConfig struct {
@@ -26,13 +25,14 @@ type DatabaseConfig struct {
 }
 
 type GeneralConfig struct {
-	BotName         string         `json:"bot_name"`
-	CurrencyName    string         `json:"currency_name"`
-	CurrencySymbol  string         `json:"currency_symbol"`
-	EnableAPI       bool           `json:"enable_api"`
-	ApiPort         string         `json:"api_port"`
-	AllowedChannels []string       `json:"allowed_channels"`
-	Database        DatabaseConfig `json:"database"`
+	BotName           string         `json:"bot_name"`
+	CurrencyName      string         `json:"currency_name"`
+	CurrencySymbol    string         `json:"currency_symbol"`
+	EnableAPI         bool           `json:"enable_api"`
+	ApiPort           string         `json:"api_port"`
+	AllowedChannels   []string       `json:"allowed_channels"`
+	RouletteChannelID string         `json:"roulette_channel_id"`
+	Database          DatabaseConfig `json:"database"`
 }
 
 var (

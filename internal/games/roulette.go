@@ -75,8 +75,8 @@ func StartRoulette(s *discordgo.Session) {
 	}
 
 	// Check if channel is configured
-	if config.Economy.RouletteChannelID == "" {
-		log.Println("Roulette channel ID not configured. Set 'roulette_channel_id' in economy.json")
+	if config.Bot.RouletteChannelID == "" {
+		log.Println("Roulette channel ID not configured. Set 'roulette_channel_id' in config.json")
 		return
 	}
 
@@ -88,7 +88,7 @@ func StartRoulette(s *discordgo.Session) {
 		interval = 10
 	}
 
-	log.Printf("Starting Roulette with %d minute intervals in channel %s", interval, config.Economy.RouletteChannelID)
+	log.Printf("Starting Roulette with %d minute intervals in channel %s", interval, config.Bot.RouletteChannelID)
 
 	// Start first round immediately
 	startNewRound()
@@ -301,7 +301,7 @@ func isValidBet(betType BetType, value string) bool {
 }
 
 func postBettingOpenEmbed(round *RouletteRound) {
-	channelID := config.Economy.RouletteChannelID
+	channelID := config.Bot.RouletteChannelID
 	if channelID == "" {
 		log.Println("No roulette channel configured, skipping betting open message")
 		return
@@ -355,7 +355,7 @@ func postBettingOpenEmbed(round *RouletteRound) {
 }
 
 func postResultEmbed(round *RouletteRound, payouts map[string]int) {
-	channelID := config.Economy.RouletteChannelID
+	channelID := config.Bot.RouletteChannelID
 	if channelID == "" {
 		log.Println("No roulette channel configured, skipping result message")
 		return
