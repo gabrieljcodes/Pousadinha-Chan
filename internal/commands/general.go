@@ -85,6 +85,15 @@ func getHelpSections() []HelpSection {
 				"`!stock portfolio`\nView investments.",
 		},
 		{
+			ID:    "crypto",
+			Name:  "Cryptocurrency",
+			Emoji: "🪙",
+			Value: "`!crypto market`\nView crypto prices (BTC, ETH, meme coins).\n\n" +
+				"`!crypto buy <SYMBOL> <amount>`\nBuy crypto.\n\n" +
+				"`!crypto sell <SYMBOL> <amount|all>`\nSell crypto.\n\n" +
+				"`!crypto portfolio`\nView crypto investments.",
+		},
+		{
 			ID:    "voice",
 			Name:  "Voice Rewards",
 			Emoji: "🎙️",
@@ -118,7 +127,7 @@ func getHelpEmbed(sectionIdx int) *discordgo.MessageEmbed {
 	embed.Description = section.Value
 	embed.Color = utils.ColorBlue
 	embed.Footer = &discordgo.MessageEmbedFooter{
-		Text: fmt.Sprintf("Use !help <section> to jump | Sections: economy, shop, gambling, casino, events, stocks, voice, api"),
+		Text: fmt.Sprintf("Use !help <section> to jump | Sections: economy, shop, gambling, casino, events, stocks, crypto, voice, api"),
 	}
 
 	return embed

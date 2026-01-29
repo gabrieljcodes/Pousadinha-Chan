@@ -208,6 +208,11 @@ func (p *PostgresDatabase) CreateTables() error {
 		log.Printf("Warning: error creating stock_prices table (may already exist): %v", err)
 	}
 
+	// Criar tabelas de crypto
+	if err := p.CreateCryptoTables(); err != nil {
+		log.Printf("Warning: error creating crypto tables: %v", err)
+	}
+
 	log.Println("Table creation completed")
 	return nil
 }

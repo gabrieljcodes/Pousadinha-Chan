@@ -161,5 +161,10 @@ func (s *SQLiteDatabase) CreateTables() error {
 		return err
 	}
 
+	// Criar tabelas de crypto
+	if err := s.CreateCryptoTables(); err != nil {
+		return err
+	}
+
 	return nil
 }
