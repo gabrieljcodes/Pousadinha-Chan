@@ -65,5 +65,17 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		stockmarket.CmdStock(s, m, args)
 	case "!wheel", "!roleta-cassino":
 		games.CmdRoulette(s, m, args)
+	case "!createevent":
+		games.CmdCreateEvent(s, m, args)
+	case "!betevent":
+		games.CmdPlaceBet(s, m, args)
+	case "!result":
+		games.CmdSetResult(s, m, args)
+	case "!events":
+		games.CmdListEvents(s, m, args)
+	case "!event":
+		games.CmdViewEvent(s, m, args)
+	case "!closeevent":
+		games.CmdCloseEvent(s, m, args)
 	}
 }

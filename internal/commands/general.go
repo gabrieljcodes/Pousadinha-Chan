@@ -69,6 +69,19 @@ func GetHelpEmbed(s *discordgo.Session) *discordgo.MessageEmbed {
 	})
 
 	embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+		Name: "🎲 Event Betting (Admin Only to Create)",
+		Value: "`!createevent <question> | <opt1> | <opt2> | ... | <minutes>`\n" +
+			"Create a betting event with dynamic odds. Example: `!createevent Will it rain? | Yes | No | 30`\n\n" +
+			"`!betevent <event_id> <option_number> <amount>` - Place a bet\n" +
+			"`!events` - List all active events\n" +
+			"`!event <event_id>` - View specific event details and odds\n" +
+			"`!closeevent <event_id>` - Close betting early (creator only)\n" +
+			"`!result <event_id> <option_number>` - Set winner and pay out (creator only)\n\n" +
+			"*Dynamic odds: Less popular options pay more! House takes 5% to prevent exploits.*",
+		Inline: false,
+	})
+
+	embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
 		Name: "🎙️ Voice Rewards (Passive)",
 		Value: fmt.Sprintf("Earn **%d %s per minute** by staying in voice channels.\n*Requirements:*\n• At least 2 people in the channel.\n• You must not be Muted or Deafened.", config.Economy.VoiceCoinsPerMinute, sym),
 		Inline: false,
