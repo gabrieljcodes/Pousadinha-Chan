@@ -12,7 +12,7 @@ http://localhost:8080/api/v1
 
 ## Authentication
 
-All requests (except listing stocks) must include your API Key in the `X-API-Key` header.
+All requests (except listing stocks/crypto) must include your API Key in the `X-API-Key` header.
 
 **To get an API Key:**
 1. In Discord, use `/apikey create`.
@@ -111,7 +111,7 @@ Returns all available stocks with current prices and market changes. **No authen
     * Prices are updated every 10 minutes
     * `change_amount` and `change_percentage` show daily market changes
 
-#### 4. Get My Portfolio
+#### 4. Get My Stock Portfolio
 
 Returns your current stock investments.
 
@@ -236,6 +236,162 @@ Sell shares of a company for coins.
 
 ---
 
+### Cryptocurrency Endpoints
+
+#### 7. List Available Cryptocurrencies
+
+Returns all available cryptocurrencies with current prices. **No authentication required.**
+
+* **URL:** `/crypto`
+* **Method:** `GET`
+* **Response Success (200 OK):**
+    ```json
+    [
+      {
+        "symbol": "BTC",
+        "name": "Bitcoin",
+        "type": "major",
+        "price": 43520.50
+      },
+      {
+        "symbol": "ETH",
+        "name": "Ethereum",
+        "type": "major",
+        "price": 2280.75
+      },
+      {
+        "symbol": "DOGE",
+        "name": "Dogecoin",
+        "type": "meme",
+        "price": 0.089
+      },
+      {
+        "symbol": "PEPE",
+        "name": "Pepe",
+        "type": "meme",
+        "price": 0.00000123
+      }
+    ]
+    ```
+* **Notes:**
+    * Prices are fetched in real-time from CoinGecko
+    * `type` can be "major" (established coins) or "meme" (high volatility)
+    * Meme coins are highly volatile - invest at your own risk!
+
+#### 8. Get My Crypto Portfolio
+
+Returns your current cryptocurrency investments.
+
+* **URL:** `/crypto/portfolio`
+* **Method:** `GET`
+* **Headers:** `X-API-Key: <your-api-key>`
+* **Response Success (200 OK):**
+    ```json
+    {
+      "items": [
+        {
+          "symbol": "BTC",
+          "name": "Bitcoin",
+          "type": "major",
+          "coins": 0.0523,
+          "current_price": 43520.50,
+          "value": 2276
+        },
+        {
+          "symbol": "DOGE",
+          "name": "Dogecoin",
+          "type": "meme",
+          "coins": 15000.5,
+          "current_price": 0.089,
+          "value": 1335
+        }
+      ],
+      "total_value": 3611
+    }
+    ```
+
+#### 9. Buy Cryptocurrency
+
+Purchase cryptocurrency using your coin balance.
+
+* **URL:** `/crypto/buy`
+* **Method:** `POST`
+* **Headers:** 
+    * `X-API-Key: <your-api-key>`
+    * `Content-Type: application/json`
+* **Body:**
+    ```json
+    {
+      "symbol": "BTC",
+      "amount": 1000
+    }
+    ```
+    * `symbol`: Cryptocurrency symbol (e.g., "BTC", "ETH", "DOGE")
+    * `amount`: Amount of coins to spend
+* **Response Success (200 OK):**
+    ```json
+    {
+      "symbol": "BTC",
+      "coins": 0.02297,
+      "amount_paid": 1000,
+      "price": 43520.50,
+      "balance": 4000
+    }
+    ```
+* **Response Error (400 Bad Request):**
+    ```json
+    {
+      "error": "Invalid cryptocurrency symbol"
+    }
+    ```
+    ```json
+    {
+      "error": "Insufficient funds"
+    }
+    ```
+
+#### 10. Sell Cryptocurrency
+
+Sell cryptocurrency for coins.
+
+* **URL:** `/crypto/sell`
+* **Method:** `POST`
+* **Headers:** 
+    * `X-API-Key: <your-api-key>`
+    * `Content-Type: application/json`
+* **Body:**
+    ```json
+    {
+      "symbol": "BTC",
+      "coins": 0.01
+    }
+    ```
+    * `symbol`: Cryptocurrency symbol
+    * `coins`: Amount of coins to sell (can be fractional)
+* **Response Success (200 OK):**
+    ```json
+    {
+      "symbol": "BTC",
+      "coins": 0.01,
+      "amount_received": 435,
+      "price": 43520.50,
+      "balance": 4435
+    }
+    ```
+* **Response Error (400 Bad Request):**
+    ```json
+    {
+      "error": "You don't own any of this cryptocurrency"
+    }
+    ```
+    ```json
+    {
+      "error": "You only own 0.02297 BTC"
+    }
+    ```
+
+---
+
 ## Managing API Keys
 
 Use the Discord Slash Commands:
@@ -253,6 +409,8 @@ You can configure a webhook URL using `/webhook set <url>` in Discord to receive
 * Transfer received
 * Stock purchases
 * Stock sales
+* Crypto purchases
+* Crypto sales
 
 The webhook will receive a simple message payload:
 ```json
@@ -282,4 +440,4 @@ Common HTTP status codes:
 | 401 | Unauthorized - Invalid or missing API key |
 | 405 | Method Not Allowed - Wrong HTTP method |
 | 500 | Internal Server Error - Database or server error |
-| 503 | Service Unavailable - Could not fetch stock prices |
+| 503 | Service Unavailable - Could not fetch prices |

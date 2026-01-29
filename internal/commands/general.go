@@ -88,10 +88,11 @@ func getHelpSections() []HelpSection {
 			ID:    "crypto",
 			Name:  "Cryptocurrency",
 			Emoji: "🪙",
-			Value: "`!crypto market`\nView crypto prices (BTC, ETH, meme coins).\n\n" +
-				"`!crypto buy <SYMBOL> <amount>`\nBuy crypto.\n\n" +
+			Value: "`!crypto market`\nView crypto prices.\n\n" +
+				"`!crypto buy <SYMBOL> <amount>`\nBuy crypto (BTC, ETH, etc).\n\n" +
 				"`!crypto sell <SYMBOL> <amount|all>`\nSell crypto.\n\n" +
-				"`!crypto portfolio`\nView crypto investments.",
+				"`!crypto portfolio`\nView crypto holdings.\n\n" +
+				"⚠️ Meme coins are highly volatile!",
 		},
 		{
 			ID:    "voice",
