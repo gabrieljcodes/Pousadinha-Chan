@@ -4,7 +4,9 @@
   "currency_symbol": "EC",
   "enable_api": true,
   "api_port": ":8080",
-  "allowed_channels": 
-["1466169270269640900",
-"1333491369204781197"]
+  "allowed_channels": [
+    "1466169270269640900",
+    "1333491369204781197"
+  ],
+  "roulette_channel_id": ""
 }
