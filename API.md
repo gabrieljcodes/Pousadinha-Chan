@@ -3,11 +3,16 @@
 The Pousadinha-Chan API allows you to interact with your account and the economy system programmatically.
 
 ## Base URL
+
 By default, the API runs on port 8080 (configurable in `config.json`).
-`http://localhost:8080/api/v1`
+
+```
+http://localhost:8080/api/v1
+```
 
 ## Authentication
-All requests must include your API Key in the `X-API-Key` header.
+
+All requests (except listing stocks) must include your API Key in the `X-API-Key` header.
 
 **To get an API Key:**
 1. In Discord, use `/apikey create`.
@@ -23,51 +28,258 @@ X-API-Key: 550e8400-e29b-41d4-a716-446655440000
 
 ## Endpoints
 
-### 1. Get My Profile
+### User Endpoints
+
+#### 1. Get My Profile
+
 Returns your current balance.
 
-*   **URL:** `/me`
-*   **Method:** `GET`
-*   **Response Success (200 OK):**
+* **URL:** `/me`
+* **Method:** `GET`
+* **Headers:** `X-API-Key: <your-api-key>`
+* **Response Success (200 OK):**
     ```json
     {
       "user_id": "123456789012345678",
       "balance": 1500
     }
     ```
-*   **Response Error (401 Unauthorized):**
+* **Response Error (401 Unauthorized):**
     ```json
     {
       "error": "Invalid API Key"
     }
     ```
 
-### 2. Transfer Coins
+#### 2. Transfer Coins
+
 Send coins to another user.
 
-*   **URL:** `/transfer`
-*   **Method:** `POST`
-*   **Headers:** `Content-Type: application/json`
-*   **Body:**
+* **URL:** `/transfer`
+* **Method:** `POST`
+* **Headers:** 
+    * `X-API-Key: <your-api-key>`
+    * `Content-Type: application/json`
+* **Body:**
     ```json
     {
       "to_user_id": "987654321098765432",
       "amount": 500
     }
     ```
-*   **Response Success (200 OK):**
+* **Response Success (200 OK):**
     ```json
     {
       "status": "success"
     }
     ```
-*   **Response Error (400 Bad Request):**
-    *   Insufficient funds
-    *   Invalid amount
-    *   Self-transfer attempt
+* **Response Error (400 Bad Request):**
+    * Insufficient funds
+    * Invalid amount
+    * Self-transfer attempt
 
-## Managing Keys
+---
+
+### Stock Market Endpoints
+
+#### 3. List Available Stocks
+
+Returns all available stocks with current prices and market changes. **No authentication required.**
+
+* **URL:** `/stocks`
+* **Method:** `GET`
+* **Response Success (200 OK):**
+    ```json
+    [
+      {
+        "ticker": "AAPL",
+        "name": "Apple Inc.",
+        "price": 195.89,
+        "change_amount": 2.45,
+        "change_percentage": 1.27
+      },
+      {
+        "ticker": "GOOGL",
+        "name": "Alphabet Inc.",
+        "price": 141.80,
+        "change_amount": -0.92,
+        "change_percentage": -0.64
+      }
+    ]
+    ```
+* **Notes:**
+    * Prices are updated every 10 minutes
+    * `change_amount` and `change_percentage` show daily market changes
+
+#### 4. Get My Portfolio
+
+Returns your current stock investments.
+
+* **URL:** `/stocks/portfolio`
+* **Method:** `GET`
+* **Headers:** `X-API-Key: <your-api-key>`
+* **Response Success (200 OK):**
+    ```json
+    {
+      "items": [
+        {
+          "ticker": "AAPL",
+          "name": "Apple Inc.",
+          "shares": 10.2564,
+          "current_price": 195.89,
+          "value": 2009
+        },
+        {
+          "ticker": "TSLA",
+          "name": "Tesla Inc.",
+          "shares": 5.0000,
+          "current_price": 248.50,
+          "value": 1242
+        }
+      ],
+      "total_value": 3251
+    }
+    ```
+* **Response Success with no investments (200 OK):**
+    ```json
+    {
+      "items": [],
+      "total_value": 0
+    }
+    ```
+
+#### 5. Buy Stocks
+
+Purchase shares of a company using your coin balance.
+
+* **URL:** `/stocks/buy`
+* **Method:** `POST`
+* **Headers:** 
+    * `X-API-Key: <your-api-key>`
+    * `Content-Type: application/json`
+* **Body:**
+    ```json
+    {
+      "ticker": "AAPL",
+      "amount": 2000
+    }
+    ```
+    * `ticker`: Company ticker symbol (e.g., "AAPL", "GOOGL")
+    * `amount`: Amount of coins to spend
+* **Response Success (200 OK):**
+    ```json
+    {
+      "ticker": "AAPL",
+      "shares": 10.2108,
+      "amount_paid": 2000,
+      "price_per_share": 195.87,
+      "balance": 500
+    }
+    ```
+* **Response Error (400 Bad Request):**
+    ```json
+    {
+      "error": "Invalid ticker"
+    }
+    ```
+    ```json
+    {
+      "error": "Insufficient funds"
+    }
+    ```
+* **Notes:**
+    * Shares are calculated as `amount / current_price`
+    * The transaction is atomic - either both the coin deduction and share addition succeed, or both fail
+
+#### 6. Sell Stocks
+
+Sell shares of a company for coins.
+
+* **URL:** `/stocks/sell`
+* **Method:** `POST`
+* **Headers:** 
+    * `X-API-Key: <your-api-key>`
+    * `Content-Type: application/json`
+* **Body:**
+    ```json
+    {
+      "ticker": "AAPL",
+      "shares": 5.0
+    }
+    ```
+    * `ticker`: Company ticker symbol
+    * `shares`: Number of shares to sell (can be fractional)
+* **Response Success (200 OK):**
+    ```json
+    {
+      "ticker": "AAPL",
+      "shares": 5.0,
+      "amount_received": 979,
+      "price_per_share": 195.89,
+      "balance": 1479
+    }
+    ```
+* **Response Error (400 Bad Request):**
+    ```json
+    {
+      "error": "You don't own any shares of this company"
+    }
+    ```
+    ```json
+    {
+      "error": "You only own 10.2108 shares"
+    }
+    ```
+* **Notes:**
+    * You can sell fractional shares
+    * If you sell all remaining shares, the investment record is removed
+
+---
+
+## Managing API Keys
+
 Use the Discord Slash Commands:
-*   `/apikey create [name]` - Generate a new key.
-*   `/apikey list` - See your active keys (masked).
-*   `/apikey delete <prefix>` - Revoke a key using its first 5 characters.
+
+* `/apikey create [name]` - Generate a new key.
+* `/apikey list` - See your active keys (masked).
+* `/apikey delete <prefix>` - Revoke a key using its first 5 characters.
+
+---
+
+## Webhooks
+
+You can configure a webhook URL using `/webhook set <url>` in Discord to receive notifications for:
+
+* Transfer received
+* Stock purchases
+* Stock sales
+
+The webhook will receive a simple message payload:
+```json
+{
+  "content": "📈 **Stock Purchase**\nYou bought **10.2108** shares of **AAPL**..."
+}
+```
+
+---
+
+## Error Responses
+
+All error responses follow this format:
+
+```json
+{
+  "error": "Error description here"
+}
+```
+
+Common HTTP status codes:
+
+| Code | Meaning |
+|------|---------|
+| 200 | Success |
+| 400 | Bad Request - Invalid parameters or insufficient funds/shares |
+| 401 | Unauthorized - Invalid or missing API key |
+| 405 | Method Not Allowed - Wrong HTTP method |
+| 500 | Internal Server Error - Database or server error |
+| 503 | Service Unavailable - Could not fetch stock prices |
