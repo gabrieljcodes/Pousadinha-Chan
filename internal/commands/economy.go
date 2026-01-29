@@ -6,6 +6,7 @@ import (
 	"estudocoin/pkg/config"
 	"estudocoin/pkg/utils"
 	"fmt"
+	"log"
 	"strconv"
 
 	"github.com/bwmarrin/discordgo"
@@ -38,6 +39,10 @@ func CmdBalance(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 
 	balance := database.GetBalance(targetUser.ID)
+	
+	// Debug log
+	log.Printf("[BALANCE] User: %s (ID: %s), Balance: %d", targetUser.Username, targetUser.ID, balance)
+	
 	s.ChannelMessageSendEmbed(m.ChannelID, utils.GoldEmbed("Balance", fmt.Sprintf("**%s** has **%d %s**.", targetUser.Username, balance, config.Bot.CurrencyName)))
 }
 

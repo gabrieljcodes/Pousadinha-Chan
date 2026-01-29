@@ -532,6 +532,10 @@ func CmdRoulette(s *discordgo.Session, m *discordgo.MessageCreate, args []string
 		return
 	}
 
+	// Debug log
+	balance := database.GetBalance(m.Author.ID)
+	log.Printf("[ROULETTE] User: %s (ID: %s), Balance: %d, Bet: %d", m.Author.Username, m.Author.ID, balance, amount)
+	
 	success, msg := PlaceRouletteBet(m.Author.ID, m.Author.Username, betType, value, amount)
 	if !success {
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(msg))
