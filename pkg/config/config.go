@@ -16,6 +16,7 @@ type EconomyConfig struct {
 	CostPerMinutePunishment  int     `json:"cost_per_minute_punishment"`
 	CostPerMinuteMute        int     `json:"cost_per_minute_mute"`
 	StockPriceMultiplier     float64 `json:"stock_price_multiplier"`
+	RouletteEnabled          bool    `json:"roulette_enabled"`
 	RouletteIntervalMinutes  int     `json:"roulette_interval_minutes"`
 	RouletteChannelID        string  `json:"roulette_channel_id"`
 }

@@ -6,6 +6,7 @@
   "cost_per_minute_punishment": 500,
   "cost_per_minute_mute": 100,
   "stock_price_multiplier": 5,
+  "roulette_enabled": true,
   "roulette_interval_minutes": 10,
   "roulette_channel_id": ""
 }
