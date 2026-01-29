@@ -81,4 +81,6 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	case "!closeevent":
 		games.CmdCloseEvent(s, m, args)
 	}
+	case "!valorantbet", "!betval":
+    	valorant.CmdValorantBet(s, m, args)
 }

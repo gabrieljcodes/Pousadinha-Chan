@@ -213,6 +213,21 @@ func (p *PostgresDatabase) CreateTables() error {
 		log.Printf("Warning: error creating crypto tables: %v", err)
 	}
 
+	createValorantBetsSQL := `CREATE TABLE IF NOT EXISTS valorant_bets (
+        id SERIAL PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        riot_id TEXT NOT NULL,
+        bet_on_loss BOOLEAN NOT NULL,
+        amount INTEGER NOT NULL,
+        created_at TIMESTAMP NOT NULL,
+        checked_at TIMESTAMP,
+        match_id TEXT,
+        resolved BOOLEAN DEFAULT FALSE
+    );`
+    if _, err := p.db.Exec(createValorantBetsSQL); err != nil {
+        return err
+    }
+
 	log.Println("Table creation completed")
 	return nil
 }

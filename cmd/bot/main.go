@@ -8,6 +8,7 @@ import (
 	"estudocoin/internal/api"
 	"estudocoin/internal/games"
 	"estudocoin/internal/stockmarket"
+	"estudocoin/internal/valorant"
 	"log"
 	"os"
 	"os/signal"
@@ -82,6 +83,10 @@ func main() {
 		}
 		registeredCommands[i] = cmd
 	}
+
+	// Valorant Call
+	valorant.StartValorantChecker()
+    defer valorant.StopValorantChecker()
 
 	log.Println("Bot is now running. Press CTRL-C to exit.")
 	

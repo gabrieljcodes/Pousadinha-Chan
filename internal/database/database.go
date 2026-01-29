@@ -324,3 +324,38 @@ func GetWebhook(userID string) (string, error) {
 	}
 	return url.String, nil
 }
+
+// AddValorantBet adiciona uma aposta
+func AddValorantBet(bet ValorantBet) error {
+    query := prepareQuery("INSERT INTO valorant_bets (user_id, riot_id, bet_on_loss, amount, created_at) VALUES (?, ?, ?, ?, ?)")
+    _, err := DB.Exec(query, bet.UserID, bet.RiotID, bet.BetOnLoss, bet.Amount, time.Now())
+    return err
+}
+
+// GetPendingValorantBets pega apostas não resolvidas
+func GetPendingValorantBets() ([]ValorantBet, error) {
+    query := prepareQuery("SELECT * FROM valorant_bets WHERE resolved = FALSE")
+    rows, err := DB.Query(query)
+    if err != nil {
+        return nil, err
+    }
+    defer rows.Close()
+    var bets []ValorantBet
+    for rows.Next() {
+        var b ValorantBet
+        rows.Scan(&b.ID, &b.UserID, &b.RiotID, &b.BetOnLoss, &b.Amount, &b.CreatedAt, &b.CheckedAt, &b.MatchID, &b.Resolved)
+        bets = append(bets, b)
+    }
+    return bets, nil
+}
+
+// ResolveValorantBet marca como resolvida e paga
+func ResolveValorantBet(betID int, won bool) error {
+    bet, _ := GetBetByID(betID) // Implemente GetBetByID similar
+    if won {
+        AddCoins(bet.UserID, int(float64(bet.Amount) * config.Economy.ValorantPayoutMultiplier))
+    }
+    query := prepareQuery("UPDATE valorant_bets SET resolved = TRUE WHERE id = ?")
+    _, err := DB.Exec(query, betID)
+    return err
+}

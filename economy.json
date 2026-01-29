@@ -7,5 +7,8 @@
   "cost_per_minute_mute": 100,
   "stock_price_multiplier": 5,
   "roulette_enabled": true,
-  "roulette_interval_minutes": 10
+  "roulette_interval_minutes": 10,
+  "valorant_min_bet": 100,  
+  "valorant_payout_multiplier": 3,
+  "valorant_poll_interval_minutes": 5
 }

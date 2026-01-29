@@ -6,7 +6,7 @@ The Pousadinha-Chan API allows you to interact with your account and the economy
 
 By default, the API runs on port 8080 (configurable in `config.json`).
 
-```
+```text
 http://localhost:8080/api/v1
 ```
 
@@ -15,11 +15,13 @@ http://localhost:8080/api/v1
 All requests (except listing stocks/crypto) must include your API Key in the `X-API-Key` header.
 
 **To get an API Key:**
+
 1. In Discord, use `/apikey create`.
 2. The bot will send the key to your DM.
 3. Save it immediately! The message is deleted after 60 seconds.
 
 **Example Header:**
+
 ```http
 X-API-Key: 550e8400-e29b-41d4-a716-446655440000
 ```
@@ -38,13 +40,16 @@ Returns your current balance.
 * **Method:** `GET`
 * **Headers:** `X-API-Key: <your-api-key>`
 * **Response Success (200 OK):**
+
     ```json
     {
       "user_id": "123456789012345678",
       "balance": 1500
     }
     ```
+
 * **Response Error (401 Unauthorized):**
+
     ```json
     {
       "error": "Invalid API Key"
@@ -57,26 +62,30 @@ Send coins to another user.
 
 * **URL:** `/transfer`
 * **Method:** `POST`
-* **Headers:** 
-    * `X-API-Key: <your-api-key>`
-    * `Content-Type: application/json`
+* **Headers:**
+  * `X-API-Key: <your-api-key>`
+  * `Content-Type: application/json`
 * **Body:**
+
     ```json
     {
       "to_user_id": "987654321098765432",
       "amount": 500
     }
     ```
+
 * **Response Success (200 OK):**
+
     ```json
     {
       "status": "success"
     }
     ```
+
 * **Response Error (400 Bad Request):**
-    * Insufficient funds
-    * Invalid amount
-    * Self-transfer attempt
+  * Insufficient funds
+  * Invalid amount
+  * Self-transfer attempt
 
 ---
 
@@ -89,6 +98,7 @@ Returns all available stocks with current prices and market changes. **No authen
 * **URL:** `/stocks`
 * **Method:** `GET`
 * **Response Success (200 OK):**
+
     ```json
     [
       {
@@ -107,9 +117,10 @@ Returns all available stocks with current prices and market changes. **No authen
       }
     ]
     ```
+
 * **Notes:**
-    * Prices are updated every 10 minutes
-    * `change_amount` and `change_percentage` show daily market changes
+  * Prices are updated every 10 minutes
+  * `change_amount` and `change_percentage` show daily market changes
 
 #### 4. Get My Stock Portfolio
 
@@ -119,6 +130,7 @@ Returns your current stock investments.
 * **Method:** `GET`
 * **Headers:** `X-API-Key: <your-api-key>`
 * **Response Success (200 OK):**
+
     ```json
     {
       "items": [
@@ -140,7 +152,9 @@ Returns your current stock investments.
       "total_value": 3251
     }
     ```
+
 * **Response Success with no investments (200 OK):**
+
     ```json
     {
       "items": [],
@@ -154,19 +168,22 @@ Purchase shares of a company using your coin balance.
 
 * **URL:** `/stocks/buy`
 * **Method:** `POST`
-* **Headers:** 
-    * `X-API-Key: <your-api-key>`
-    * `Content-Type: application/json`
+* **Headers:**
+  * `X-API-Key: <your-api-key>`
+  * `Content-Type: application/json`
 * **Body:**
+
     ```json
     {
       "ticker": "AAPL",
       "amount": 2000
     }
     ```
-    * `ticker`: Company ticker symbol (e.g., "AAPL", "GOOGL")
-    * `amount`: Amount of coins to spend
+
+  * `ticker`: Company ticker symbol (e.g., "AAPL", "GOOGL")
+  * `amount`: Amount of coins to spend
 * **Response Success (200 OK):**
+
     ```json
     {
       "ticker": "AAPL",
@@ -176,20 +193,24 @@ Purchase shares of a company using your coin balance.
       "balance": 500
     }
     ```
+
 * **Response Error (400 Bad Request):**
+
     ```json
     {
       "error": "Invalid ticker"
     }
     ```
+
     ```json
     {
       "error": "Insufficient funds"
     }
     ```
+
 * **Notes:**
-    * Shares are calculated as `amount / current_price`
-    * The transaction is atomic - either both the coin deduction and share addition succeed, or both fail
+  * Shares are calculated as `amount / current_price`
+  * The transaction is atomic - either both the coin deduction and share addition succeed, or both fail
 
 #### 6. Sell Stocks
 
@@ -197,19 +218,22 @@ Sell shares of a company for coins.
 
 * **URL:** `/stocks/sell`
 * **Method:** `POST`
-* **Headers:** 
-    * `X-API-Key: <your-api-key>`
-    * `Content-Type: application/json`
+* **Headers:**
+  * `X-API-Key: <your-api-key>`
+  * `Content-Type: application/json`
 * **Body:**
+
     ```json
     {
       "ticker": "AAPL",
       "shares": 5.0
     }
     ```
-    * `ticker`: Company ticker symbol
-    * `shares`: Number of shares to sell (can be fractional)
+
+  * `ticker`: Company ticker symbol
+  * `shares`: Number of shares to sell (can be fractional)
 * **Response Success (200 OK):**
+
     ```json
     {
       "ticker": "AAPL",
@@ -219,20 +243,24 @@ Sell shares of a company for coins.
       "balance": 1479
     }
     ```
+
 * **Response Error (400 Bad Request):**
+
     ```json
     {
       "error": "You don't own any shares of this company"
     }
     ```
+
     ```json
     {
       "error": "You only own 10.2108 shares"
     }
     ```
+
 * **Notes:**
-    * You can sell fractional shares
-    * If you sell all remaining shares, the investment record is removed
+  * You can sell fractional shares
+  * If you sell all remaining shares, the investment record is removed
 
 ---
 
@@ -245,6 +273,7 @@ Returns all available cryptocurrencies with current prices. **No authentication 
 * **URL:** `/crypto`
 * **Method:** `GET`
 * **Response Success (200 OK):**
+
     ```json
     [
       {
@@ -273,10 +302,11 @@ Returns all available cryptocurrencies with current prices. **No authentication 
       }
     ]
     ```
+
 * **Notes:**
-    * Prices are fetched in real-time from CoinGecko
-    * `type` can be "major" (established coins) or "meme" (high volatility)
-    * Meme coins are highly volatile - invest at your own risk!
+  * Prices are fetched in real-time from CoinGecko
+  * `type` can be "major" (established coins) or "meme" (high volatility)
+  * Meme coins are highly volatile - invest at your own risk!
 
 #### 8. Get My Crypto Portfolio
 
@@ -286,6 +316,7 @@ Returns your current cryptocurrency investments.
 * **Method:** `GET`
 * **Headers:** `X-API-Key: <your-api-key>`
 * **Response Success (200 OK):**
+
     ```json
     {
       "items": [
@@ -316,19 +347,22 @@ Purchase cryptocurrency using your coin balance.
 
 * **URL:** `/crypto/buy`
 * **Method:** `POST`
-* **Headers:** 
-    * `X-API-Key: <your-api-key>`
-    * `Content-Type: application/json`
+* **Headers:**
+  * `X-API-Key: <your-api-key>`
+  * `Content-Type: application/json`
 * **Body:**
+
     ```json
     {
       "symbol": "BTC",
       "amount": 1000
     }
     ```
-    * `symbol`: Cryptocurrency symbol (e.g., "BTC", "ETH", "DOGE")
-    * `amount`: Amount of coins to spend
+
+  * `symbol`: Cryptocurrency symbol (e.g., "BTC", "ETH", "DOGE")
+  * `amount`: Amount of coins to spend
 * **Response Success (200 OK):**
+
     ```json
     {
       "symbol": "BTC",
@@ -338,12 +372,15 @@ Purchase cryptocurrency using your coin balance.
       "balance": 4000
     }
     ```
+
 * **Response Error (400 Bad Request):**
+
     ```json
     {
       "error": "Invalid cryptocurrency symbol"
     }
     ```
+
     ```json
     {
       "error": "Insufficient funds"
@@ -356,19 +393,22 @@ Sell cryptocurrency for coins.
 
 * **URL:** `/crypto/sell`
 * **Method:** `POST`
-* **Headers:** 
-    * `X-API-Key: <your-api-key>`
-    * `Content-Type: application/json`
+* **Headers:**
+  * `X-API-Key: <your-api-key>`
+  * `Content-Type: application/json`
 * **Body:**
+
     ```json
     {
       "symbol": "BTC",
       "coins": 0.01
     }
     ```
-    * `symbol`: Cryptocurrency symbol
-    * `coins`: Amount of coins to sell (can be fractional)
+
+  * `symbol`: Cryptocurrency symbol
+  * `coins`: Amount of coins to sell (can be fractional)
 * **Response Success (200 OK):**
+
     ```json
     {
       "symbol": "BTC",
@@ -378,12 +418,15 @@ Sell cryptocurrency for coins.
       "balance": 4435
     }
     ```
+
 * **Response Error (400 Bad Request):**
+
     ```json
     {
       "error": "You don't own any of this cryptocurrency"
     }
     ```
+
     ```json
     {
       "error": "You only own 0.02297 BTC"
@@ -413,6 +456,7 @@ You can configure a webhook URL using `/webhook set <url>` in Discord to receive
 * Crypto sales
 
 The webhook will receive a simple message payload:
+
 ```json
 {
   "content": "📈 **Stock Purchase**\nYou bought **10.2108** shares of **AAPL**..."
@@ -434,10 +478,54 @@ All error responses follow this format:
 Common HTTP status codes:
 
 | Code | Meaning |
-|------|---------|
+| ------ | --------- |
 | 200 | Success |
 | 400 | Bad Request - Invalid parameters or insufficient funds/shares |
 | 401 | Unauthorized - Invalid or missing API key |
 | 405 | Method Not Allowed - Wrong HTTP method |
 | 500 | Internal Server Error - Database or server error |
 | 503 | Service Unavailable - Could not fetch prices |
+
+## Valorant Betting API (em desenvolvimento)
+
+**Autenticação:** Mesma API Key do usuário (header `X-User-ID` ou via chave)
+
+### POST /api/v1/valorant/bet
+
+Cria uma aposta em perda/vitória de jogador
+
+Body:
+
+```json
+{
+  "riot_id": "PlayerName#TAG",
+  "amount": 500,
+  "bet_on_loss": true
+}
+
+Response (200):
+
+{
+  "success": true,
+  "bet_id": 42,
+  "message": "Bet placed – awaiting match result"
+}
+
+GET /api/v1/valorant/pending
+
+Lista apostas pendentes do usuário autenticado
+
+Response:
+
+{
+  "bets": [
+    {
+      "id": 42,
+      "riot_id": "PlayerName#TAG",
+      "amount": 500,
+      "bet_on_loss": true,
+      "created_at": "2026-01-29T14:00:00Z",
+      "resolved": false
+    }
+  ]
+}

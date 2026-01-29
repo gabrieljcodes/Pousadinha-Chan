@@ -19,6 +19,9 @@ type EconomyConfig struct {
 	StockPriceMultiplier    float64 `json:"stock_price_multiplier"`
 	RouletteEnabled         bool    `json:"roulette_enabled"`
 	RouletteIntervalMinutes int     `json:"roulette_interval_minutes"`
+	ValorantMinBet int     `json:"valorant_min_bet"`
+    ValorantPayoutMultiplier float64 `json:"valorant_payout_multiplier"`
+    ValorantPollIntervalMinutes int `json:"valorant_poll_interval_minutes"`
 }
 
 type DatabaseConfig struct {
