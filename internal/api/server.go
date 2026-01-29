@@ -103,8 +103,15 @@ func HandleTransfer(w http.ResponseWriter, r *http.Request) {
 func Start() {
 	mux := http.NewServeMux()
 	
+	// User endpoints
 	mux.HandleFunc("/api/v1/me", AuthMiddleware(HandleMe))
 	mux.HandleFunc("/api/v1/transfer", AuthMiddleware(HandleTransfer))
+	
+	// Stock market endpoints
+	mux.HandleFunc("/api/v1/stocks", HandleStocksList)
+	mux.HandleFunc("/api/v1/stocks/portfolio", AuthMiddleware(HandlePortfolio))
+	mux.HandleFunc("/api/v1/stocks/buy", AuthMiddleware(HandleBuyStock))
+	mux.HandleFunc("/api/v1/stocks/sell", AuthMiddleware(HandleSellStock))
 
 	port := config.Bot.ApiPort
 	if port == "" {
