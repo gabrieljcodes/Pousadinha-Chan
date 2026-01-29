@@ -63,5 +63,7 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	case "!stock", "!mercado", "!market":
 		stockmarket.CmdStock(s, m, args)
+	case "!wheel", "!roleta-cassino":
+		games.CmdRoulette(s, m, args)
 	}
 }

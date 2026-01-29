@@ -6,6 +6,7 @@ import (
 	"estudocoin/internal/database"
 	"estudocoin/internal/events"
 	"estudocoin/internal/api"
+	"estudocoin/internal/games"
 	"estudocoin/internal/stockmarket"
 	"log"
 	"os"
@@ -61,6 +62,9 @@ func main() {
 
 	// Start Stock Market
 	stockmarket.Start(dg)
+
+	// Start Roulette
+	games.StartRoulette(dg)
 
 	// Register Slash Commands
 	log.Println("Registering slash commands...")
