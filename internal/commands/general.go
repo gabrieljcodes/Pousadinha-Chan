@@ -35,8 +35,9 @@ var helpSections = []HelpSection{
 		Value: fmt.Sprintf("`!shop` / `/shop`\nView available items.\n\n"+
 			"`!buy nickname <n>`\nChange your own nickname (**%d %s**).\n\n"+
 			"`!buy rename @user <n>`\nChange someone else's nickname (**%d %s**).\n\n"+
-			"`!buy mute @user <min>`\nTimeout a user for X minutes (**%d %s/min**).\n*Note: Mutes are accumulative!*",
-			config.Economy.CostNicknameSelf, config.Bot.CurrencySymbol, config.Economy.CostNicknameOther, config.Bot.CurrencySymbol, config.Economy.CostPerMinuteMute, config.Bot.CurrencySymbol),
+			"`!buy punishment @user <min>`\nTimeout user (**%d %s/min**) - text & voice.\n*Note: Punishments are accumulative!*\n\n"+
+			"`!buy mute @user <min>`\nMute user in voice (**%d %s/min**) - voice only.\n*User must be in a call!*",
+			config.Economy.CostNicknameSelf, config.Bot.CurrencySymbol, config.Economy.CostNicknameOther, config.Bot.CurrencySymbol, config.Economy.CostPerMinutePunishment, config.Bot.CurrencySymbol, config.Economy.CostPerMinuteMute, config.Bot.CurrencySymbol),
 	},
 	{
 		ID:    "gambling",
