@@ -112,6 +112,12 @@ func Start() {
 	mux.HandleFunc("/api/v1/stocks/portfolio", AuthMiddleware(HandlePortfolio))
 	mux.HandleFunc("/api/v1/stocks/buy", AuthMiddleware(HandleBuyStock))
 	mux.HandleFunc("/api/v1/stocks/sell", AuthMiddleware(HandleSellStock))
+	
+	// Cryptocurrency endpoints
+	mux.HandleFunc("/api/v1/crypto", HandleCryptoList)
+	mux.HandleFunc("/api/v1/crypto/portfolio", AuthMiddleware(HandleCryptoPortfolio))
+	mux.HandleFunc("/api/v1/crypto/buy", AuthMiddleware(HandleBuyCrypto))
+	mux.HandleFunc("/api/v1/crypto/sell", AuthMiddleware(HandleSellCrypto))
 
 	port := config.Bot.ApiPort
 	if port == "" {
