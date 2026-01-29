@@ -95,20 +95,36 @@ func convertPlaceholders(query string) string {
 	return result
 }
 
-// GetBalance retorna o saldo de um usuário
+// GetBalance retorna o saldo de um usuário com retry em caso de erro
 func GetBalance(userID string) int {
 	var balance int
 	query := prepareQuery("SELECT balance FROM users WHERE id = ?")
-	err := DB.QueryRow(query, userID).Scan(&balance)
-	if err != nil {
+	
+	// Tentar até 3 vezes com pequeno delay
+	for i := 0; i < 3; i++ {
+		err := DB.QueryRow(query, userID).Scan(&balance)
+		if err == nil {
+			return balance
+		}
+		
 		if err == sql.ErrNoRows {
-			DB.Exec(prepareQuery("INSERT INTO users (id, balance) VALUES (?, 0)"), userID)
+			// Usuário não existe, criar com saldo 0
+			_, insertErr := DB.Exec(prepareQuery("INSERT INTO users (id, balance) VALUES (?, 0)"), userID)
+			if insertErr != nil {
+				log.Printf("[GetBalance] Error inserting user %s: %v (attempt %d)", userID, insertErr, i+1)
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
 			return 0
 		}
-		log.Println("Error getting balance:", err)
-		return 0
+		
+		// Outro erro - logar e tentar novamente
+		log.Printf("[GetBalance] Error getting balance for %s: %v (attempt %d)", userID, err, i+1)
+		time.Sleep(100 * time.Millisecond)
 	}
-	return balance
+	
+	log.Printf("[GetBalance] Failed to get balance for %s after 3 attempts, returning 0", userID)
+	return 0
 }
 
 // GetLeaderboard retorna o ranking de saldos
