@@ -57,6 +57,18 @@ func GetHelpEmbed(s *discordgo.Session) *discordgo.MessageEmbed {
 	})
 
 	embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+		Name: "🎡 Casino Roulette",
+		Value: "`!wheel`\nView roulette betting options and time until next spin.\n\n" +
+			"`!wheel number <0-36> <amount>` - **35:1**\n" +
+			"`!wheel red <amount>` / `!wheel black <amount>` - **1:1**\n" +
+			"`!wheel even <amount>` / `!wheel odd <amount>` - **1:1**\n" +
+			"`!wheel low <amount>` (1-18) / `!wheel high <amount>` (19-36) - **1:1**\n" +
+			"`!wheel dozen <1st/2nd/3rd> <amount>` - **2:1**\n\n" +
+			"*Rounds occur every 10 minutes. Betting closes when the wheel spins!*",
+		Inline: false,
+	})
+
+	embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
 		Name: "🎙️ Voice Rewards (Passive)",
 		Value: fmt.Sprintf("Earn **%d %s per minute** by staying in voice channels.\n*Requirements:*\n• At least 2 people in the channel.\n• You must not be Muted or Deafened.", config.Economy.VoiceCoinsPerMinute, sym),
 		Inline: false,

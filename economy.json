@@ -4,5 +4,7 @@
   "cost_nickname_self": 500,
   "cost_nickname_other": 2000,
   "cost_per_minute_mute": 100,
-  "stock_price_multiplier": 5
+  "stock_price_multiplier": 5,
+  "roulette_interval_minutes": 10,
+  "roulette_channel_id": ""
 }
