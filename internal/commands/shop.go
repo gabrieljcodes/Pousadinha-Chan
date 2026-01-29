@@ -25,10 +25,14 @@ func CmdShop(s *discordgo.Session, m *discordgo.MessageCreate) {
    Cost: %d %s
    Command: `+"`!buy rename @user <new name>`"+`
 
-3. **Mute/Timeout User**
+3. **Punishment/Timeout User** (Server timeout - text & voice)
+   Cost: %d %s per minute
+   Command: `+"`!buy punishment @user <minutes>`"+`
+
+4. **Mute User** (Voice only - must be in call)
    Cost: %d %s per minute
    Command: `+"`!buy mute @user <minutes>`"+`
-`, config.Economy.CostNicknameSelf, sym, config.Economy.CostNicknameOther, sym, config.Economy.CostPerMinuteMute, sym)
+`, config.Economy.CostNicknameSelf, sym, config.Economy.CostNicknameOther, sym, config.Economy.CostPerMinutePunishment, sym, config.Economy.CostPerMinuteMute, sym)
 
 	s.ChannelMessageSendEmbed(m.ChannelID, utils.GoldEmbed(fmt.Sprintf("🛒 %s Shop", config.Bot.BotName), desc))
 }
@@ -88,9 +92,9 @@ func CmdBuy(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
 		database.RemoveCoins(userID, config.Economy.CostNicknameOther)
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.SuccessEmbed("Purchase Successful", fmt.Sprintf("Nickname of %s changed.", targetUser.Username)))
 
-	case "mute", "timeout":
+	case "punishment", "timeout":
 		if len(m.Mentions) == 0 || len(args) < 3 {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Usage: `!buy mute @user <minutes>`"))
+			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Usage: `!buy punishment @user <minutes>`"))
 			return
 		}
 		targetUser := m.Mentions[0]
@@ -102,7 +106,7 @@ func CmdBuy(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
 			return
 		}
 
-		cost := minutes * config.Economy.CostPerMinuteMute
+		cost := minutes * config.Economy.CostPerMinutePunishment
 		if database.GetBalance(userID) < cost {
 			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(fmt.Sprintf("Insufficient funds. Cost: %d %s.", cost, config.Bot.CurrencySymbol)))
 			return
@@ -131,7 +135,52 @@ func CmdBuy(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
 		}
 
 		database.RemoveCoins(userID, cost)
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.SuccessEmbed("Silenced!", fmt.Sprintf("%s silenced until %s.", targetUser.Username, until.Format("15:04:05"))))
+		s.ChannelMessageSendEmbed(m.ChannelID, utils.SuccessEmbed("Punishment Applied!", fmt.Sprintf("%s has been timed out until %s.", targetUser.Username, until.Format("15:04:05"))))
+
+	case "mute":
+		if len(m.Mentions) == 0 || len(args) < 3 {
+			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Usage: `!buy mute @user <minutes>`"))
+			return
+		}
+		targetUser := m.Mentions[0]
+		
+		minutesStr := args[len(args)-1] 
+		minutes, err := strconv.Atoi(minutesStr)
+		if err != nil || minutes <= 0 {
+			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Invalid time."))
+			return
+		}
+
+		cost := minutes * config.Economy.CostPerMinuteMute
+		if database.GetBalance(userID) < cost {
+			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(fmt.Sprintf("Insufficient funds. Cost: %d %s.", cost, config.Bot.CurrencySymbol)))
+			return
+		}
+
+		// Check if target user is in a voice channel
+		voiceState, err := s.State.VoiceState(m.GuildID, targetUser.ID)
+		if err != nil || voiceState == nil || voiceState.ChannelID == "" {
+			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(fmt.Sprintf("%s is not in a voice channel! You can only mute users who are currently in a call.", targetUser.Username)))
+			return
+		}
+
+		// Apply server mute (voice only, not timeout)
+		err = s.GuildMemberMute(m.GuildID, targetUser.ID, true)
+		if err != nil {
+			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Error muting user (check permissions/hierarchy)."))
+			return
+		}
+
+		// Remove coins
+		database.RemoveCoins(userID, cost)
+
+		// Schedule unmute after duration
+		go func() {
+			time.Sleep(time.Duration(minutes) * time.Minute)
+			s.GuildMemberMute(m.GuildID, targetUser.ID, false)
+		}()
+
+		s.ChannelMessageSendEmbed(m.ChannelID, utils.SuccessEmbed("User Muted!", fmt.Sprintf("%s has been muted in voice for %d minutes.", targetUser.Username, minutes)))
 
 	default:
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Item not found."))

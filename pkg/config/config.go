@@ -9,14 +9,15 @@ import (
 )
 
 type EconomyConfig struct {
-	DailyAmount             int     `json:"daily_amount"`
-	VoiceCoinsPerMinute     int     `json:"voice_coins_per_minute"`
-	CostNicknameSelf        int     `json:"cost_nickname_self"`
-	CostNicknameOther       int     `json:"cost_nickname_other"`
-	CostPerMinuteMute       int     `json:"cost_per_minute_mute"`
-	StockPriceMultiplier    float64 `json:"stock_price_multiplier"`
-	RouletteIntervalMinutes int     `json:"roulette_interval_minutes"`
-	RouletteChannelID       string  `json:"roulette_channel_id"`
+	DailyAmount              int     `json:"daily_amount"`
+	VoiceCoinsPerMinute      int     `json:"voice_coins_per_minute"`
+	CostNicknameSelf         int     `json:"cost_nickname_self"`
+	CostNicknameOther        int     `json:"cost_nickname_other"`
+	CostPerMinutePunishment  int     `json:"cost_per_minute_punishment"`
+	CostPerMinuteMute        int     `json:"cost_per_minute_mute"`
+	StockPriceMultiplier     float64 `json:"stock_price_multiplier"`
+	RouletteIntervalMinutes  int     `json:"roulette_interval_minutes"`
+	RouletteChannelID        string  `json:"roulette_channel_id"`
 }
 
 type DatabaseConfig struct {
