@@ -66,6 +66,9 @@ func main() {
 	// Start Roulette
 	games.StartRoulette(dg)
 
+	// Start Event Betting
+	games.StartEventBetting(dg)
+
 	// Register Slash Commands
 	log.Println("Registering slash commands...")
 	registeredCommands := make([]*discordgo.ApplicationCommand, len(commands.SlashCommands))
