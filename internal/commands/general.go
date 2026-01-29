@@ -4,108 +4,214 @@ import (
 	"estudocoin/pkg/config"
 	"estudocoin/pkg/utils"
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/bwmarrin/discordgo"
 )
 
-func GetHelpEmbed(s *discordgo.Session) *discordgo.MessageEmbed {
-	embed := utils.NewEmbed()
-	embed.Title = fmt.Sprintf("📘 %s Help", config.Bot.BotName)
-	embed.Description = "Here is the complete list of commands and features available."
-	embed.Color = utils.ColorBlue
-	embed.Thumbnail = &discordgo.MessageEmbedThumbnail{
-		URL: s.State.User.AvatarURL(""),
-	}
-	sym := config.Bot.CurrencySymbol
+// HelpSection represents a section of the help menu
+type HelpSection struct {
+	ID    string
+	Name  string
+	Emoji string
+	Value string
+}
 
-	embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
-		Name: "💰 Economy",
+var helpSections = []HelpSection{
+	{
+		ID:    "economy",
+		Name:  "Economy",
+		Emoji: "💰",
 		Value: fmt.Sprintf("`!daily` / `/daily`\nCollect your daily reward (**%d %s**).\n*Shows remaining time if not available.*\n\n"+
 			"`!balance` / `/balance [user]`\nCheck your wallet or someone else's.\n\n"+
 			"`!leaderboard` / `/leaderboard`\nSee the richest users.\n\n"+
-			"`!pay` / `/pay <user> <amount>`\nTransfer coins to another user.", config.Economy.DailyAmount, sym),
-		Inline: false,
-	})
-
-	embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
-		Name: "🛒 Shop",
+			"`!pay` / `/pay <user> <amount>`\nTransfer coins to another user.", config.Economy.DailyAmount, config.Bot.CurrencySymbol),
+	},
+	{
+		ID:    "shop",
+		Name:  "Shop",
+		Emoji: "🛒",
 		Value: fmt.Sprintf("`!shop` / `/shop`\nView available items.\n\n"+
 			"`!buy nickname <n>`\nChange your own nickname (**%d %s**).\n\n"+
 			"`!buy rename @user <n>`\nChange someone else's nickname (**%d %s**).\n\n"+
 			"`!buy mute @user <min>`\nTimeout a user for X minutes (**%d %s/min**).\n*Note: Mutes are accumulative!*",
-			config.Economy.CostNicknameSelf, sym, config.Economy.CostNicknameOther, sym, config.Economy.CostPerMinuteMute, sym),
-		Inline: false,
-	})
-
-	embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
-		Name: "🎲 Gambling",
-		Value: "`!bet aviator <amount>` / `/bet aviator`\nPlay the Aviator crash game. The multiplier rises every second.\n*Watch out for turbulence! Cash out before it crashes.*\n\n" +
-			"`!bet cups <amount>` / `/bet cups`\nFind the hidden coin under 6 cups.\n*Win 2x -> Double again or Cash Out.*\n\n" +
-			"`!bet blackjack <amount>` / `/blackjack <bet>`\nPlay classic Blackjack against the dealer.\n*Hit, Stand, Double Down, or take Insurance. Blackjack pays 3:2!*\n\n" +
-			"`!bet slots <amount>` / `/slots <amount>`\nSpin the slot machine! Match symbols to win.\n*3 matching = Jackpot | 2 matching = Win | Jackpot up to 25x!*\n\n" +
-			"`!roulette @user <amount>`\nChallenge another user to Russian Roulette.\n*Players take turns pulling the trigger. Survivor takes the entire pot!*",
-		Inline: false,
-	})
-
-	embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
-		Name: "📈 Stock Market",
-		Value: "`!stock market`\nView available stocks and current prices.\n\n" +
-			"`!stock buy <ticker> <amount>`\nBuy shares with your coins.\n\n" +
-			"`!stock sell <ticker> <shares|all>`\nSell your shares for coins.\n\n" +
-			"`!stock portfolio`\nView your investments and total portfolio value.",
-		Inline: false,
-	})
-
-	embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
-		Name: "🎡 Casino Roulette",
-		Value: "`!wheel`\nView roulette betting options and time until next spin.\n\n" +
+			config.Economy.CostNicknameSelf, config.Bot.CurrencySymbol, config.Economy.CostNicknameOther, config.Bot.CurrencySymbol, config.Economy.CostPerMinuteMute, config.Bot.CurrencySymbol),
+	},
+	{
+		ID:    "gambling",
+		Name:  "Gambling",
+		Emoji: "🎲",
+		Value: "`!bet aviator <amount>` / `/bet aviator`\nPlay the Aviator crash game.\n*Watch out for turbulence!*\n\n" +
+			"`!bet cups <amount>` / `/bet cups`\nFind the hidden coin under 6 cups.\n*Win 2x -> Double or Cash Out.*\n\n" +
+			"`!bet blackjack <amount>` / `/blackjack`\nClassic Blackjack vs dealer.\n*Hit, Stand, Double, Insurance.*\n\n" +
+			"`!bet slots <amount>` / `/slots`\nSpin the slot machine!\n*3 = Jackpot | 2 = Win | Up to 25x!*\n\n" +
+			"`!roulette @user <amount>`\nRussian Roulette PvP.\n*Survivor takes all!*",
+	},
+	{
+		ID:    "casino",
+		Name:  "Casino Roulette",
+		Emoji: "🎡",
+		Value: "`!wheel`\nView roulette options and time until spin.\n\n" +
 			"`!wheel number <0-36> <amount>` - **35:1**\n" +
-			"`!wheel red <amount>` / `!wheel black <amount>` - **1:1**\n" +
-			"`!wheel even <amount>` / `!wheel odd <amount>` - **1:1**\n" +
-			"`!wheel low <amount>` (1-18) / `!wheel high <amount>` (19-36) - **1:1**\n" +
+			"`!wheel red/black <amount>` - **1:1**\n" +
+			"`!wheel even/odd <amount>` - **1:1**\n" +
+			"`!wheel low/high <amount>` - **1:1**\n" +
 			"`!wheel dozen <1st/2nd/3rd> <amount>` - **2:1**\n\n" +
-			"*Rounds occur every 10 minutes. Betting closes when the wheel spins!*",
-		Inline: false,
-	})
+			"*Rounds every 10 min. Betting closes on spin!*",
+	},
+	{
+		ID:    "events",
+		Name:  "Event Betting",
+		Emoji: "🎯",
+		Value: "`!createevent <q> | <opt1> | <opt2> | <min>`\n*Admin only.* Create betting event.\n\n" +
+			"`!betevent <id> <opt_num> <amount>`\nPlace bet on event.\n\n" +
+			"`!events` - List active events\n" +
+			"`!event <id>` - View event details\n" +
+			"`!closeevent <id>` - Close early\n" +
+			"`!result <id> <opt>` - Set winner\n\n" +
+			"*Dynamic odds: less popular = higher payout!*",
+	},
+	{
+		ID:    "stocks",
+		Name:  "Stock Market",
+		Emoji: "📈",
+		Value: "`!stock market`\nView stocks and prices.\n\n" +
+			"`!stock buy <ticker> <amount>`\nBuy shares.\n\n" +
+			"`!stock sell <ticker> <shares|all>`\nSell shares.\n\n" +
+			"`!stock portfolio`\nView investments.",
+	},
+	{
+		ID:    "voice",
+		Name:  "Voice Rewards",
+		Emoji: "🎙️",
+		Value: fmt.Sprintf("Earn **%d %s/min** in voice channels.\n*Need 2+ people, not muted/deafened.*", config.Economy.VoiceCoinsPerMinute, config.Bot.CurrencySymbol),
+	},
+	{
+		ID:    "api",
+		Name:  "Developer & API",
+		Emoji: "🔧",
+		Value: fmt.Sprintf("`/apikey create` - Generate API key\n"+
+			"`/apikey list` - View keys\n"+
+			"`/webhook set <url>` - Coin notifications", config.Bot.BotName),
+	},
+}
 
-	embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
-		Name: "🎲 Event Betting (Admin Only to Create)",
-		Value: "`!createevent <question> | <opt1> | <opt2> | ... | <minutes>`\n" +
-			"Create a betting event with dynamic odds. Example: `!createevent Will it rain? | Yes | No | 30`\n\n" +
-			"`!betevent <event_id> <option_number> <amount>` - Place a bet\n" +
-			"`!events` - List all active events\n" +
-			"`!event <event_id>` - View specific event details and odds\n" +
-			"`!closeevent <event_id>` - Close betting early (creator only)\n" +
-			"`!result <event_id> <option_number>` - Set winner and pay out (creator only)\n\n" +
-			"*Dynamic odds: Less popular options pay more! House takes 5% to prevent exploits.*",
-		Inline: false,
-	})
+func getHelpEmbed(sectionIdx int) *discordgo.MessageEmbed {
+	if sectionIdx < 0 {
+		sectionIdx = len(helpSections) - 1
+	}
+	if sectionIdx >= len(helpSections) {
+		sectionIdx = 0
+	}
 
-	embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
-		Name: "🎙️ Voice Rewards (Passive)",
-		Value: fmt.Sprintf("Earn **%d %s per minute** by staying in voice channels.\n*Requirements:*\n• At least 2 people in the channel.\n• You must not be Muted or Deafened.", config.Economy.VoiceCoinsPerMinute, sym),
-		Inline: false,
-	})
+	section := helpSections[sectionIdx]
 
-	embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
-		Name: "🔧 Developer & API",
-		Value: fmt.Sprintf("`/apikey create`\nGenerate an API Key to integrate with %s.\n\n"+
-			"`/apikey list`\nView your active keys.\n\n"+
-			"`/webhook set <url>`\nConfigure a URL to receive notifications when you receive coins.", config.Bot.BotName),
-		Inline: false,
-	})
-
+	embed := utils.NewEmbed()
+	embed.Title = fmt.Sprintf("%s %s - Page %d/%d", section.Emoji, section.Name, sectionIdx+1, len(helpSections))
+	embed.Description = section.Value
+	embed.Color = utils.ColorBlue
 	embed.Footer = &discordgo.MessageEmbedFooter{
-		Text: fmt.Sprintf("%s v1.1 • Use slash commands for a better experience!", config.Bot.BotName),
+		Text: fmt.Sprintf("Use !help <section> to jump | Sections: economy, shop, gambling, casino, events, stocks, voice, api"),
 	}
 
 	return embed
 }
 
+func getHelpButtons(sectionIdx int) []discordgo.MessageComponent {
+	return []discordgo.MessageComponent{
+		discordgo.ActionsRow{
+			Components: []discordgo.MessageComponent{
+				discordgo.Button{
+					Label:    "⬅️ Previous",
+					Style:    discordgo.PrimaryButton,
+					CustomID: fmt.Sprintf("help_nav_%d", sectionIdx-1),
+					Disabled: false,
+				},
+				discordgo.Button{
+					Label:    "➡️ Next",
+					Style:    discordgo.PrimaryButton,
+					CustomID: fmt.Sprintf("help_nav_%d", sectionIdx+1),
+					Disabled: false,
+				},
+			},
+		},
+	}
+}
+
+func findSectionIndex(sectionID string) int {
+	sectionID = strings.ToLower(sectionID)
+	for i, section := range helpSections {
+		if strings.ToLower(section.ID) == sectionID || strings.ToLower(section.Name) == sectionID {
+			return i
+		}
+	}
+	return -1
+}
+
 func CmdHelp(s *discordgo.Session, m *discordgo.MessageCreate) {
-	s.ChannelMessageSendEmbed(m.ChannelID, GetHelpEmbed(s))
+	args := strings.Fields(m.Content)
+	
+	// Check if user specified a section
+	sectionIdx := 0
+	if len(args) > 1 {
+		sectionArg := strings.ToLower(args[1])
+		foundIdx := findSectionIndex(sectionArg)
+		if foundIdx >= 0 {
+			sectionIdx = foundIdx
+		}
+	}
+
+	embed := getHelpEmbed(sectionIdx)
+	buttons := getHelpButtons(sectionIdx)
+
+	s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
+		Embeds:     []*discordgo.MessageEmbed{embed},
+		Components: buttons,
+	})
+}
+
+func HandleHelpNavigation(s *discordgo.Session, i *discordgo.InteractionCreate, customID string) {
+	// Parse customID: help_nav_<idx>
+	parts := strings.Split(customID, "_")
+	if len(parts) != 3 {
+		return
+	}
+
+	sectionIdx, err := strconv.Atoi(parts[2])
+	if err != nil {
+		return
+	}
+
+	// Wrap around
+	if sectionIdx < 0 {
+		sectionIdx = len(helpSections) - 1
+	}
+	if sectionIdx >= len(helpSections) {
+		sectionIdx = 0
+	}
+
+	embed := getHelpEmbed(sectionIdx)
+	buttons := getHelpButtons(sectionIdx)
+
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseUpdateMessage,
+		Data: &discordgo.InteractionResponseData{
+			Embeds:     []*discordgo.MessageEmbed{embed},
+			Components: buttons,
+		},
+	})
 }
 
 func HandleSlashHelp(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	respondEmbed(s, i, GetHelpEmbed(s))
+	embed := getHelpEmbed(0)
+	buttons := getHelpButtons(0)
+
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Embeds:     []*discordgo.MessageEmbed{embed},
+			Components: buttons,
+		},
+	})
 }

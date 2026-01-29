@@ -48,5 +48,7 @@ func ComponentsHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		games.HandleRussianRouletteInteraction(s, i)
 	} else if strings.HasPrefix(customID, "slots_spin_") {
 		games.HandleSlotsInteraction(s, i)
+	} else if strings.HasPrefix(customID, "help_nav_") {
+		HandleHelpNavigation(s, i, customID)
 	}
 }
