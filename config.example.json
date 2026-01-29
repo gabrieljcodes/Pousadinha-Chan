@@ -1,0 +1,10 @@
+{
+  "bot_name": "Pousadinha-Chan",
+  "currency_name": "Coins",
+  "currency_symbol": "C",
+  "enable_api": true,
+  "api_port": ":8080",
+  "allowed_channels": [
+    "123456789100"
+  ]
+}
