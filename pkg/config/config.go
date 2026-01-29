@@ -139,6 +139,8 @@ func loadJSON(filename string, target interface{}) {
 	if err != nil {
 		log.Fatalf("Error parsing %s: %v", filename, err)
 	}
+	
+	log.Printf("Loaded config from %s", filename)
 }
 
 // IsChannelAllowed checks if a channel ID is in the allowed channels list
