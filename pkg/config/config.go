@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 )
 
 type EconomyConfig struct {
@@ -79,7 +80,13 @@ func buildPostgresConnectionString() string {
 	// Para Supabase, usar a DATABASE_URL completa se disponível (funciona com pgx)
 	if dbURL := os.Getenv("DATABASE_URL"); dbURL != "" {
 		log.Println("Using DATABASE_URL from environment")
-		// pgx funciona bem com o pooler do Supabase, sem necessidade de parâmetros extras
+		// Adicionar parâmetro para desabilitar cache de prepared statements (evita erros no pooler)
+		if !strings.Contains(dbURL, "statement_cache_mode") {
+			if strings.Contains(dbURL, "?") {
+				return dbURL + "&statement_cache_mode=describe"
+			}
+			return dbURL + "?statement_cache_mode=describe"
+		}
 		return dbURL
 	}
 

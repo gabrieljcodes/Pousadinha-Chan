@@ -60,6 +60,9 @@ func main() {
 		log.Fatal("Error opening connection: ", err)
 	}
 
+	// Initialize voice sessions for users already in voice channels
+	events.InitializeVoiceSessions(dg)
+
 	// Start Stock Market
 	stockmarket.Start(dg)
 
