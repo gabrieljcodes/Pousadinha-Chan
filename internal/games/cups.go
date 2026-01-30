@@ -73,8 +73,8 @@ func startCupGame(s *discordgo.Session, userID string, bet int, channelID string
 				return
 			}
 
-			// Deduct initial bet
-			database.RemoveCoins(userID, bet)
+			// Deduct initial bet (goes to bot)
+			database.CollectLostBet(userID, bet)
 
 			// Setup Input Channel
 			gameChan := make(chan *discordgo.InteractionCreate) // Unbuffered block
@@ -156,12 +156,20 @@ rows := []discordgo.MessageComponent{
 
 				// Check Result
 				if choice == winningCup {
-					// WIN
-					currentPot *= 2
+					// WIN - First round 5x, subsequent rounds 2x (5x, 10x, 20x, 40x...)
+					if round == 1 {
+						currentPot *= 5
+					} else {
+						currentPot *= 2
+					}
 					
 					// Ask to Continue
 					embed.Title = "✅ CORRECT!"
-					embed.Description = fmt.Sprintf("The coin was in **Cup %d**.\n\nYou have **%d %s**.\n\nDo you want to **Cash Out** or **Double It**?", winningCup, currentPot, config.Bot.CurrencySymbol)
+					nextMultiplier := 2
+					if round == 1 {
+						nextMultiplier = 10
+					}
+					embed.Description = fmt.Sprintf("The coin was in **Cup %d**.\n\nYou have **%d %s**.\n\nDo you want to **Cash Out** or continue for **%dx**?", winningCup, currentPot, config.Bot.CurrencySymbol, nextMultiplier)
 					embed.Color = utils.ColorGreen
 
 					actionRow := discordgo.ActionsRow{
@@ -172,7 +180,12 @@ rows := []discordgo.MessageComponent{
 								CustomID: fmt.Sprintf("cup_cashout_%s", userID),
 							},
 							discordgo.Button{
-								Label: "🎲 Continue (Double or Nothing)",
+								Label: func() string {
+								if round == 1 {
+									return "🎲 Continue (10x or Nothing)"
+								}
+								return "🎲 Continue (Double or Nothing)"
+							}(),
 								Style: discordgo.PrimaryButton,
 								CustomID: fmt.Sprintf("cup_continue_%s", userID),
 							},

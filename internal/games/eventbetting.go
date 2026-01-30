@@ -161,8 +161,8 @@ func PlaceBet(userID, username, eventID, optionID string, amount int) (bool, str
 		}
 	}
 
-	// Deduct coins
-	if err := database.RemoveCoins(userID, amount); err != nil {
+	// Deduct coins (goes to bot pool)
+	if err := database.CollectLostBet(userID, amount); err != nil {
 		return false, "Error processing bet."
 	}
 

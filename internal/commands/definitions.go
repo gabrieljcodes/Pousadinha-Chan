@@ -227,4 +227,64 @@ var SlashCommands = []*discordgo.ApplicationCommand{
 			},
 		},
 	},
+	{
+		Name:        "loan",
+		Description: "Loan system - Lend or borrow money",
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Name:        "offer",
+				Description: "Offer a loan to another user",
+				Type:        discordgo.ApplicationCommandOptionSubCommand,
+				Options: []*discordgo.ApplicationCommandOption{
+					{
+						Type:        discordgo.ApplicationCommandOptionUser,
+						Name:        "user",
+						Description: "The user to lend money to",
+						Required:    true,
+					},
+					{
+						Type:        discordgo.ApplicationCommandOptionInteger,
+						Name:        "amount",
+						Description: "Amount to lend",
+						Required:    true,
+						MinValue:    &minAmount,
+					},
+					{
+						Type:        discordgo.ApplicationCommandOptionNumber,
+						Name:        "interest",
+						Description: "Interest rate percentage (0-100)",
+						Required:    true,
+						MinValue:    ptr(0.0),
+						MaxValue:    100.0,
+					},
+					{
+						Type:        discordgo.ApplicationCommandOptionInteger,
+						Name:        "days",
+						Description: "Days until payment is due (1-365)",
+						Required:    true,
+						MinValue:    ptr(1.0),
+						MaxValue:    365.0,
+					},
+				},
+			},
+			{
+				Name:        "pay",
+				Description: "Pay an active loan",
+				Type:        discordgo.ApplicationCommandOptionSubCommand,
+				Options: []*discordgo.ApplicationCommandOption{
+					{
+						Type:        discordgo.ApplicationCommandOptionString,
+						Name:        "loan_id",
+						Description: "The loan ID to pay (optional - pays oldest if not specified)",
+						Required:    false,
+					},
+				},
+			},
+			{
+				Name:        "list",
+				Description: "List your active loans",
+				Type:        discordgo.ApplicationCommandOptionSubCommand,
+			},
+		},
+	},
 }

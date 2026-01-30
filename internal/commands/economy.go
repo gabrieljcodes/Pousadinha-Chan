@@ -14,22 +14,40 @@ import (
 
 func CmdDaily(s *discordgo.Session, m *discordgo.MessageCreate) {
 	userID := m.Author.ID
-	if !database.CanDaily(userID) {
-		nextTime := database.GetNextDailyTime(userID)
-		discordTime := fmt.Sprintf("<t:%d:R>", nextTime.Unix())
+	info := database.GetDailyStreakInfo(userID)
+
+	if !info.CanClaim {
+		discordTime := fmt.Sprintf("<t:%d:R>", info.NextDaily.Unix())
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(fmt.Sprintf("You already collected your daily reward! Come back %s.", discordTime)))
 		return
 	}
 
-	amount := config.Economy.DailyAmount
-	err := database.AddCoins(userID, amount)
+	info, err := database.ClaimDaily(userID)
+	if err != nil {
+		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Error claiming daily reward."))
+		return
+	}
+
+	// Adiciona as moedas
+	err = database.AddCoins(userID, info.Reward)
 	if err != nil {
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Error adding coins."))
 		return
 	}
-	database.SetDaily(userID)
 
-	s.ChannelMessageSendEmbed(m.ChannelID, utils.SuccessEmbed("Daily Collected!", fmt.Sprintf("You received **%d %s**!", amount, config.Bot.CurrencyName)))
+	streakText := ""
+	if info.Streak > 0 {
+		streakText = fmt.Sprintf("\n\n🔥 **Streak: %d days**", info.Streak+1)
+		if info.Streak+1 >= 50 {
+			streakText += " (MAX)"
+		}
+	}
+	if info.MaxStreak > 0 {
+		streakText += fmt.Sprintf("\n🏆 Max Streak: %d", info.MaxStreak)
+	}
+
+	s.ChannelMessageSendEmbed(m.ChannelID, utils.SuccessEmbed("Daily Collected!", 
+		fmt.Sprintf("You received **%d %s**!%s", info.Reward, config.Bot.CurrencyName, streakText)))
 }
 
 func CmdBalance(s *discordgo.Session, m *discordgo.MessageCreate) {

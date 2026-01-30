@@ -62,6 +62,8 @@ func SlashHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		handleSlashBet(s, i)
 	case "blackjack":
 		handleSlashBlackjack(s, i)
+	case "loan":
+		handleSlashLoan(s, i)
 	}
 }
 
@@ -88,21 +90,40 @@ func handleSlashBlackjack(s *discordgo.Session, i *discordgo.InteractionCreate) 
 
 func handleSlashDaily(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	userID := i.Member.User.ID
-	if !database.CanDaily(userID) {
-		nextTime := database.GetNextDailyTime(userID)
-		discordTime := fmt.Sprintf("<t:%d:R>", nextTime.Unix())
+	info := database.GetDailyStreakInfo(userID)
+
+	if !info.CanClaim {
+		discordTime := fmt.Sprintf("<t:%d:R>", info.NextDaily.Unix())
 		respondEmbed(s, i, utils.ErrorEmbed(fmt.Sprintf("You already collected your daily reward! Come back %s.", discordTime)))
 		return
 	}
 
-	amount := config.Economy.DailyAmount
-	err := database.AddCoins(userID, amount)
+	info, err := database.ClaimDaily(userID)
+	if err != nil {
+		respondEmbed(s, i, utils.ErrorEmbed("Error claiming daily reward."))
+		return
+	}
+
+	// Adiciona as moedas
+	err = database.AddCoins(userID, info.Reward)
 	if err != nil {
 		respondEmbed(s, i, utils.ErrorEmbed("Error adding coins."))
 		return
 	}
-	database.SetDaily(userID)
-	respondEmbed(s, i, utils.SuccessEmbed("Daily Collected!", fmt.Sprintf("You received **%d %s**!", amount, config.Bot.CurrencyName)))
+
+	streakText := ""
+	if info.Streak > 0 {
+		streakText = fmt.Sprintf("\n\n🔥 **Streak: %d days**", info.Streak+1)
+		if info.Streak+1 >= 50 {
+			streakText += " (MAX)"
+		}
+	}
+	if info.MaxStreak > 0 {
+		streakText += fmt.Sprintf("\n🏆 Max Streak: %d", info.MaxStreak)
+	}
+
+	respondEmbed(s, i, utils.SuccessEmbed("Daily Collected!", 
+		fmt.Sprintf("You received **%d %s**!%s", info.Reward, config.Bot.CurrencyName, streakText)))
 }
 
 func handleSlashBalance(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -203,7 +224,7 @@ func handleSlashBuy(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			return
 		}
 
-		database.RemoveCoins(userID, config.Economy.CostNicknameSelf)
+		database.CollectLostBet(userID, config.Economy.CostNicknameSelf)
 		respondEmbed(s, i, utils.SuccessEmbed("Purchase Successful", "Your nickname has been changed!"))
 
 	case "rename":
@@ -221,7 +242,7 @@ func handleSlashBuy(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			return
 		}
 
-		database.RemoveCoins(userID, config.Economy.CostNicknameOther)
+		database.CollectLostBet(userID, config.Economy.CostNicknameOther)
 		respondEmbed(s, i, utils.SuccessEmbed("Purchase Successful", fmt.Sprintf("Nickname of %s changed.", targetUser.Username)))
 
 	case "mute":
@@ -254,7 +275,98 @@ func handleSlashBuy(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			return
 		}
 
-		database.RemoveCoins(userID, cost)
+		database.CollectLostBet(userID, cost)
 		respondEmbed(s, i, utils.SuccessEmbed("Silenced!", fmt.Sprintf("%s silenced until %s.", targetUser.Username, until.Format("15:04:05"))))
+	}
+}
+
+func handleSlashLoan(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	options := i.ApplicationCommandData().Options
+	subCommand := options[0].Name
+
+	switch subCommand {
+	case "offer":
+		// Converter para formato compatível com CmdLoanOffer
+		targetUser := options[0].Options[0].UserValue(s)
+		amount := int(options[0].Options[1].IntValue())
+		interest := options[0].Options[2].FloatValue()
+		days := int(options[0].Options[3].IntValue())
+
+		// Criar mensagem falsa para compatibilidade
+		m := &discordgo.MessageCreate{
+			Message: &discordgo.Message{
+				Author:    i.Member.User,
+				ChannelID: i.ChannelID,
+				GuildID:   i.GuildID,
+				Content:   fmt.Sprintf("/loan offer @%s %d %.2f %d", targetUser.Username, amount, interest, days),
+			},
+		}
+		m.Mentions = []*discordgo.User{targetUser}
+
+		// Criar args
+		args := []string{"offer", fmt.Sprintf("%d", amount), fmt.Sprintf("%.2f", interest), fmt.Sprintf("%d", days)}
+
+		CmdLoanOffer(s, m, args)
+
+		// Responder que a oferta foi criada
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: fmt.Sprintf("📩 Loan offer sent to <@%s>!", targetUser.ID),
+				Flags:   discordgo.MessageFlagsEphemeral,
+			},
+		})
+
+	case "pay":
+		loanID := ""
+		if len(options[0].Options) > 0 {
+			loanID = options[0].Options[0].StringValue()
+		}
+
+		m := &discordgo.MessageCreate{
+			Message: &discordgo.Message{
+				Author:    i.Member.User,
+				ChannelID: i.ChannelID,
+				GuildID:   i.GuildID,
+				Content:   "!loan pay " + loanID,
+			},
+		}
+
+		args := []string{"pay"}
+		if loanID != "" {
+			args = append(args, loanID)
+		}
+
+		CmdLoanPay(s, m, args)
+
+		// Responder
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "💰 Processing loan payment...",
+				Flags:   discordgo.MessageFlagsEphemeral,
+			},
+		})
+
+	case "list":
+		m := &discordgo.MessageCreate{
+			Message: &discordgo.Message{
+				Author:    i.Member.User,
+				ChannelID: i.ChannelID,
+				GuildID:   i.GuildID,
+				Content:   "!loan list",
+			},
+		}
+
+		CmdLoanList(s, m, []string{"list"})
+
+		// Responder
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "📋 Listing your active loans...",
+				Flags:   discordgo.MessageFlagsEphemeral,
+			},
+		})
 	}
 }

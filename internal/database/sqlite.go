@@ -123,14 +123,18 @@ func (s *SQLiteDatabase) CreateTables() error {
 		"id" TEXT NOT NULL PRIMARY KEY,
 		"balance" INTEGER DEFAULT 0,
 		"last_daily" DATETIME,
-		"webhook_url" TEXT
+		"webhook_url" TEXT,
+		"daily_streak" INTEGER DEFAULT 0,
+		"max_daily_streak" INTEGER DEFAULT 0
 	);`
 	if _, err := s.db.Exec(createTableSQL); err != nil {
 		return err
 	}
 
-	// Migration: Try to add column if it doesn't exist
+	// Migration: Try to add columns if they don't exist
 	_, _ = s.db.Exec(`ALTER TABLE users ADD COLUMN webhook_url TEXT;`)
+	_, _ = s.db.Exec(`ALTER TABLE users ADD COLUMN daily_streak INTEGER DEFAULT 0;`)
+	_, _ = s.db.Exec(`ALTER TABLE users ADD COLUMN max_daily_streak INTEGER DEFAULT 0;`)
 
 	createApiTableSQL := `CREATE TABLE IF NOT EXISTS api_keys (
 		"key" TEXT NOT NULL PRIMARY KEY,
@@ -163,6 +167,24 @@ func (s *SQLiteDatabase) CreateTables() error {
 
 	// Criar tabelas de crypto
 	if err := s.CreateCryptoTables(); err != nil {
+		return err
+	}
+
+	// Criar tabela de empréstimos
+	createLoansTableSQL := `CREATE TABLE IF NOT EXISTS loans (
+		"id" TEXT NOT NULL PRIMARY KEY,
+		"lender_id" TEXT NOT NULL,
+		"borrower_id" TEXT NOT NULL,
+		"amount" INTEGER DEFAULT 0,
+		"interest_rate" REAL DEFAULT 0,
+		"due_date" DATETIME,
+		"total_owed" INTEGER DEFAULT 0,
+		"paid" INTEGER DEFAULT 0,
+		"created_at" DATETIME,
+		"channel_id" TEXT,
+		"guild_id" TEXT
+	);`
+	if _, err := s.db.Exec(createLoansTableSQL); err != nil {
 		return err
 	}
 

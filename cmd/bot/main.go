@@ -60,6 +60,10 @@ func main() {
 		log.Fatal("Error opening connection: ", err)
 	}
 
+	// Set Bot User ID for collecting lost bets
+	database.BotUserID = dg.State.User.ID
+	log.Printf("Bot User ID: %s", database.BotUserID)
+
 	// Initialize voice sessions for users already in voice channels
 	events.InitializeVoiceSessions(dg)
 
@@ -71,6 +75,9 @@ func main() {
 
 	// Start Event Betting
 	games.StartEventBetting(dg)
+
+	// Load active loans and schedule auto-collections
+	commands.LoadActiveLoans(dg)
 
 	// Register Slash Commands
 	log.Println("Registering slash commands...")
@@ -89,6 +96,11 @@ func main() {
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-sc
+
+	log.Println("Shutting down...")
+
+	// Pay all users in active voice sessions
+	events.CloseAllVoiceSessions()
 
 	// Cleanly close down the Discord session.
 	// Optionally remove commands on exit to avoid clutter if dev

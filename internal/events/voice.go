@@ -172,3 +172,36 @@ func InitializeVoiceSessions(s *discordgo.Session) {
 	}
 	log.Println("[VOICE] Initialization complete")
 }
+
+// CloseAllVoiceSessions paga todos os usuários em sessões ativas quando o bot fecha
+func CloseAllVoiceSessions() {
+	mu.Lock()
+	defer mu.Unlock()
+
+	log.Printf("[VOICE] Closing %d active voice sessions...", len(sessions))
+
+	for userID, sess := range sessions {
+		// Só paga se tiver um canal válido (não estiver mutado)
+		if sess.ChannelID != "" {
+			duration := time.Since(sess.StartTime)
+			totalSecs := int(duration.Seconds()) + sess.AccumulatedSeconds
+			minutes := totalSecs / 60
+
+			if minutes > 0 {
+				reward := minutes * config.Economy.VoiceCoinsPerMinute
+				database.AddCoins(userID, reward)
+				log.Printf("[VOICE SHUTDOWN] Paid user %s: %d coins for %d minutes", userID, reward, minutes)
+			} else {
+				log.Printf("[VOICE SHUTDOWN] User %s had less than 1 minute, no payment", userID)
+			}
+		} else {
+			// Usuário estava mutado, salva segundos acumulados para próxima sessão
+			if sess.AccumulatedSeconds > 0 {
+				log.Printf("[VOICE SHUTDOWN] User %s was muted with %d seconds accumulated (saved)", userID, sess.AccumulatedSeconds)
+			}
+		}
+		delete(sessions, userID)
+	}
+
+	log.Println("[VOICE] All sessions closed")
+}

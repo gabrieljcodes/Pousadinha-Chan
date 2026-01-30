@@ -172,6 +172,20 @@ func RemoveCoins(userID string, amount int) error {
 	return err
 }
 
+// BotUserID é o ID do bot (deve ser definido no main.go)
+var BotUserID string
+
+// CollectLostBet envia o dinheiro perdido em apostas para o perfil do bot
+func CollectLostBet(userID string, amount int) error {
+	if BotUserID == "" {
+		// Se o ID do bot não estiver definido, apenas remove as moedas do usuário
+		return RemoveCoins(userID, amount)
+	}
+	
+	// Transfere do usuário para o bot
+	return TransferCoins(userID, BotUserID, amount)
+}
+
 // TransferCoins transfere moedas entre usuários
 func TransferCoins(fromID, toID string, amount int) error {
 	tx, err := DB.Begin()
@@ -210,45 +224,129 @@ func TransferCoins(fromID, toID string, amount int) error {
 	return tx.Commit()
 }
 
+// DailyStreakInfo contém informações sobre a streak de daily do usuário
+type DailyStreakInfo struct {
+	Streak     int
+	MaxStreak  int
+	Reward     int
+	CanClaim   bool
+	NextDaily  time.Time
+}
+
+// GetDailyStreakInfo retorna informações completas sobre o daily do usuário
+func GetDailyStreakInfo(userID string) *DailyStreakInfo {
+	info := &DailyStreakInfo{
+		Streak:    0,
+		MaxStreak: 0,
+		Reward:    100,
+		CanClaim:  true,
+		NextDaily: time.Now(),
+	}
+
+	var lastDaily sql.NullTime
+	var streak sql.NullInt64
+	var maxStreak sql.NullInt64
+
+	query := prepareQuery("SELECT last_daily, daily_streak, max_daily_streak FROM users WHERE id = ?")
+	err := DB.QueryRow(query, userID).Scan(&lastDaily, &streak, &maxStreak)
+
+	if err == nil {
+		if streak.Valid {
+			info.Streak = int(streak.Int64)
+		}
+		if maxStreak.Valid {
+			info.MaxStreak = int(maxStreak.Int64)
+		}
+		if lastDaily.Valid {
+			timeSince := time.Since(lastDaily.Time)
+			info.CanClaim = timeSince >= 24*time.Hour
+			info.NextDaily = lastDaily.Time.Add(24 * time.Hour)
+
+			// Verifica se perdeu a streak (mais de 48 horas desde o último claim)
+			if timeSince > 48*time.Hour {
+				info.Streak = 0
+			}
+		}
+	}
+
+	// Calcula a recompensa baseada na streak
+	// Streak 0 = 100, Streak 1 = 200, ... até max 5000
+	info.Reward = (info.Streak + 1) * 100
+	if info.Reward > 5000 {
+		info.Reward = 5000
+	}
+
+	return info
+}
+
 // CanDaily verifica se o usuário pode coletar o daily
 func CanDaily(userID string) bool {
-	var lastDaily sql.NullTime
-	query := prepareQuery("SELECT last_daily FROM users WHERE id = ?")
-	err := DB.QueryRow(query, userID).Scan(&lastDaily)
-	if err != nil {
-		return true
-	}
-
-	if !lastDaily.Valid {
-		return true
-	}
-
-	return time.Since(lastDaily.Time) >= 24*time.Hour
+	return GetDailyStreakInfo(userID).CanClaim
 }
 
 // GetNextDailyTime retorna quando o próximo daily estará disponível
 func GetNextDailyTime(userID string) time.Time {
-	var lastDaily sql.NullTime
-	query := prepareQuery("SELECT last_daily FROM users WHERE id = ?")
-	err := DB.QueryRow(query, userID).Scan(&lastDaily)
-	if err != nil || !lastDaily.Valid {
-		return time.Now()
-	}
-	return lastDaily.Time.Add(24 * time.Hour)
+	return GetDailyStreakInfo(userID).NextDaily
 }
 
-// SetDaily registra que o usuário coletou o daily
-func SetDaily(userID string) error {
-	now := time.Now()
-	if config.DBType == "postgres" {
-		query := `INSERT INTO users (id, balance, last_daily) VALUES ($1, 0, $2) 
-				  ON CONFLICT(id) DO UPDATE SET last_daily = $2`
-		_, err := DB.Exec(query, userID, now)
-		return err
+// GetDailyReward calcula a recompensa do daily baseada na streak atual
+func GetDailyReward(userID string) int {
+	return GetDailyStreakInfo(userID).Reward
+}
+
+// ClaimDaily coleta o daily e atualiza a streak
+func ClaimDaily(userID string) (*DailyStreakInfo, error) {
+	info := GetDailyStreakInfo(userID)
+
+	if !info.CanClaim {
+		return info, fmt.Errorf("daily not available yet")
 	}
-	query := "INSERT INTO users (id, balance, last_daily) VALUES (?, 0, ?) ON CONFLICT(id) DO UPDATE SET last_daily = ?"
-	_, err := DB.Exec(query, userID, now, now)
-	return err
+
+	now := time.Now()
+
+	// Verifica se a streak continua (coletou entre 24h e 48h atrás)
+	timeSinceLast := time.Since(info.NextDaily.Add(-24 * time.Hour))
+	if timeSinceLast >= 0 && timeSinceLast <= 48*time.Hour {
+		// Continua a streak
+		info.Streak++
+	} else {
+		// Reseta a streak
+		info.Streak = 0
+	}
+
+	// Atualiza max streak se necessário
+	if info.Streak > info.MaxStreak {
+		info.MaxStreak = info.Streak
+	}
+
+	// Recalcula a recompensa
+	info.Reward = (info.Streak + 1) * 100
+	if info.Reward > 5000 {
+		info.Reward = 5000
+	}
+
+	// Atualiza no banco de dados
+	if config.DBType == "postgres" {
+		query := `INSERT INTO users (id, balance, last_daily, daily_streak, max_daily_streak) 
+				  VALUES ($1, $2, $3, $4, $5) 
+				  ON CONFLICT(id) DO UPDATE 
+				  SET last_daily = $3, daily_streak = $4, max_daily_streak = $5`
+		_, err := DB.Exec(query, userID, info.Reward, now, info.Streak, info.MaxStreak)
+		if err != nil {
+			return info, err
+		}
+	} else {
+		query := `INSERT INTO users (id, balance, last_daily, daily_streak, max_daily_streak) 
+				  VALUES (?, ?, ?, ?, ?) 
+				  ON CONFLICT(id) DO UPDATE 
+				  SET last_daily = ?, daily_streak = ?, max_daily_streak = ?`
+		_, err := DB.Exec(query, userID, info.Reward, now, info.Streak, info.MaxStreak, now, info.Streak, info.MaxStreak)
+		if err != nil {
+			return info, err
+		}
+	}
+
+	return info, nil
 }
 
 // CreateAPIKey cria uma nova chave de API
@@ -323,4 +421,65 @@ func GetWebhook(userID string) (string, error) {
 		return "", err
 	}
 	return url.String, nil
+}
+
+// Loan representa um empréstimo no banco de dados
+type Loan struct {
+	ID           string
+	LenderID     string
+	BorrowerID   string
+	Amount       int
+	InterestRate float64
+	DueDate      time.Time
+	TotalOwed    int
+	Paid         bool
+	CreatedAt    time.Time
+	ChannelID    string
+	GuildID      string
+}
+
+// SaveLoan salva um novo empréstimo no banco de dados
+func SaveLoan(loan *Loan) error {
+	if config.DBType == "postgres" {
+		query := `INSERT INTO loans (id, lender_id, borrower_id, amount, interest_rate, due_date, total_owed, paid, created_at, channel_id, guild_id) 
+				  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
+		_, err := DB.Exec(query, loan.ID, loan.LenderID, loan.BorrowerID, loan.Amount, 
+			loan.InterestRate, loan.DueDate, loan.TotalOwed, loan.Paid, loan.CreatedAt, loan.ChannelID, loan.GuildID)
+		return err
+	}
+	query := `INSERT INTO loans (id, lender_id, borrower_id, amount, interest_rate, due_date, total_owed, paid, created_at, channel_id, guild_id) 
+			  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	_, err := DB.Exec(query, loan.ID, loan.LenderID, loan.BorrowerID, loan.Amount,
+		loan.InterestRate, loan.DueDate, loan.TotalOwed, loan.Paid, loan.CreatedAt, loan.ChannelID, loan.GuildID)
+	return err
+}
+
+// MarkLoanAsPaid marca um empréstimo como pago
+func MarkLoanAsPaid(loanID string) error {
+	query := prepareQuery("UPDATE loans SET paid = ? WHERE id = ?")
+	_, err := DB.Exec(query, true, loanID)
+	return err
+}
+
+// GetActiveLoans retorna todos os empréstimos ativos (não pagos)
+func GetActiveLoans() ([]*Loan, error) {
+	query := prepareQuery("SELECT id, lender_id, borrower_id, amount, interest_rate, due_date, total_owed, paid, created_at, channel_id, guild_id FROM loans WHERE paid = ?")
+	rows, err := DB.Query(query, false)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var loans []*Loan
+	for rows.Next() {
+		loan := &Loan{}
+		err := rows.Scan(&loan.ID, &loan.LenderID, &loan.BorrowerID, &loan.Amount,
+			&loan.InterestRate, &loan.DueDate, &loan.TotalOwed, &loan.Paid,
+			&loan.CreatedAt, &loan.ChannelID, &loan.GuildID)
+		if err != nil {
+			continue
+		}
+		loans = append(loans, loan)
+	}
+	return loans, nil
 }

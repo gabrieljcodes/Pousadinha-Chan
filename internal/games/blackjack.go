@@ -178,8 +178,8 @@ func StartBlackjackGame(s *discordgo.Session, i *discordgo.InteractionCreate, be
 		return
 	}
 	
-	// Deduct bet
-	database.AddCoins(userID, -bet)
+	// Deduct bet (goes to bot)
+	database.CollectLostBet(userID, bet)
 	
 	// Initialize game
 	game := &BlackjackGame{
@@ -437,14 +437,14 @@ func HandleBlackjackDouble(s *discordgo.Session, i *discordgo.InteractionCreate,
 	game.mu.Lock()
 	defer game.mu.Unlock()
 	
-	// Deduct additional bet
+	// Deduct additional bet (goes to bot)
 	balance := database.GetBalance(userID)
 	if balance < game.Bet {
 		respondEmbed(s, i, utils.ErrorEmbed("Insufficient balance to double down!"))
 		return
 	}
 	
-	database.AddCoins(userID, -game.Bet)
+	database.CollectLostBet(userID, game.Bet)
 	game.Bet *= 2
 	game.DoubledDown = true
 	
@@ -499,7 +499,7 @@ func HandleBlackjackInsurance(s *discordgo.Session, i *discordgo.InteractionCrea
 		return
 	}
 	
-	database.AddCoins(userID, -insuranceAmount)
+	database.CollectLostBet(userID, insuranceAmount)
 	game.Insurance = true
 	game.InsuranceBet = insuranceAmount
 	
@@ -666,8 +666,8 @@ func StartBlackjackText(s *discordgo.Session, m *discordgo.MessageCreate, bet in
 		return
 	}
 	
-	// Deduct bet
-	database.AddCoins(userID, -bet)
+	// Deduct bet (goes to bot)
+	database.CollectLostBet(userID, bet)
 	
 	// Initialize game
 	game := &BlackjackGame{

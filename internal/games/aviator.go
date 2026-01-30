@@ -203,7 +203,7 @@ func setupGame(userID string, bet int) chan bool {
 	controlChan := make(chan bool, 1)
 	activeGames[userID] = controlChan
 	mutex.Unlock()
-	database.RemoveCoins(userID, bet)
+	database.CollectLostBet(userID, bet)
 	return controlChan
 }
 
