@@ -127,13 +127,8 @@ func CmdLeaderboard(s *discordgo.Session, m *discordgo.MessageCreate) {
 		}
 		
 		// Mostrar patrimônio total com detalhes
-		if u.StockValue > 0 {
-			description += fmt.Sprintf("**%d.** %s - **%d %s** 💰 (🪙 %d | 📈 %d)\n", 
-				i+1, name, u.TotalNetWorth, config.Bot.CurrencyName, u.Balance, u.StockValue)
-		} else {
-			description += fmt.Sprintf("**%d.** %s - **%d %s**\n", 
-				i+1, name, u.TotalNetWorth, config.Bot.CurrencyName)
-		}
+		description += fmt.Sprintf("**%d.** %s - **%d %s** 💰 (🪙 %d | 📈 %d)\n", 
+			i+1, name, u.TotalNetWorth, config.Bot.CurrencyName, u.Balance, u.StockValue)
 	}
 	
 	description += "\n💰 = Total | 🪙 = Wallet | 📈 = Stocks"
