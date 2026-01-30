@@ -28,8 +28,11 @@ type Database interface {
 
 // UserBalance representa o saldo de um usuário
 type UserBalance struct {
-	ID      string
-	Balance int
+	ID              string
+	Balance         int
+	StockValue      int
+	CryptoValue     int
+	TotalNetWorth   int
 }
 
 // APIKeyStruct representa uma chave de API

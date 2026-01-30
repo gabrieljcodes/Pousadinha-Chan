@@ -126,8 +126,17 @@ func CmdLeaderboard(s *discordgo.Session, m *discordgo.MessageCreate) {
 			name = discordUser.Username
 		}
 		
-		description += fmt.Sprintf("**%d.** %s - **%d %s**\n", i+1, name, u.Balance, config.Bot.CurrencyName)
+		// Mostrar patrimônio total com detalhes
+		if u.StockValue > 0 {
+			description += fmt.Sprintf("**%d.** %s - **%d %s** 💰 (🪙 %d | 📈 %d)\n", 
+				i+1, name, u.TotalNetWorth, config.Bot.CurrencyName, u.Balance, u.StockValue)
+		} else {
+			description += fmt.Sprintf("**%d.** %s - **%d %s**\n", 
+				i+1, name, u.TotalNetWorth, config.Bot.CurrencyName)
+		}
 	}
+	
+	description += "\n💰 = Total | 🪙 = Wallet | 📈 = Stocks"
 
-	s.ChannelMessageSendEmbed(m.ChannelID, utils.GoldEmbed("Richest Users", description))
+	s.ChannelMessageSendEmbed(m.ChannelID, utils.GoldEmbed("🏆 Richest Users (Net Worth)", description))
 }

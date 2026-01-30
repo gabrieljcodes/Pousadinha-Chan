@@ -158,10 +158,19 @@ func handleSlashLeaderboard(s *discordgo.Session, i *discordgo.InteractionCreate
 			name = discordUser.Username
 		}
 		
-description += fmt.Sprintf("**%d.** %s - **%d %s**\n", i+1, name, u.Balance, config.Bot.CurrencyName)
+		// Mostrar patrimônio total com detalhes
+		if u.StockValue > 0 {
+			description += fmt.Sprintf("**%d.** %s - **%d %s** 💰 (🪙 %d | 📈 %d)\n", 
+				i+1, name, u.TotalNetWorth, config.Bot.CurrencyName, u.Balance, u.StockValue)
+		} else {
+			description += fmt.Sprintf("**%d.** %s - **%d %s**\n", 
+				i+1, name, u.TotalNetWorth, config.Bot.CurrencyName)
+		}
 	}
+	
+	description += "\n💰 = Total | 🪙 = Wallet | 📈 = Stocks"
 
-	respondEmbed(s, i, utils.GoldEmbed("Richest Users", description))
+	respondEmbed(s, i, utils.GoldEmbed("🏆 Richest Users (Net Worth)", description))
 }
 
 func handleSlashPay(s *discordgo.Session, i *discordgo.InteractionCreate) {

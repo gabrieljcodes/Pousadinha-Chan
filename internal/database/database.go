@@ -127,10 +127,17 @@ func GetBalance(userID string) int {
 	return 0
 }
 
-// GetLeaderboard retorna o ranking de saldos
+// GetLeaderboard retorna o ranking de saldos (excluindo o bot e incluindo investimentos)
 func GetLeaderboard(limit int) ([]UserBalance, error) {
-	query := prepareQuery("SELECT id, balance FROM users ORDER BY balance DESC LIMIT ?")
-	rows, err := DB.Query(query, limit)
+	// Buscar todos os usuários (exceto o bot) com seus saldos
+	var query string
+	if BotUserID != "" {
+		query = prepareQuery("SELECT id, balance FROM users WHERE id != ? ORDER BY balance DESC")
+	} else {
+		query = prepareQuery("SELECT id, balance FROM users ORDER BY balance DESC")
+	}
+	
+	rows, err := DB.Query(query)
 	if err != nil {
 		return nil, err
 	}
@@ -142,8 +149,51 @@ func GetLeaderboard(limit int) ([]UserBalance, error) {
 		if err := rows.Scan(&u.ID, &u.Balance); err != nil {
 			continue
 		}
+		// Pular o bot se ainda estiver na lista
+		if BotUserID != "" && u.ID == BotUserID {
+			continue
+		}
+		
+		// Calcular valor em ações
+		stockValue := 0
+		stockInvestments, _ := GetAllInvestmentsByUser(u.ID)
+		for _, inv := range stockInvestments {
+			price, _ := GetStockPriceDB(inv.Ticker)
+			stockValue += int(inv.Shares * price)
+		}
+		u.StockValue = stockValue
+		
+		// Para crypto, vamos apenas contar o número de cryptos diferentes
+		// (os preços de crypto são voláteis e buscados em tempo real da API)
+		cryptoInvestments, _ := GetAllCryptoInvestmentsByUser(u.ID)
+		cryptoCount := 0
+		for _, inv := range cryptoInvestments {
+			if inv.Coins > 0 {
+				cryptoCount++
+			}
+		}
+		u.CryptoValue = cryptoCount // Usamos para armazenar a contagem por enquanto
+		
+		// Patrimônio total (balance + stocks, crypto não incluído por ser volátil)
+		u.TotalNetWorth = u.Balance + u.StockValue
+		
 		users = append(users, u)
 	}
+	
+	// Ordenar por patrimônio total (bubble sort simples)
+	for i := 0; i < len(users); i++ {
+		for j := i + 1; j < len(users); j++ {
+			if users[j].TotalNetWorth > users[i].TotalNetWorth {
+				users[i], users[j] = users[j], users[i]
+			}
+		}
+	}
+	
+	// Limitar resultados
+	if len(users) > limit {
+		users = users[:limit]
+	}
+	
 	return users, nil
 }
 
