@@ -130,15 +130,19 @@ func GetBalance(userID string) int {
 // GetLeaderboard retorna o ranking de saldos (excluindo o bot e incluindo investimentos)
 func GetLeaderboard(limit int) ([]UserBalance, error) {
 	// Buscar todos os usuários (exceto o bot) com seus saldos
-	var query string
+	var rows *sql.Rows
+	var err error
+	
 	if BotUserID != "" {
-		query = prepareQuery("SELECT id, balance FROM users WHERE id != ? ORDER BY balance DESC")
+		query := prepareQuery("SELECT id, balance FROM users WHERE id != ? ORDER BY balance DESC")
+		rows, err = DB.Query(query, BotUserID)
 	} else {
-		query = prepareQuery("SELECT id, balance FROM users ORDER BY balance DESC")
+		query := prepareQuery("SELECT id, balance FROM users ORDER BY balance DESC")
+		rows, err = DB.Query(query)
 	}
 	
-	rows, err := DB.Query(query)
 	if err != nil {
+		log.Printf("[LEADERBOARD ERROR] Query failed: %v", err)
 		return nil, err
 	}
 	defer rows.Close()
