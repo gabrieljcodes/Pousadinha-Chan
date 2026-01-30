@@ -2,6 +2,7 @@ package commands
 
 import (
 	"estudocoin/internal/database"
+	"estudocoin/internal/games"
 	"estudocoin/pkg/config"
 	"estudocoin/pkg/utils"
 	"fmt"
@@ -112,6 +113,20 @@ func CmdBuy(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
 			return
 		}
 
+		// Verificar se o usuário está em um jogo ativo
+		if games.IsUserInGame(targetUser.ID) {
+			msg, _ := s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("⏳ Aguardando", 
+				fmt.Sprintf("%s está em um jogo ativo. Aguardando o jogo terminar para aplicar o punishment...", targetUser.Username)))
+			
+			// Esperar o jogo acabar
+			games.WaitForGameFinish(targetUser.ID)
+			
+			// Deletar mensagem de espera
+			if msg != nil {
+				s.ChannelMessageDelete(m.ChannelID, msg.ID)
+			}
+		}
+
 		// Check existing timeout
 		member, err := s.GuildMember(m.GuildID, targetUser.ID)
 		if err != nil {
@@ -155,6 +170,20 @@ func CmdBuy(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
 		if database.GetBalance(userID) < cost {
 			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(fmt.Sprintf("Insufficient funds. Cost: %d %s.", cost, config.Bot.CurrencySymbol)))
 			return
+		}
+
+		// Verificar se o usuário está em um jogo ativo
+		if games.IsUserInGame(targetUser.ID) {
+			msg, _ := s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("⏳ Aguardando", 
+				fmt.Sprintf("%s está em um jogo ativo. Aguardando o jogo terminar para aplicar o mute...", targetUser.Username)))
+			
+			// Esperar o jogo acabar
+			games.WaitForGameFinish(targetUser.ID)
+			
+			// Deletar mensagem de espera
+			if msg != nil {
+				s.ChannelMessageDelete(m.ChannelID, msg.ID)
+			}
 		}
 
 		// Check if target user is in a voice channel
