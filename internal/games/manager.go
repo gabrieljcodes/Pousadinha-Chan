@@ -1,6 +1,9 @@
 package games
 
-import "sync"
+import (
+	"sync"
+	"time"
+)
 
 type GameJob struct {
 	UserID    string
@@ -12,6 +15,10 @@ var (
 	jobQueue = make(chan GameJob, 100) // Buffer up to 100 games
 	queueLen = 0
 	queueMu  sync.Mutex
+	
+	// Mapa para rastrear usuários em jogos ativos
+	activePlayers = make(map[string]bool)
+	playersMu     sync.RWMutex
 )
 
 func init() {
@@ -33,6 +40,11 @@ func Enqueue(job GameJob) {
 
 func processQueue() {
 	for job := range jobQueue {
+		// Marcar usuário como em jogo
+		playersMu.Lock()
+		activePlayers[job.UserID] = true
+		playersMu.Unlock()
+		
 		// Create a channel to wait for this specific game to finish
 		finishChan := make(chan struct{})
 		
@@ -41,5 +53,33 @@ func processQueue() {
 
 		// Wait here until the game signals it is done
 		<-finishChan
+		
+		// Remover usuário dos jogos ativos
+		playersMu.Lock()
+		delete(activePlayers, job.UserID)
+		playersMu.Unlock()
+	}
+}
+
+// IsUserInGame verifica se um usuário está em um jogo ativo
+func IsUserInGame(userID string) bool {
+	playersMu.RLock()
+	defer playersMu.RUnlock()
+	return activePlayers[userID]
+}
+
+// WaitForGameFinish espera o usuário terminar o jogo atual
+func WaitForGameFinish(userID string) {
+	for {
+		playersMu.RLock()
+		inGame := activePlayers[userID]
+		playersMu.RUnlock()
+		
+		if !inGame {
+			return
+		}
+		
+		// Esperar um pouco antes de verificar novamente
+		time.Sleep(500 * time.Millisecond)
 	}
 }

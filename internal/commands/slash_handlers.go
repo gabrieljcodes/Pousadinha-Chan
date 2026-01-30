@@ -259,6 +259,28 @@ func handleSlashBuy(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			return
 		}
 
+		// Verificar se o usuário está em um jogo ativo
+		if games.IsUserInGame(targetUser.ID) {
+			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Embeds: []*discordgo.MessageEmbed{utils.InfoEmbed("⏳ Aguardando", 
+						fmt.Sprintf("%s está em um jogo ativo. Aguardando o jogo terminar para aplicar o punishment...", targetUser.Username))},
+				},
+			})
+			
+			// Esperar o jogo acabar
+			games.WaitForGameFinish(targetUser.ID)
+			
+			// Atualizar para mensagem de aplicação
+			defer func() {
+				s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+					Embeds: &[]*discordgo.MessageEmbed{utils.SuccessEmbed("Punishment Applied!", 
+						fmt.Sprintf("%s has been timed out until %s.", targetUser.Username, time.Now().Add(time.Duration(minutes)*time.Minute).Format("15:04:05")))},
+				})
+			}()
+		}
+
 		// Check existing timeout
 		member, err := s.GuildMember(guildID, targetUser.ID)
 		if err != nil {
