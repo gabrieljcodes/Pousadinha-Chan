@@ -50,5 +50,11 @@ func ComponentsHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		games.HandleSlotsInteraction(s, i)
 	} else if strings.HasPrefix(customID, "help_nav_") {
 		HandleHelpNavigation(s, i, customID)
+	} else if strings.HasPrefix(customID, "loan_accept_") {
+		loanID := strings.TrimPrefix(customID, "loan_accept_")
+		HandleLoanAccept(s, i, loanID)
+	} else if strings.HasPrefix(customID, "loan_decline_") {
+		loanID := strings.TrimPrefix(customID, "loan_decline_")
+		HandleLoanDecline(s, i, loanID)
 	}
 }

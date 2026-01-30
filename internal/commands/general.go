@@ -25,10 +25,12 @@ func getHelpSections() []HelpSection {
 			ID:    "economy",
 			Name:  "Economy",
 			Emoji: "💰",
-			Value: fmt.Sprintf("`!daily` / `/daily`\nCollect your daily reward (**%d %s**).\n*Shows remaining time if not available.*\n\n"+
+			Value: "`!daily` / `/daily`\nCollect your daily reward (**100-5000**).\n"+
+				"🔥 **Streak System:** Day 1 = 100, Day 2 = 200... up to 5000!\n"+
+				"⚠️ Skip a day = streak resets to 100.\n\n"+
 				"`!balance` / `/balance [user]`\nCheck your wallet or someone else's.\n\n"+
 				"`!leaderboard` / `/leaderboard`\nSee the richest users.\n\n"+
-				"`!pay` / `/pay <user> <amount>`\nTransfer coins to another user.", config.Economy.DailyAmount, config.Bot.CurrencySymbol),
+				"`!pay` / `/pay <user> <amount>`\nTransfer coins to another user.",
 		},
 		{
 			ID:    "shop",
@@ -46,7 +48,7 @@ func getHelpSections() []HelpSection {
 			Name:  "Gambling",
 			Emoji: "🎲",
 			Value: "`!bet aviator <amount>` / `/bet aviator`\nPlay the Aviator crash game.\n*Watch out for turbulence!*\n\n" +
-				"`!bet cups <amount>` / `/bet cups`\nFind the hidden coin under 6 cups.\n*Win 2x -> Double or Cash Out.*\n\n" +
+				"`!bet cups <amount>` / `/bet cups`\nFind the hidden coin under 6 cups.\n*Win 5x, then 10x, 20x, 40x... or Cash Out!*\n\n" +
 				"`!bet blackjack <amount>` / `/blackjack`\nClassic Blackjack vs dealer.\n*Hit, Stand, Double, Insurance.*\n\n" +
 				"`!bet slots <amount>` / `/slots`\nSpin the slot machine!\n*3 = Jackpot | 2 = Win | Up to 25x!*\n\n" +
 				"`!roulette @user <amount>`\nRussian Roulette PvP.\n*Survivor takes all!*",
@@ -101,6 +103,18 @@ func getHelpSections() []HelpSection {
 			Value: fmt.Sprintf("Earn **%d %s/min** in voice channels.\n*Need 2+ people, not muted/deafened.*", config.Economy.VoiceCoinsPerMinute, config.Bot.CurrencySymbol),
 		},
 		{
+			ID:    "loans",
+			Name:  "Loans",
+			Emoji: "💳",
+			Value: "`!loan offer @user <amount> <interest> <days>` / `/loan offer`\n"+
+				"Offer a loan to another user. They have 1 minute to accept.\n\n"+
+				"`!loan pay [loan_id]` / `/loan pay`\n"+
+				"Pay an active loan (pays oldest if no ID specified).\n\n"+
+				"`!loan list [@user]` / `/loan list`\n"+
+				"View active loans.\n\n"+
+				"⚠️ **Auto-collection:** If not paid by due date, funds are automatically deducted!",
+		},
+		{
 			ID:    "api",
 			Name:  "Developer & API",
 			Emoji: "🔧",
@@ -128,7 +142,7 @@ func getHelpEmbed(sectionIdx int) *discordgo.MessageEmbed {
 	embed.Description = section.Value
 	embed.Color = utils.ColorBlue
 	embed.Footer = &discordgo.MessageEmbedFooter{
-		Text: fmt.Sprintf("Use !help <section> to jump | Sections: economy, shop, gambling, casino, events, stocks, crypto, voice, api"),
+		Text: fmt.Sprintf("Use !help <section> to jump | Sections: economy, shop, gambling, casino, events, stocks, crypto, voice, loans, api"),
 	}
 
 	return embed

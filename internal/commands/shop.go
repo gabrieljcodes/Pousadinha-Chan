@@ -64,7 +64,7 @@ func CmdBuy(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
 			return
 		}
 
-		database.RemoveCoins(userID, config.Economy.CostNicknameSelf)
+		database.CollectLostBet(userID, config.Economy.CostNicknameSelf)
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.SuccessEmbed("Purchase Successful", "Your nickname has been changed!"))
 
 	case "rename":
@@ -89,7 +89,7 @@ func CmdBuy(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
 			return
 		}
 
-		database.RemoveCoins(userID, config.Economy.CostNicknameOther)
+		database.CollectLostBet(userID, config.Economy.CostNicknameOther)
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.SuccessEmbed("Purchase Successful", fmt.Sprintf("Nickname of %s changed.", targetUser.Username)))
 
 	case "punishment", "timeout":
@@ -134,7 +134,7 @@ func CmdBuy(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
 			return
 		}
 
-		database.RemoveCoins(userID, cost)
+		database.CollectLostBet(userID, cost)
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.SuccessEmbed("Punishment Applied!", fmt.Sprintf("%s has been timed out until %s.", targetUser.Username, until.Format("15:04:05"))))
 
 	case "mute":
@@ -172,7 +172,7 @@ func CmdBuy(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
 		}
 
 		// Remove coins
-		database.RemoveCoins(userID, cost)
+		database.CollectLostBet(userID, cost)
 
 		// Schedule unmute after duration
 		go func() {

@@ -263,8 +263,8 @@ func PlaceRouletteBet(userID, username string, betType BetType, value string, am
 		return false, "Invalid bet."
 	}
 
-	// Deduct bet
-	if err := database.RemoveCoins(userID, amount); err != nil {
+	// Deduct bet (goes to bot)
+	if err := database.CollectLostBet(userID, amount); err != nil {
 		return false, "Error placing bet."
 	}
 

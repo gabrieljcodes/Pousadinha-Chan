@@ -203,7 +203,7 @@ func HandleSlotsInteraction(s *discordgo.Session, i *discordgo.InteractionCreate
 		return
 	}
 
-	database.RemoveCoins(userID, session.Bet)
+	database.CollectLostBet(userID, session.Bet)
 
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseUpdateMessage,

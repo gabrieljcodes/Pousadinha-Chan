@@ -80,5 +80,25 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		games.CmdViewEvent(s, m, args)
 	case "!closeevent":
 		games.CmdCloseEvent(s, m, args)
+	case "!loan":
+		if len(args) < 1 {
+			s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("Loan System",
+				"**Commands:**\n"+
+					"`!loan offer @user <amount> <interest> <days>` - Offer a loan\n"+
+					"`!loan pay [loan_id]` - Pay a loan\n"+
+					"`!loan list [@user]` - List active loans"))
+			return
+		}
+		subCommand := strings.ToLower(args[0])
+		switch subCommand {
+		case "offer":
+			CmdLoanOffer(s, m, args)
+		case "pay":
+			CmdLoanPay(s, m, args)
+		case "list":
+			CmdLoanList(s, m, args)
+		default:
+			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Unknown loan command. Use `!loan offer`, `!loan pay`, or `!loan list`"))
+		}
 	}
 }
