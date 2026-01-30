@@ -5,6 +5,7 @@ import (
 	"estudocoin/pkg/config"
 	"estudocoin/pkg/utils"
 	"fmt"
+	"log"
 	"math/rand"
 	"sync"
 	"time"
@@ -253,7 +254,11 @@ func runGameLoop(userID string, bet int, controlChan chan bool, update MessageUp
 			}
 
 			winAmount := int(float64(bet) * multiplier)
-			database.AddCoins(userID, winAmount)
+			err := database.AddCoins(userID, winAmount)
+			if err != nil {
+				log.Printf("[AVIATOR ERROR] Failed to add coins for user %s: %v", userID, err)
+			}
+			log.Printf("[AVIATOR WIN] User %s won %d %s (bet: %d, multiplier: %.2f)", userID, winAmount, config.Bot.CurrencySymbol, bet, multiplier)
 			update(utils.SuccessEmbed("✅ CASHED OUT!", fmt.Sprintf("You jumped at **x%.2f**\nProfit: **+%d %s**", multiplier, winAmount, config.Bot.CurrencySymbol)), true)
 			return
 
