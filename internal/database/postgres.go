@@ -161,11 +161,7 @@ func (p *PostgresDatabase) UpsertSyntax(table string, conflictCols []string, upd
 
 // CreateTables cria as tabelas necessárias para PostgreSQL
 func (p *PostgresDatabase) CreateTables() error {
-	// Verificar se deve pular criação de tabelas
-	if os.Getenv("DB_SKIP_TABLE_CREATION") == "true" {
-		log.Println("Skipping table creation (DB_SKIP_TABLE_CREATION=true)")
-		return nil
-	}
+
 
 	log.Println("Creating PostgreSQL tables if not exists...")
 

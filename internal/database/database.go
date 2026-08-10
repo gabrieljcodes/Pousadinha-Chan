@@ -28,11 +28,6 @@ func Initialize() {
 	log.Println("Database initialized successfully")
 }
 
-// ShouldSkipTableCreation verifica se deve pular a criação de tabelas
-func ShouldSkipTableCreation() bool {
-	return os.Getenv("DB_SKIP_TABLE_CREATION") == "true"
-}
-
 
 
 // NewPostgres cria e inicializa um banco PostgreSQL
