@@ -22,7 +22,7 @@ type EconomyConfig struct {
 }
 
 type DatabaseConfig struct {
-	Type string `json:"type"` // "sqlite" ou "postgres"
+	Type string `json:"type"` // "postgres"
 }
 
 type GeneralConfig struct {
@@ -39,7 +39,6 @@ type GeneralConfig struct {
 var (
 	Economy    EconomyConfig
 	Bot        GeneralConfig
-	DBType     string
 	ConnString string
 )
 
@@ -52,28 +51,7 @@ func Load() {
 }
 
 func setupDatabaseConfig() {
-	// DB_TYPE do .env sobrescreve o config.json
-	DBType = os.Getenv("DB_TYPE")
-	if DBType == "" {
-		DBType = Bot.Database.Type
-	}
-	if DBType == "" {
-		DBType = "sqlite"
-	}
-
-	switch DBType {
-	case "postgres":
-		ConnString = buildPostgresConnectionString()
-	case "sqlite":
-		fallthrough
-	default:
-		// Caminho do SQLite vem do .env ou usa default
-		ConnString = os.Getenv("SQLITE_PATH")
-		if ConnString == "" {
-			ConnString = "./pousadinha-chan.db"
-		}
-		DBType = "sqlite"
-	}
+	ConnString = buildPostgresConnectionString()
 }
 
 func buildPostgresConnectionString() string {

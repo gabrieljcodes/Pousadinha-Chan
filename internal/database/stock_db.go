@@ -3,8 +3,6 @@ package database
 import (
 	"database/sql"
 	"time"
-
-	"estudocoin/pkg/config"
 )
 
 // GetInvestment retorna a quantidade de ações que um usuário tem de um ticker
@@ -21,16 +19,10 @@ func GetInvestment(userID, ticker string) (float64, error) {
 	return shares, nil
 }
 
-// AddShares adiciona ações para um usuário
 func AddShares(userID, ticker string, amount float64) error {
-	if config.DBType == "postgres" {
-		query := `INSERT INTO stock_investments (user_id, ticker, shares) VALUES ($1, $2, $3) 
-				  ON CONFLICT(user_id, ticker) DO UPDATE SET shares = stock_investments.shares + $3`
-		_, err := DB.Exec(query, userID, ticker, amount)
-		return err
-	}
-	query := "INSERT INTO stock_investments (user_id, ticker, shares) VALUES (?, ?, ?) ON CONFLICT(user_id, ticker) DO UPDATE SET shares = shares + ?"
-	_, err := DB.Exec(query, userID, ticker, amount, amount)
+	query := `INSERT INTO stock_investments (user_id, ticker, shares) VALUES ($1, $2, $3) 
+			  ON CONFLICT(user_id, ticker) DO UPDATE SET shares = stock_investments.shares + $3`
+	_, err := DB.Exec(query, userID, ticker, amount)
 	return err
 }
 
@@ -55,17 +47,11 @@ func RemoveShares(userID, ticker string, amount float64) error {
 	return err
 }
 
-// SetStockPriceDB define o preço de uma ação
 func SetStockPriceDB(ticker string, price float64) error {
 	now := time.Now()
-	if config.DBType == "postgres" {
-		query := `INSERT INTO stock_prices (ticker, last_price, updated_at) VALUES ($1, $2, $3) 
-				  ON CONFLICT(ticker) DO UPDATE SET last_price = $2, updated_at = $3`
-		_, err := DB.Exec(query, ticker, price, now)
-		return err
-	}
-	query := "INSERT INTO stock_prices (ticker, last_price, updated_at) VALUES (?, ?, ?) ON CONFLICT(ticker) DO UPDATE SET last_price = ?, updated_at = ?"
-	_, err := DB.Exec(query, ticker, price, now, price, now)
+	query := `INSERT INTO stock_prices (ticker, last_price, updated_at) VALUES ($1, $2, $3) 
+			  ON CONFLICT(ticker) DO UPDATE SET last_price = $2, updated_at = $3`
+	_, err := DB.Exec(query, ticker, price, now)
 	return err
 }
 

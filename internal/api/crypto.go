@@ -222,15 +222,9 @@ func HandleBuyCrypto(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Add crypto shares
-	var query string
-	if config.DBType == "postgres" {
-		query = `INSERT INTO crypto_investments (user_id, symbol, coins) VALUES ($1, $2, $3) 
-				  ON CONFLICT(user_id, symbol) DO UPDATE SET coins = crypto_investments.coins + $3`
-		_, err = tx.Exec(query, userID, symbol, coins)
-	} else {
-		query = "INSERT INTO crypto_investments (user_id, symbol, coins) VALUES (?, ?, ?) ON CONFLICT(user_id, symbol) DO UPDATE SET coins = coins + ?"
-		_, err = tx.Exec(query, userID, symbol, coins, coins)
-	}
+	query := `INSERT INTO crypto_investments (user_id, symbol, coins) VALUES ($1, $2, $3) 
+			  ON CONFLICT(user_id, symbol) DO UPDATE SET coins = crypto_investments.coins + $3`
+	_, err = tx.Exec(query, userID, symbol, coins)
 
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)

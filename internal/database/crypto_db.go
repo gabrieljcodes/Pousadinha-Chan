@@ -2,8 +2,6 @@ package database
 
 import (
 	"database/sql"
-	
-	"estudocoin/pkg/config"
 )
 
 // CryptoInvestment represents a cryptocurrency investment
@@ -27,19 +25,7 @@ func (p *PostgresDatabase) CreateCryptoTables() error {
 	return nil
 }
 
-// CreateCryptoTablesSQLite cria as tabelas para SQLite
-func (s *SQLiteDatabase) CreateCryptoTables() error {
-	createCryptoInvestmentsSQL := `CREATE TABLE IF NOT EXISTS crypto_investments (
-		"user_id" TEXT NOT NULL,
-		"symbol" TEXT NOT NULL,
-		"coins" REAL DEFAULT 0,
-		PRIMARY KEY (user_id, symbol)
-	);`
-	if _, err := s.db.Exec(createCryptoInvestmentsSQL); err != nil {
-		return err
-	}
-	return nil
-}
+
 
 // GetCryptoInvestment retorna a quantidade de coins que um usuário tem de uma crypto
 func GetCryptoInvestment(userID, symbol string) (float64, error) {
@@ -55,16 +41,10 @@ func GetCryptoInvestment(userID, symbol string) (float64, error) {
 	return coins, nil
 }
 
-// AddCryptoShares adiciona coins para um usuário
 func AddCryptoShares(userID, symbol string, coins float64) error {
-	if config.DBType == "postgres" {
-		query := `INSERT INTO crypto_investments (user_id, symbol, coins) VALUES ($1, $2, $3) 
-				  ON CONFLICT(user_id, symbol) DO UPDATE SET coins = crypto_investments.coins + $3`
-		_, err := DB.Exec(query, userID, symbol, coins)
-		return err
-	}
-	query := "INSERT INTO crypto_investments (user_id, symbol, coins) VALUES (?, ?, ?) ON CONFLICT(user_id, symbol) DO UPDATE SET coins = coins + ?"
-	_, err := DB.Exec(query, userID, symbol, coins, coins)
+	query := `INSERT INTO crypto_investments (user_id, symbol, coins) VALUES ($1, $2, $3) 
+			  ON CONFLICT(user_id, symbol) DO UPDATE SET coins = crypto_investments.coins + $3`
+	_, err := DB.Exec(query, userID, symbol, coins)
 	return err
 }
 

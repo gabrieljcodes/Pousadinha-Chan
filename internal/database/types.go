@@ -19,7 +19,7 @@ type Database interface {
 	Exec(query string, args ...interface{}) (sql.Result, error)
 	Begin() (*sql.Tx, error)
 
-	// Placeholder retorna o placeholder correto para o driver (? para SQLite, $N para PostgreSQL)
+	// Placeholder retorna o placeholder correto para o driver ($N para PostgreSQL)
 	Placeholder(index int) string
 
 	// UpsertSyntax retorna a sintaxe correta para upsert

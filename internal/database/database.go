@@ -14,16 +14,8 @@ import (
 func Initialize() {
 	var err error
 
-	switch config.DBType {
-	case "postgres":
-		log.Println("Initializing PostgreSQL database...")
-		DB, err = NewPostgres(config.ConnString)
-	case "sqlite":
-		fallthrough
-	default:
-		log.Println("Initializing SQLite database...")
-		DB, err = NewSQLite(config.ConnString)
-	}
+	log.Println("Initializing PostgreSQL database...")
+	DB, err = NewPostgres(config.ConnString)
 
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
@@ -33,7 +25,7 @@ func Initialize() {
 		log.Fatalf("Failed to ping database: %v", err)
 	}
 
-	log.Printf("Database initialized successfully (type: %s)", config.DBType)
+	log.Println("Database initialized successfully")
 }
 
 // ShouldSkipTableCreation verifica se deve pular a criação de tabelas
@@ -41,17 +33,7 @@ func ShouldSkipTableCreation() bool {
 	return os.Getenv("DB_SKIP_TABLE_CREATION") == "true"
 }
 
-// NewSQLite cria e inicializa um banco SQLite
-func NewSQLite(connString string) (Database, error) {
-	db := NewSQLiteDatabase(connString)
-	if err := db.Open(); err != nil {
-		return nil, err
-	}
-	if err := db.CreateTables(); err != nil {
-		return nil, err
-	}
-	return db, nil
-}
+
 
 // NewPostgres cria e inicializa um banco PostgreSQL
 func NewPostgres(connString string) (Database, error) {
@@ -67,21 +49,8 @@ func NewPostgres(connString string) (Database, error) {
 
 // Helper functions para facilitar a migração das queries existentes
 
-// prepareQuery converte uma query com ? para o formato correto do driver
+// prepareQuery converte uma query com ? para o formato do PostgreSQL ($1, $2, etc.)
 func prepareQuery(query string) string {
-	if config.DBType == "postgres" {
-		// Converter ? para $1, $2, etc.
-		return convertPlaceholders(query)
-	}
-	return query
-}
-
-// convertPlaceholders converte ? placeholders para $N (PostgreSQL)
-func convertPlaceholders(query string) string {
-	if config.DBType != "postgres" {
-		return query
-	}
-
 	result := ""
 	placeholderIndex := 1
 	for i := 0; i < len(query); i++ {
@@ -203,15 +172,9 @@ func GetLeaderboard(limit int) ([]UserBalance, error) {
 
 // AddCoins adiciona moedas a um usuário
 func AddCoins(userID string, amount int) error {
-	if config.DBType == "postgres" {
-		// PostgreSQL usa sintaxe diferente para upsert
-		query := `INSERT INTO users (id, balance) VALUES ($1, $2) 
-				  ON CONFLICT(id) DO UPDATE SET balance = users.balance + $2`
-		_, err := DB.Exec(query, userID, amount)
-		return err
-	}
-	query := "INSERT INTO users (id, balance) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET balance = balance + ?"
-	_, err := DB.Exec(query, userID, amount, amount)
+	query := `INSERT INTO users (id, balance) VALUES ($1, $2) 
+			  ON CONFLICT(id) DO UPDATE SET balance = users.balance + $2`
+	_, err := DB.Exec(query, userID, amount)
 	return err
 }
 
@@ -263,14 +226,9 @@ func TransferCoins(fromID, toID string, amount int) error {
 		return err
 	}
 
-	if config.DBType == "postgres" {
-		_, err = tx.Exec(`INSERT INTO users (id, balance) VALUES ($1, $2) 
-						  ON CONFLICT(id) DO UPDATE SET balance = users.balance + $2`,
-			toID, amount)
-	} else {
-		_, err = tx.Exec("INSERT INTO users (id, balance) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET balance = balance + ?",
-			toID, amount, amount)
-	}
+	_, err = tx.Exec(`INSERT INTO users (id, balance) VALUES ($1, $2) 
+					  ON CONFLICT(id) DO UPDATE SET balance = users.balance + $2`,
+		toID, amount)
 	if err != nil {
 		return err
 	}
@@ -380,24 +338,13 @@ func ClaimDaily(userID string) (*DailyStreakInfo, error) {
 	}
 
 	// Atualiza no banco de dados
-	if config.DBType == "postgres" {
-		query := `INSERT INTO users (id, balance, last_daily, daily_streak, max_daily_streak) 
-				  VALUES ($1, $2, $3, $4, $5) 
-				  ON CONFLICT(id) DO UPDATE 
-				  SET last_daily = $3, daily_streak = $4, max_daily_streak = $5`
-		_, err := DB.Exec(query, userID, info.Reward, now, info.Streak, info.MaxStreak)
-		if err != nil {
-			return info, err
-		}
-	} else {
-		query := `INSERT INTO users (id, balance, last_daily, daily_streak, max_daily_streak) 
-				  VALUES (?, ?, ?, ?, ?) 
-				  ON CONFLICT(id) DO UPDATE 
-				  SET last_daily = ?, daily_streak = ?, max_daily_streak = ?`
-		_, err := DB.Exec(query, userID, info.Reward, now, info.Streak, info.MaxStreak, now, info.Streak, info.MaxStreak)
-		if err != nil {
-			return info, err
-		}
+	query := `INSERT INTO users (id, balance, last_daily, daily_streak, max_daily_streak) 
+			  VALUES ($1, $2, $3, $4, $5) 
+			  ON CONFLICT(id) DO UPDATE 
+			  SET last_daily = $3, daily_streak = $4, max_daily_streak = $5`
+	_, err := DB.Exec(query, userID, info.Reward, now, info.Streak, info.MaxStreak)
+	if err != nil {
+		return info, err
 	}
 
 	return info, nil
@@ -443,11 +390,6 @@ func ListAPIKeys(userID string) ([]APIKeyStruct, error) {
 
 // DeleteAPIKey deleta uma chave de API
 func DeleteAPIKey(userID, prefix string) error {
-	if config.DBType == "postgres" {
-		query := prepareQuery("DELETE FROM api_keys WHERE user_id = ? AND key LIKE ?")
-		_, err := DB.Exec(query, userID, prefix+"%")
-		return err
-	}
 	query := prepareQuery("DELETE FROM api_keys WHERE user_id = ? AND key LIKE ?")
 	_, err := DB.Exec(query, userID, prefix+"%")
 	return err
@@ -455,14 +397,9 @@ func DeleteAPIKey(userID, prefix string) error {
 
 // SetWebhook define a URL de webhook de um usuário
 func SetWebhook(userID, url string) error {
-	if config.DBType == "postgres" {
-		query := `INSERT INTO users (id, balance, webhook_url) VALUES ($1, 0, $2) 
-				  ON CONFLICT(id) DO UPDATE SET webhook_url = $2`
-		_, err := DB.Exec(query, userID, url)
-		return err
-	}
-	query := "INSERT INTO users (id, balance, webhook_url) VALUES (?, 0, ?) ON CONFLICT(id) DO UPDATE SET webhook_url = ?"
-	_, err := DB.Exec(query, userID, url, url)
+	query := `INSERT INTO users (id, balance, webhook_url) VALUES ($1, 0, $2) 
+			  ON CONFLICT(id) DO UPDATE SET webhook_url = $2`
+	_, err := DB.Exec(query, userID, url)
 	return err
 }
 
@@ -494,16 +431,9 @@ type Loan struct {
 
 // SaveLoan salva um novo empréstimo no banco de dados
 func SaveLoan(loan *Loan) error {
-	if config.DBType == "postgres" {
-		query := `INSERT INTO loans (id, lender_id, borrower_id, amount, interest_rate, due_date, total_owed, paid, created_at, channel_id, guild_id) 
-				  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
-		_, err := DB.Exec(query, loan.ID, loan.LenderID, loan.BorrowerID, loan.Amount, 
-			loan.InterestRate, loan.DueDate, loan.TotalOwed, loan.Paid, loan.CreatedAt, loan.ChannelID, loan.GuildID)
-		return err
-	}
 	query := `INSERT INTO loans (id, lender_id, borrower_id, amount, interest_rate, due_date, total_owed, paid, created_at, channel_id, guild_id) 
-			  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-	_, err := DB.Exec(query, loan.ID, loan.LenderID, loan.BorrowerID, loan.Amount,
+			  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
+	_, err := DB.Exec(query, loan.ID, loan.LenderID, loan.BorrowerID, loan.Amount, 
 		loan.InterestRate, loan.DueDate, loan.TotalOwed, loan.Paid, loan.CreatedAt, loan.ChannelID, loan.GuildID)
 	return err
 }

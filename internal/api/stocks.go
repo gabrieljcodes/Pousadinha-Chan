@@ -253,19 +253,10 @@ func HandleBuyStock(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Add shares using the appropriate upsert syntax
-	var query string
-	if config.DBType == "postgres" {
-		query = `INSERT INTO stock_investments (user_id, ticker, shares) VALUES ($1, $2, $3) 
-				  ON CONFLICT(user_id, ticker) DO UPDATE SET shares = stock_investments.shares + $3`
-	} else {
-		query = "INSERT INTO stock_investments (user_id, ticker, shares) VALUES (?, ?, ?) ON CONFLICT(user_id, ticker) DO UPDATE SET shares = shares + ?"
-	}
+	query := `INSERT INTO stock_investments (user_id, ticker, shares) VALUES ($1, $2, $3) 
+			  ON CONFLICT(user_id, ticker) DO UPDATE SET shares = stock_investments.shares + $3`
 
-	if config.DBType == "postgres" {
-		_, err = tx.Exec(query, userID, ticker, shares)
-	} else {
-		_, err = tx.Exec(query, userID, ticker, shares, shares)
-	}
+	_, err = tx.Exec(query, userID, ticker, shares)
 	
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -431,15 +422,8 @@ func HandleSellStock(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-// PrepareQuery é um helper que converte placeholders para o driver correto
+// PrepareQuery é um helper que converte placeholders para o formato do PostgreSQL
 func PrepareQuery(query string) string {
-	if config.DBType == "postgres" {
-		return convertPlaceholders(query)
-	}
-	return query
-}
-
-func convertPlaceholders(query string) string {
 	result := ""
 	placeholderIndex := 1
 	for i := 0; i < len(query); i++ {
