@@ -42,6 +42,8 @@ COPY --from=builder /app/bot /app/bot
 COPY economy.json ./
 COPY config.example.json ./
 COPY config.json* ./
+COPY internal/stockmarket/companies.json ./internal/stockmarket/companies.json
+COPY internal/stockmarket/companies.json ./companies.json
 
 # Ensure correct file permissions
 RUN chown -R appuser:appgroup /app

@@ -1,6 +1,7 @@
 package stockmarket
 
 import (
+	_ "embed"
 	"encoding/json"
 	"estudocoin/internal/database"
 	"log"
@@ -10,14 +11,19 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
+//go:embed companies.json
+var defaultCompaniesJSON []byte
+
 var Companies []Company
 
 func LoadCompanies() error {
-	file, err := os.ReadFile("internal/stockmarket/companies.json")
+	// Try loading custom companies.json from root or internal path first
+	file, err := os.ReadFile("companies.json")
 	if err != nil {
-		file, err = os.ReadFile("companies.json")
+		file, err = os.ReadFile("internal/stockmarket/companies.json")
 		if err != nil {
-			return err
+			// Fallback to default embedded companies data compiled into the binary
+			file = defaultCompaniesJSON
 		}
 	}
 	return json.Unmarshal(file, &Companies)

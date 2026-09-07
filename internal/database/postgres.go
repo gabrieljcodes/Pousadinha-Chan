@@ -4,9 +4,11 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
 )
 
 // PostgresDatabase implements the Database interface for PostgreSQL using pgx (recommended by Supabase)
@@ -27,11 +29,21 @@ func (p *PostgresDatabase) Open() error {
 	log.Printf("Connecting to PostgreSQL using pgx driver...")
 	log.Printf("Connection string (masked): %s", maskPassword(p.connString))
 
-	// Use pgx driver instead of pq - better support for Supabase pooler
-	db, err := sql.Open("pgx", p.connString)
+	connConfig, err := pgx.ParseConfig(p.connString)
 	if err != nil {
-		return fmt.Errorf("failed to open database: %w", err)
+		return fmt.Errorf("failed to parse database configuration: %w", err)
 	}
+
+	// When using transaction pooling (e.g. Supabase port 6543 / PgBouncer), prepared statements
+	// must not be cached because client connections share backend PostgreSQL connections across transactions.
+	// QueryExecModeExec disables statement caching and prevents "prepared statement already exists" (42P05) errors.
+	if connConfig.Port == 6543 || strings.Contains(p.connString, "pooler") || connConfig.DefaultQueryExecMode == pgx.QueryExecModeCacheStatement {
+		connConfig.DefaultQueryExecMode = pgx.QueryExecModeExec
+		connConfig.StatementCacheCapacity = 0
+		connConfig.DescriptionCacheCapacity = 0
+	}
+
+	db := stdlib.OpenDB(*connConfig)
 
 	// Configure connection pool optimized for Supabase pooler / PgBouncer
 	db.SetMaxOpenConns(15)

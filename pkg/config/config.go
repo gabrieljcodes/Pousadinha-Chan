@@ -65,15 +65,25 @@ func setupDatabaseConfig() {
 }
 
 func buildPostgresConnectionString() string {
-	// For Supabase, use the full DATABASE_URL if available (works with pgx)
+	// For Supabase or full database connection string
 	if dbURL := os.Getenv("DATABASE_URL"); dbURL != "" {
 		log.Println("Using DATABASE_URL from environment")
-		// Add parameter to disable prepared statement caching (prevents pooler errors)
-		if !strings.Contains(dbURL, "statement_cache_mode") {
-			if strings.Contains(dbURL, "?") {
-				return dbURL + "&statement_cache_mode=describe"
-			}
-			return dbURL + "?statement_cache_mode=describe"
+		// Clean up any legacy or invalid parameters
+		dbURL = strings.ReplaceAll(dbURL, "statement_cache_mode=describe", "")
+		dbURL = strings.TrimSuffix(dbURL, "?")
+		dbURL = strings.TrimSuffix(dbURL, "&")
+
+		// Add pgx parameters to disable prepared statement caching when using poolers (port 6543 / PgBouncer)
+		sep := "?"
+		if strings.Contains(dbURL, "?") {
+			sep = "&"
+		}
+		if !strings.Contains(dbURL, "default_query_exec_mode") {
+			dbURL = dbURL + sep + "default_query_exec_mode=exec"
+			sep = "&"
+		}
+		if !strings.Contains(dbURL, "statement_cache_capacity") {
+			dbURL = dbURL + sep + "statement_cache_capacity=0"
 		}
 		return dbURL
 	}
