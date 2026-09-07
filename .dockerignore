@@ -1,0 +1,44 @@
+# Version control
+.git
+.gitignore
+
+# Antigravity / Agent files
+.agents
+skills-lock.json
+
+# Environment and secret files
+.env
+*.env
+*.pem
+*.key
+
+# Local databases
+*.db
+*.db-journal
+
+# Compiled binaries
+bot
+main
+pousadinha-chan
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test artifacts and coverage
+*.out
+*.test
+coverage.txt
+
+# IDE & Editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Temporary and log files
+*.log
+tmp/
+scratch/

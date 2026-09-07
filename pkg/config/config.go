@@ -45,7 +45,17 @@ var (
 func Load() {
 	loadJSON("economy.json", &Economy)
 	loadJSON("config.json", &Bot)
-	
+
+	// Environment variable overrides
+	if apiPort := os.Getenv("API_PORT"); apiPort != "" {
+		Bot.ApiPort = apiPort
+	}
+	if enableAPI := os.Getenv("ENABLE_API"); enableAPI != "" {
+		if val, err := strconv.ParseBool(enableAPI); err == nil {
+			Bot.EnableAPI = val
+		}
+	}
+
 	// Configurar database defaults
 	setupDatabaseConfig()
 }
@@ -118,14 +128,23 @@ func contains(s, substr string) bool {
 func loadJSON(filename string, target interface{}) {
 	file, err := os.ReadFile(filename)
 	if err != nil {
-		log.Fatalf("Error reading %s: %v", filename, err)
+		if filename == "config.json" {
+			if altFile, altErr := os.ReadFile("config.example.json"); altErr == nil {
+				log.Printf("Notice: %s not found, falling back to config.example.json", filename)
+				file = altFile
+				err = nil
+			}
+		}
+		if err != nil {
+			log.Fatalf("Error reading %s: %v", filename, err)
+		}
 	}
 
 	err = json.Unmarshal(file, target)
 	if err != nil {
 		log.Fatalf("Error parsing %s: %v", filename, err)
 	}
-	
+
 	log.Printf("Loaded config from %s", filename)
 }
 

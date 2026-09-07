@@ -1,0 +1,58 @@
+services:
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pousadinha_bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # Default to internal postgres service when running inside compose network.
+      # Overridden automatically if DATABASE_URL or other values are set in .env.
+      - DB_HOST=${DB_HOST:-postgres}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+      - DB_NAME=${DB_NAME:-pousadinha}
+      - DB_SSLMODE=${DB_SSLMODE:-disable}
+      - API_PORT=${API_PORT:-:8080}
+    ports:
+      - "${HOST_API_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+        # If user is using external Supabase via DATABASE_URL, set COMPOSE_PROFILES or run without postgres
+        required: false
+    networks:
+      - pousadinha_network
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: pousadinha_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-pousadinha}
+    ports:
+      - "${HOST_DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-pousadinha}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - pousadinha_network
+
+volumes:
+  postgres_data:
+    name: pousadinha_postgres_data
+
+networks:
+  pousadinha_network:
+    name: pousadinha_network
+    driver: bridge
