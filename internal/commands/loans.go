@@ -1,10 +1,14 @@
 package commands
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"estudocoin/internal/database"
 	"estudocoin/pkg/config"
 	"estudocoin/pkg/utils"
 	"fmt"
+	"log"
+	"math"
 	"strconv"
 	"strings"
 	"sync"
@@ -13,7 +17,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-// PendingLoanRequest representa uma solicitação de empréstimo pendente
+// PendingLoanRequest represents a pending loan request
 type PendingLoanRequest struct {
 	Loan      *database.Loan
 	Timeout   *time.Timer
@@ -21,29 +25,20 @@ type PendingLoanRequest struct {
 }
 
 var (
-	// loans armazena todos os empréstimos ativos: loanID -> Loan
-	loans = make(map[string]*database.Loan)
-	loansMu sync.RWMutex
-
-	// pendingLoans armazena solicitações pendentes: borrowerID -> PendingLoanRequest
+	// pendingLoans stores pending loan requests: loanID -> PendingLoanRequest
 	pendingLoans = make(map[string]*PendingLoanRequest)
 	pendingMu    sync.Mutex
-
-	// loanIDCounter para gerar IDs únicos
-	loanIDCounter int64
-	loanIDMu      sync.Mutex
 )
 
-// generateLoanID gera um ID único para o empréstimo
+// generateLoanID generates a short, unique, collision-proof ID for the loan
 func generateLoanID() string {
-	loanIDMu.Lock()
-	defer loanIDMu.Unlock()
-	loanIDCounter++
-	return fmt.Sprintf("loan_%d_%d", time.Now().Unix(), loanIDCounter)
+	b := make([]byte, 3)
+	_, _ = rand.Read(b)
+	return fmt.Sprintf("ln_%d_%s", time.Now().Unix()%1000000, hex.EncodeToString(b))
 }
 
-// CmdLoanOffer cria uma oferta de empréstimo para outro usuário
-// Uso: !loan offer @user <amount> <interest_rate> <days>
+// CmdLoanOffer creates a loan offer for another user
+// Usage: !loan offer @user <amount> <interest_rate> <days>
 func CmdLoanOffer(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
 	if len(args) < 5 {
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("Loan System",
@@ -58,28 +53,15 @@ func CmdLoanOffer(s *discordgo.Session, m *discordgo.MessageCreate, args []strin
 		return
 	}
 
-	// Verificar menção
+	// Check mention
 	if len(m.Mentions) == 0 {
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Please mention a user to lend money to."))
 		return
 	}
 
 	borrower := m.Mentions[0]
-	lenderID := m.Author.ID
 
-	// Não pode emprestar para si mesmo
-	if borrower.ID == lenderID {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("You cannot lend money to yourself!"))
-		return
-	}
-
-	// Não pode emprestar para bots
-	if borrower.Bot {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("You cannot lend money to bots!"))
-		return
-	}
-
-	// Parse amount (args[2] porque args[0]=offer, args[1]=@usuario)
+	// Parse amount (args[2] because args[0]=offer, args[1]=@user)
 	amount, err := strconv.Atoi(args[2])
 	if err != nil || amount <= 0 {
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Invalid amount. Must be a positive number."))
@@ -100,31 +82,53 @@ func CmdLoanOffer(s *discordgo.Session, m *discordgo.MessageCreate, args []strin
 		return
 	}
 
-	// Verificar se o usuário já tem uma solicitação pendente
-	pendingMu.Lock()
-	if _, exists := pendingLoans[borrower.ID]; exists {
-		pendingMu.Unlock()
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(fmt.Sprintf("<@%s> already has a pending loan request!", borrower.ID)))
+	ExecuteLoanOffer(s, m.ChannelID, m.GuildID, m.Author, borrower, amount, interestRate, days, nil)
+}
+
+// ExecuteLoanOffer handles loan creation and sends the interactive confirmation message
+func ExecuteLoanOffer(s *discordgo.Session, channelID, guildID string, lender *discordgo.User, borrower *discordgo.User, amount int, interestRate float64, days int, i *discordgo.InteractionCreate) {
+	// Cannot lend to oneself
+	if borrower.ID == lender.ID {
+		sendLoanResponse(s, channelID, i, utils.ErrorEmbed("You cannot lend money to yourself!"))
 		return
+	}
+
+	// Cannot lend to bots
+	if borrower.Bot {
+		sendLoanResponse(s, channelID, i, utils.ErrorEmbed("You cannot lend money to bots!"))
+		return
+	}
+
+	// Check if this lender already has an open pending offer for this borrower
+	pendingMu.Lock()
+	for _, req := range pendingLoans {
+		if req.Loan.BorrowerID == borrower.ID && req.Loan.LenderID == lender.ID {
+			pendingMu.Unlock()
+			sendLoanResponse(s, channelID, i, utils.ErrorEmbed(fmt.Sprintf("You already have an active loan offer pending for <@%s>!", borrower.ID)))
+			return
+		}
 	}
 	pendingMu.Unlock()
 
-	// Verificar saldo do credor
-	lenderBalance := database.GetBalance(lenderID)
+	// Check lender balance
+	lenderBalance := database.GetBalance(lender.ID)
 	if lenderBalance < amount {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(fmt.Sprintf("Insufficient balance! You have %d %s", lenderBalance, config.Bot.CurrencySymbol)))
+		sendLoanResponse(s, channelID, i, utils.ErrorEmbed(fmt.Sprintf("Insufficient balance! You have %d %s", lenderBalance, config.Bot.CurrencySymbol)))
 		return
 	}
 
-	// Calcular valor total
-	interest := int(float64(amount) * (interestRate / 100))
+	// Calculate total amount with proper rounding and minimum 1 coin interest if rate > 0
+	interest := int(math.Round(float64(amount) * (interestRate / 100.0)))
+	if interestRate > 0 && interest == 0 {
+		interest = 1
+	}
 	totalOwed := amount + interest
 	dueDate := time.Now().Add(time.Duration(days) * 24 * time.Hour)
 
-	// Criar o empréstimo
+	// Create the loan model
 	loan := &database.Loan{
 		ID:           generateLoanID(),
-		LenderID:     lenderID,
+		LenderID:     lender.ID,
 		BorrowerID:   borrower.ID,
 		Amount:       amount,
 		InterestRate: interestRate,
@@ -132,14 +136,14 @@ func CmdLoanOffer(s *discordgo.Session, m *discordgo.MessageCreate, args []strin
 		TotalOwed:    totalOwed,
 		Paid:         false,
 		CreatedAt:    time.Now(),
-		ChannelID:    m.ChannelID,
-		GuildID:      m.GuildID,
+		ChannelID:    channelID,
+		GuildID:      guildID,
 	}
 
-	// Criar mensagem de confirmação
+	// Confirmation embed
 	embed := &discordgo.MessageEmbed{
 		Title:       "💰 Loan Offer",
-		Description: fmt.Sprintf("<@%s> wants to lend money to <@%s>!", lenderID, borrower.ID),
+		Description: fmt.Sprintf("<@%s> wants to lend money to <@%s>!", lender.ID, borrower.ID),
 		Color:       0xFFD700,
 		Fields: []*discordgo.MessageEmbedField{
 			{
@@ -149,65 +153,83 @@ func CmdLoanOffer(s *discordgo.Session, m *discordgo.MessageCreate, args []strin
 			},
 			{
 				Name:   "📈 Interest Rate",
-				Value:  fmt.Sprintf("%.1f%%", interestRate),
+				Value:  fmt.Sprintf("%.1f%% (+%d %s)", interestRate, interest, config.Bot.CurrencySymbol),
 				Inline: true,
 			},
 			{
-				Name:   "💸 Total to Pay",
+				Name:   "💰 Total to Repay",
 				Value:  fmt.Sprintf("%d %s", totalOwed, config.Bot.CurrencySymbol),
 				Inline: true,
 			},
 			{
 				Name:   "📅 Due Date",
-				Value:  fmt.Sprintf("<t:%d:f>", dueDate.Unix()),
+				Value:  fmt.Sprintf("<t:%d:R> (%d days)", dueDate.Unix(), days),
 				Inline: true,
 			},
 			{
-				Name:   "⏱️ Time to Accept",
-				Value:  "1 minute",
+				Name:   "🆔 Loan ID",
+				Value:  fmt.Sprintf("`%s`", loan.ID),
+				Inline: true,
+			},
+			{
+				Name:   "⏱️ Expires In",
+				Value:  "60 seconds",
 				Inline: true,
 			},
 		},
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: fmt.Sprintf("Loan ID: %s", loan.ID),
+			Text: "Borrower must click Accept to confirm the loan.",
 		},
 	}
 
-	buttons := []discordgo.MessageComponent{
+	// Action buttons
+	components := []discordgo.MessageComponent{
 		discordgo.ActionsRow{
 			Components: []discordgo.MessageComponent{
 				discordgo.Button{
-					Label:    "✅ Accept",
+					Label:    "Accept",
 					Style:    discordgo.SuccessButton,
 					CustomID: fmt.Sprintf("loan_accept_%s", loan.ID),
+					Emoji:    &discordgo.ComponentEmoji{Name: "✅"},
 				},
 				discordgo.Button{
-					Label:    "❌ Decline",
+					Label:    "Decline",
 					Style:    discordgo.DangerButton,
 					CustomID: fmt.Sprintf("loan_decline_%s", loan.ID),
+					Emoji:    &discordgo.ComponentEmoji{Name: "❌"},
 				},
 			},
 		},
 	}
 
-	msg, err := s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
-		Embeds:     []*discordgo.MessageEmbed{embed},
-		Components: buttons,
-	})
+	// If slash command, acknowledge first
+	if i != nil {
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: fmt.Sprintf("📩 Loan offer sent to <@%s>!", borrower.ID),
+				Flags:   discordgo.MessageFlagsEphemeral,
+			},
+		})
+	}
 
+	msg, err := s.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{
+		Content:    fmt.Sprintf("<@%s>, you have received a loan offer from <@%s>!", borrower.ID, lender.ID),
+		Embed:      embed,
+		Components: components,
+	})
 	if err != nil {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Error creating loan offer."))
+		log.Printf("[Loan Offer Error] Failed to send message: %v", err)
 		return
 	}
 
-	// Configurar timeout de 1 minuto
-	timeout := time.AfterFunc(1*time.Minute, func() {
-		expireLoanOffer(s, loan.ID, m.ChannelID, msg.ID)
+	// 60-second expiration timer
+	timeout := time.AfterFunc(60*time.Second, func() {
+		expireLoanOffer(s, loan.ID, channelID, msg.ID)
 	})
 
-	// Armazenar solicitação pendente
 	pendingMu.Lock()
-	pendingLoans[borrower.ID] = &PendingLoanRequest{
+	pendingLoans[loan.ID] = &PendingLoanRequest{
 		Loan:      loan,
 		Timeout:   timeout,
 		MessageID: msg.ID,
@@ -215,104 +237,117 @@ func CmdLoanOffer(s *discordgo.Session, m *discordgo.MessageCreate, args []strin
 	pendingMu.Unlock()
 }
 
-// CmdLoanPay permite ao devedor pagar um empréstimo
-// Uso: !loan pay [loan_id] ou !loan pay (paga o primeiro empréstimo ativo)
-func CmdLoanPay(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
-	borrowerID := m.Author.ID
-
-	// Buscar empréstimos ativos do usuário
-	loansMu.RLock()
-	var userLoans []*database.Loan
-	for _, loan := range loans {
-		if loan.BorrowerID == borrowerID && !loan.Paid {
-			userLoans = append(userLoans, loan)
-		}
+func sendLoanResponse(s *discordgo.Session, channelID string, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) {
+	if i != nil {
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Embeds: []*discordgo.MessageEmbed{embed},
+				Flags:  discordgo.MessageFlagsEphemeral,
+			},
+		})
+	} else {
+		s.ChannelMessageSendEmbed(channelID, embed)
 	}
-	loansMu.RUnlock()
+}
 
-	if len(userLoans) == 0 {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("You don't have any active loans to pay!"))
+// CmdLoanPay allows the borrower to pay an active loan
+// Usage: !loan pay [loan_id] or !loan pay (pays the earliest active loan)
+func CmdLoanPay(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
+	loanID := ""
+	if len(args) >= 2 {
+		loanID = strings.TrimSpace(args[1])
+	}
+	ExecuteLoanPay(s, m.ChannelID, m.Author.ID, loanID, nil)
+}
+
+// ExecuteLoanPay executes repayment for an active loan
+func ExecuteLoanPay(s *discordgo.Session, channelID, borrowerID, loanID string, i *discordgo.InteractionCreate) {
+	userLoans, err := database.GetActiveLoansByBorrower(borrowerID)
+	if err != nil || len(userLoans) == 0 {
+		sendLoanResponse(s, channelID, i, utils.ErrorEmbed("You don't have any active loans to pay!"))
 		return
 	}
 
-	var loanToPay *database.Loan
-
-	// Se especificou um ID, procurar por ele
-	if len(args) >= 2 {
-		loanID := args[1]
-		for _, loan := range userLoans {
-			if loan.ID == loanID {
-				loanToPay = loan
+	var targetLoanID string
+	if loanID != "" {
+		// Find specific loan
+		for _, l := range userLoans {
+			if l.ID == loanID {
+				targetLoanID = l.ID
 				break
 			}
 		}
-		if loanToPay == nil {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Loan not found or already paid!"))
+		if targetLoanID == "" {
+			sendLoanResponse(s, channelID, i, utils.ErrorEmbed("Loan ID not found among your active unpaid loans!"))
 			return
 		}
 	} else {
-		// Pega o empréstimo mais antigo (primeiro da lista)
-		loanToPay = userLoans[0]
+		// Default to oldest loan
+		targetLoanID = userLoans[0].ID
 	}
 
-	// Verificar saldo
-	balance := database.GetBalance(borrowerID)
-	if balance < loanToPay.TotalOwed {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(
-			fmt.Sprintf("Insufficient balance! You need %d %s but have %d %s.",
-				loanToPay.TotalOwed, config.Bot.CurrencySymbol, balance, config.Bot.CurrencySymbol)))
+	// Process atomic payment
+	paidLoan, err := database.PayLoanAtomic(targetLoanID, borrowerID)
+	if err != nil {
+		sendLoanResponse(s, channelID, i, utils.ErrorEmbed(fmt.Sprintf("Payment failed: %v", err)))
 		return
 	}
 
-	// Realizar pagamento
-	processLoanPayment(s, m.ChannelID, loanToPay, borrowerID)
+	successEmbed := utils.SuccessEmbed("Loan Repaid!",
+		fmt.Sprintf("🎉 <@%s> paid **%d %s** to <@%s>!\nLoan `%s` is now fully settled.",
+			paidLoan.BorrowerID, paidLoan.TotalOwed, config.Bot.CurrencySymbol, paidLoan.LenderID, paidLoan.ID))
+
+	if i != nil {
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Embeds: []*discordgo.MessageEmbed{successEmbed},
+			},
+		})
+	} else {
+		s.ChannelMessageSendEmbed(channelID, successEmbed)
+	}
 }
 
-// CmdLoanList lista todos os empréstimos ativos do usuário
-// Uso: !loan list ou !loan list @user (para ver de outro usuário)
+// CmdLoanList lists active loans for the user
+// Usage: !loan list or !loan list @user
 func CmdLoanList(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
-	targetID := m.Author.ID
-	targetName := m.Author.Username
+	targetUser := m.Author
 	isOwn := true
 
-	// Se mencionou alguém, mostra os empréstimos dele
 	if len(m.Mentions) > 0 {
-		targetID = m.Mentions[0].ID
-		targetName = m.Mentions[0].Username
+		targetUser = m.Mentions[0]
 		isOwn = false
 	}
 
-	loansMu.RLock()
-	var userLoans []*database.Loan
-	for _, loan := range loans {
-		if (loan.BorrowerID == targetID || loan.LenderID == targetID) && !loan.Paid {
-			userLoans = append(userLoans, loan)
-		}
-	}
-	loansMu.RUnlock()
+	ExecuteLoanList(s, m.ChannelID, targetUser, isOwn, nil)
+}
 
-	if len(userLoans) == 0 {
-		if isOwn {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("Loans", "You don't have any active loans!"))
-		} else {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("Loans", fmt.Sprintf("%s doesn't have any active loans!", targetName)))
+// ExecuteLoanList lists active loans directly from PostgreSQL
+func ExecuteLoanList(s *discordgo.Session, channelID string, targetUser *discordgo.User, isOwn bool, i *discordgo.InteractionCreate) {
+	userLoans, err := database.GetActiveLoansByUser(targetUser.ID, 15)
+	if err != nil || len(userLoans) == 0 {
+		msg := "You don't have any active loans!"
+		if !isOwn {
+			msg = fmt.Sprintf("%s doesn't have any active loans!", targetUser.Username)
 		}
+		sendLoanResponse(s, channelID, i, utils.InfoEmbed("Loans", msg))
 		return
 	}
 
-	// Construir a lista
 	var description strings.Builder
-	description.WriteString(fmt.Sprintf("**Active Loans for %s**\n\n", targetName))
+	description.WriteString(fmt.Sprintf("**Active Loans for %s**\n\n", targetUser.Username))
 
-	for i, loan := range userLoans {
+	for idx, loan := range userLoans {
 		role := "Borrower"
 		otherParty := loan.LenderID
-		if loan.LenderID == targetID {
+		if loan.LenderID == targetUser.ID {
 			role = "Lender"
 			otherParty = loan.BorrowerID
 		}
 
-		timeLeft := loan.DueDate.Sub(time.Now())
+		timeLeft := time.Until(loan.DueDate)
 		statusEmoji := "🟢"
 		if timeLeft < 24*time.Hour {
 			statusEmoji = "🟡"
@@ -321,73 +356,77 @@ func CmdLoanList(s *discordgo.Session, m *discordgo.MessageCreate, args []string
 			statusEmoji = "🔴 OVERDUE"
 		}
 
-		// Truncar ID de forma segura
-		idDisplay := loan.ID
-		if len(idDisplay) > 20 {
-			idDisplay = idDisplay[:20] + "..."
-		}
-
 		description.WriteString(fmt.Sprintf(
 			"**%d.** `%s`\n"+
-			"Role: %s | Other: <@%s>\n"+
-			"Amount: %d %s | Total: %d %s\n"+
-			"Due: %s %s\n\n",
-			i+1, idDisplay,
+				"• Role: **%s** | Other: <@%s>\n"+
+				"• Borrowed: **%d %s** | Debt: **%d %s**\n"+
+				"• Due: %s (%s)\n\n",
+			idx+1, loan.ID, // Full un-truncated ID in code block
 			role, otherParty,
 			loan.Amount, config.Bot.CurrencySymbol, loan.TotalOwed, config.Bot.CurrencySymbol,
 			statusEmoji, formatDuration(timeLeft),
 		))
 	}
 
-	s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("📋 Active Loans", description.String()))
+	description.WriteString("💡 *To pay a loan, use `!loan pay <id>` or `/loan pay loan_id:<id>`*")
+	embed := utils.GoldEmbed("📋 Active Loans", description.String())
+
+	if i != nil {
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Embeds: []*discordgo.MessageEmbed{embed},
+			},
+		})
+	} else {
+		s.ChannelMessageSendEmbed(channelID, embed)
+	}
 }
 
-// HandleLoanAccept aceita uma oferta de empréstimo
+// HandleLoanAccept accepts a loan offer atomically
 func HandleLoanAccept(s *discordgo.Session, i *discordgo.InteractionCreate, loanID string) {
 	userID := i.Member.User.ID
 
 	pendingMu.Lock()
-	request, exists := pendingLoans[userID]
-	if !exists || request.Loan.ID != loanID {
+	request, exists := pendingLoans[loanID]
+	if !exists {
 		pendingMu.Unlock()
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "❌ This loan offer has expired or is invalid!",
+				Content: "❌ This loan offer has expired or does not exist!",
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
 		return
 	}
 
-	// Cancelar timeout
+	// Verify designated borrower
+	if userID != request.Loan.BorrowerID {
+		pendingMu.Unlock()
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "❌ This loan offer is not for you!",
+				Flags:   discordgo.MessageFlagsEphemeral,
+			},
+		})
+		return
+	}
+
 	request.Timeout.Stop()
-	delete(pendingLoans, userID)
+	delete(pendingLoans, loanID)
 	pendingMu.Unlock()
 
 	loan := request.Loan
 
-	// Verificar se o credor ainda tem saldo
-	lenderBalance := database.GetBalance(loan.LenderID)
-	if lenderBalance < loan.Amount {
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseUpdateMessage,
-			Data: &discordgo.InteractionResponseData{
-				Content:    fmt.Sprintf("❌ <@%s> no longer has sufficient balance!", loan.LenderID),
-				Embeds:     []*discordgo.MessageEmbed{},
-				Components: []discordgo.MessageComponent{},
-			},
-		})
-		return
-	}
-
-	// Transferir dinheiro
-	err := database.TransferCoins(loan.LenderID, loan.BorrowerID, loan.Amount)
+	// Atomic transaction: locks lender balance, transfers money, and inserts loan record
+	err := database.AcceptLoanAtomic(loan)
 	if err != nil {
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseUpdateMessage,
 			Data: &discordgo.InteractionResponseData{
-				Content:    "❌ Error processing loan transaction!",
+				Content:    fmt.Sprintf("❌ Loan could not be completed: lender may no longer have sufficient balance (%v)", err),
 				Embeds:     []*discordgo.MessageEmbed{},
 				Components: []discordgo.MessageComponent{},
 			},
@@ -395,55 +434,43 @@ func HandleLoanAccept(s *discordgo.Session, i *discordgo.InteractionCreate, loan
 		return
 	}
 
-	// Salvar empréstimo no banco
-	err = database.SaveLoan(loan)
-	if err != nil {
-		// Tentar reverter a transferência
-		database.TransferCoins(loan.BorrowerID, loan.LenderID, loan.Amount)
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseUpdateMessage,
-			Data: &discordgo.InteractionResponseData{
-				Content:    "❌ Error saving loan to database!",
-				Embeds:     []*discordgo.MessageEmbed{},
-				Components: []discordgo.MessageComponent{},
-			},
-		})
-		return
-	}
-
-	// Adicionar à lista de empréstimos ativos
-	loansMu.Lock()
-	loans[loan.ID] = loan
-	loansMu.Unlock()
-
-	// Agendar cobrança automática
-	scheduleAutoCollection(s, loan)
-
-	// Atualizar mensagem
+	// Update message
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseUpdateMessage,
 		Data: &discordgo.InteractionResponseData{
-			Content: fmt.Sprintf("✅ **Loan Accepted!**\n<@%s> received **%d %s** from <@%s>.\nTotal to pay: **%d %s** by <t:%d:f>",
+			Content: fmt.Sprintf("✅ **Loan Accepted!**\n<@%s> received **%d %s** from <@%s>.\nTotal to repay: **%d %s** by <t:%d:f>\nLoan ID: `%s`",
 				loan.BorrowerID, loan.Amount, config.Bot.CurrencySymbol, loan.LenderID,
-				loan.TotalOwed, config.Bot.CurrencySymbol, loan.DueDate.Unix()),
+				loan.TotalOwed, config.Bot.CurrencySymbol, loan.DueDate.Unix(), loan.ID),
 			Embeds:     []*discordgo.MessageEmbed{},
 			Components: []discordgo.MessageComponent{},
 		},
 	})
 }
 
-// HandleLoanDecline recusa uma oferta de empréstimo
+// HandleLoanDecline declines or cancels a loan offer
 func HandleLoanDecline(s *discordgo.Session, i *discordgo.InteractionCreate, loanID string) {
 	userID := i.Member.User.ID
 
 	pendingMu.Lock()
-	request, exists := pendingLoans[userID]
-	if !exists || request.Loan.ID != loanID {
+	request, exists := pendingLoans[loanID]
+	if !exists {
 		pendingMu.Unlock()
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "❌ This loan offer has expired or is invalid!",
+				Content: "❌ This loan offer has expired or does not exist!",
+				Flags:   discordgo.MessageFlagsEphemeral,
+			},
+		})
+		return
+	}
+
+	if userID != request.Loan.BorrowerID && userID != request.Loan.LenderID {
+		pendingMu.Unlock()
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "❌ You cannot decline this loan offer.",
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -451,146 +478,99 @@ func HandleLoanDecline(s *discordgo.Session, i *discordgo.InteractionCreate, loa
 	}
 
 	request.Timeout.Stop()
-	delete(pendingLoans, userID)
+	delete(pendingLoans, loanID)
 	pendingMu.Unlock()
+
+	actionText := "declined"
+	if userID == request.Loan.LenderID {
+		actionText = "cancelled"
+	}
 
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseUpdateMessage,
 		Data: &discordgo.InteractionResponseData{
-			Content:    fmt.Sprintf("❌ <@%s> declined the loan offer.", userID),
+			Content:    fmt.Sprintf("❌ <@%s> %s the loan offer.", userID, actionText),
 			Embeds:     []*discordgo.MessageEmbed{},
 			Components: []discordgo.MessageComponent{},
 		},
 	})
 }
 
-// expireLoanOffer expira uma oferta de empréstimo após timeout
+// expireLoanOffer expires a loan offer after timeout
 func expireLoanOffer(s *discordgo.Session, loanID, channelID, messageID string) {
 	pendingMu.Lock()
-	var borrowerID string
-	for uid, req := range pendingLoans {
-		if req.Loan.ID == loanID {
-			borrowerID = uid
-			delete(pendingLoans, uid)
-			break
-		}
+	req, exists := pendingLoans[loanID]
+	if !exists {
+		pendingMu.Unlock()
+		return
 	}
+	delete(pendingLoans, loanID)
+	borrowerID := req.Loan.BorrowerID
 	pendingMu.Unlock()
 
-	if borrowerID != "" {
-		content := fmt.Sprintf("⏰ **Loan offer expired!** <@%s> did not respond in time.", borrowerID)
-		embeds := []*discordgo.MessageEmbed{}
-		components := []discordgo.MessageComponent{}
-		s.ChannelMessageEditComplex(&discordgo.MessageEdit{
-			Channel:    channelID,
-			ID:         messageID,
-			Content:    &content,
-			Embeds:     &embeds,
-			Components: &components,
-		})
-	}
-}
-
-// processLoanPayment processa o pagamento de um empréstimo
-func processLoanPayment(s *discordgo.Session, channelID string, loan *database.Loan, payerID string) {
-	// Transferir do devedor para o credor
-	err := database.TransferCoins(loan.BorrowerID, loan.LenderID, loan.TotalOwed)
-	if err != nil {
-		s.ChannelMessageSendEmbed(channelID, utils.ErrorEmbed(
-			fmt.Sprintf("Error processing payment. You need %d %s.", loan.TotalOwed, config.Bot.CurrencySymbol)))
-		return
-	}
-
-	// Marcar como pago
-	loansMu.Lock()
-	loan.Paid = true
-	delete(loans, loan.ID)
-	loansMu.Unlock()
-
-	// Atualizar no banco
-	database.MarkLoanAsPaid(loan.ID)
-
-	// Enviar confirmação
-	s.ChannelMessageSendEmbed(channelID, utils.SuccessEmbed("Loan Paid!",
-		fmt.Sprintf("<@%s> paid **%d %s** to <@%s>**!**\nLoan `%s` is now fully repaid! 🎉",
-			payerID, loan.TotalOwed, config.Bot.CurrencySymbol, loan.LenderID, loan.ID)))
-}
-
-// scheduleAutoCollection agenda a cobrança automática no vencimento
-func scheduleAutoCollection(s *discordgo.Session, loan *database.Loan) {
-	timeUntilDue := loan.DueDate.Sub(time.Now())
-	if timeUntilDue <= 0 {
-		// Já venceu, cobrar imediatamente
-		go autoCollectLoan(s, loan)
-		return
-	}
-
-	// Agendar cobrança
-	time.AfterFunc(timeUntilDue, func() {
-		autoCollectLoan(s, loan)
+	content := fmt.Sprintf("⏰ **Loan offer expired!** <@%s> did not respond in time.", borrowerID)
+	embeds := []*discordgo.MessageEmbed{}
+	components := []discordgo.MessageComponent{}
+	_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
+		Channel:    channelID,
+		ID:         messageID,
+		Content:    &content,
+		Embeds:     &embeds,
+		Components: &components,
 	})
 }
 
-// autoCollectLoan cobra automaticamente o empréstimo no vencimento
-func autoCollectLoan(s *discordgo.Session, loan *database.Loan) {
-	loansMu.RLock()
-	// Verificar se ainda existe e não foi pago
-	currentLoan, exists := loans[loan.ID]
-	loansMu.RUnlock()
+// StartLoanWorker starts the background ticker that periodically processes overdue loans.
+func StartLoanWorker(s *discordgo.Session) {
+	log.Println("Starting background loan overdue collector worker (1-minute interval)...")
+	ticker := time.NewTicker(1 * time.Minute)
 
-	if !exists || currentLoan.Paid {
+	go func() {
+		// Run once on startup
+		processOverdueLoans(s)
+		for range ticker.C {
+			processOverdueLoans(s)
+		}
+	}()
+}
+
+// processOverdueLoans queries PostgreSQL for overdue loans and auto-collects funds atomically
+func processOverdueLoans(s *discordgo.Session) {
+	overdueLoans, err := database.GetOverdueUnpaidLoans()
+	if err != nil || len(overdueLoans) == 0 {
 		return
 	}
 
-	// Tentar cobrar
-	borrowerBalance := database.GetBalance(loan.BorrowerID)
-
-	if borrowerBalance >= loan.TotalOwed {
-		// Tem saldo suficiente, cobrar
-		database.TransferCoins(loan.BorrowerID, loan.LenderID, loan.TotalOwed)
-
-		loansMu.Lock()
-		loan.Paid = true
-		delete(loans, loan.ID)
-		loansMu.Unlock()
-
-		database.MarkLoanAsPaid(loan.ID)
-
-		// Notificar
-		s.ChannelMessageSendEmbed(loan.ChannelID, utils.SuccessEmbed("Auto Payment Executed",
-			fmt.Sprintf("💰 Loan auto-collected!\n<@%s> paid **%d %s** to <@%s>.\nLoan `%s` is now fully repaid! ✅",
-				loan.BorrowerID, loan.TotalOwed, config.Bot.CurrencySymbol, loan.LenderID, loan.ID)))
-	} else {
-		// Não tem saldo suficiente, deixar negativo
-		// Primeiro zera o saldo atual (vai para o credor)
-		if borrowerBalance > 0 {
-			database.TransferCoins(loan.BorrowerID, loan.LenderID, borrowerBalance)
+	for _, loan := range overdueLoans {
+		updatedLoan, collected, remaining, fullyPaid, err := database.AutoCollectDueLoan(loan.ID)
+		if err != nil {
+			log.Printf("[Loan Worker] Error auto-collecting loan %s: %v", loan.ID, err)
+			continue
 		}
 
-		// Adiciona o restante como dívida (saldo negativo)
-		remaining := loan.TotalOwed - borrowerBalance
-		database.AddCoins(loan.BorrowerID, -remaining)
-
-		loansMu.Lock()
-		loan.Paid = true
-		delete(loans, loan.ID)
-		loansMu.Unlock()
-
-		database.MarkLoanAsPaid(loan.ID)
-
-		// Notificar
-		s.ChannelMessageSendEmbed(loan.ChannelID, &discordgo.MessageEmbed{
-			Title:       "⚠️ Loan Defaulted",
-			Description: fmt.Sprintf("**LOAN DEFAULTED**\n<@%s> didn't have enough funds!\n"+
-				"Collected: **%d %s** | Remaining debt: **%d %s**\n"+
-				"Loan `%s` marked as paid with negative balance! 💸",
-				loan.BorrowerID, borrowerBalance, config.Bot.CurrencySymbol, remaining, config.Bot.CurrencySymbol, loan.ID),
-			Color: 0xFF0000,
-		})
+		if fullyPaid {
+			embed := utils.SuccessEmbed("Auto Payment Executed",
+				fmt.Sprintf("💰 **Loan auto-collected!**\n<@%s> paid **%d %s** to <@%s>.\nLoan `%s` is now fully repaid! ✅",
+					updatedLoan.BorrowerID, collected, config.Bot.CurrencySymbol, updatedLoan.LenderID, updatedLoan.ID))
+			_, _ = s.ChannelMessageSendEmbed(loan.ChannelID, embed)
+		} else if collected > 0 {
+			embed := utils.GoldEmbed("⚠️ Partial Loan Collection",
+				fmt.Sprintf("⚠️ <@%s> did not have enough funds to repay loan `%s` in full!\n"+
+					"• Collected: **%d %s**\n"+
+					"• Remaining Debt: **%d %s**\n"+
+					"The loan remains **OVERDUE** until fully settled. 💸",
+					updatedLoan.BorrowerID, updatedLoan.ID, collected, config.Bot.CurrencySymbol, remaining, config.Bot.CurrencySymbol))
+			_, _ = s.ChannelMessageSendEmbed(loan.ChannelID, embed)
+		}
 	}
 }
 
-// formatDuration formata a duração para exibição
+// LoadActiveLoans is kept for backward-compatibility with main.go startup calls
+func LoadActiveLoans(s *discordgo.Session) {
+	StartLoanWorker(s)
+}
+
+// formatDuration formats duration for display
 func formatDuration(d time.Duration) string {
 	if d < 0 {
 		d = -d
@@ -604,20 +584,4 @@ func formatDuration(d time.Duration) string {
 		return fmt.Sprintf("%dd %dh", days, hours)
 	}
 	return fmt.Sprintf("%dh", hours)
-}
-
-// LoadActiveLoans carrega empréstimos ativos do banco ao iniciar
-func LoadActiveLoans(s *discordgo.Session) {
-	activeLoans, err := database.GetActiveLoans()
-	if err != nil {
-		return
-	}
-
-	loansMu.Lock()
-	for _, loan := range activeLoans {
-		loans[loan.ID] = loan
-		// Reagendar cobrança
-		go scheduleAutoCollection(s, loan)
-	}
-	loansMu.Unlock()
 }

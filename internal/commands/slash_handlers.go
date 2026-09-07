@@ -104,7 +104,7 @@ func handleSlashDaily(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		return
 	}
 
-	// Adiciona as moedas
+	// Add coins
 	err = database.AddCoins(userID, info.Reward)
 	if err != nil {
 		respondEmbed(s, i, utils.ErrorEmbed("Error adding coins."))
@@ -158,7 +158,7 @@ func handleSlashLeaderboard(s *discordgo.Session, i *discordgo.InteractionCreate
 			name = discordUser.Username
 		}
 		
-		// Mostrar patrimônio total com detalhes
+		// Show total net worth with details
 		description += fmt.Sprintf("**%d.** %s - **%d %s** 💰 (🪙 %d | 📈 %d)\n", 
 			i+1, name, u.TotalNetWorth, config.Bot.CurrencyName, u.Balance, u.StockValue)
 	}
@@ -259,20 +259,20 @@ func handleSlashBuy(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			return
 		}
 
-		// Verificar se o usuário está em um jogo ativo
+		// Check if user is in an active game
 		if games.IsUserInGame(targetUser.ID) {
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
 				Data: &discordgo.InteractionResponseData{
-					Embeds: []*discordgo.MessageEmbed{utils.InfoEmbed("⏳ Aguardando", 
-						fmt.Sprintf("%s está em um jogo ativo. Aguardando o jogo terminar para aplicar o punishment...", targetUser.Username))},
+					Embeds: []*discordgo.MessageEmbed{utils.InfoEmbed("⏳ Waiting", 
+						fmt.Sprintf("%s is in an active game. Waiting for the game to finish to apply punishment...", targetUser.Username))},
 				},
 			})
 			
-			// Esperar o jogo acabar
+			// Wait for game to finish
 			games.WaitForGameFinish(targetUser.ID)
 			
-			// Atualizar para mensagem de aplicação
+			// Update to application message
 			defer func() {
 				s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
 					Embeds: &[]*discordgo.MessageEmbed{utils.SuccessEmbed("Punishment Applied!", 
@@ -312,36 +312,12 @@ func handleSlashLoan(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	switch subCommand {
 	case "offer":
-		// Converter para formato compatível com CmdLoanOffer
 		targetUser := options[0].Options[0].UserValue(s)
 		amount := int(options[0].Options[1].IntValue())
 		interest := options[0].Options[2].FloatValue()
 		days := int(options[0].Options[3].IntValue())
 
-		// Criar mensagem falsa para compatibilidade
-		m := &discordgo.MessageCreate{
-			Message: &discordgo.Message{
-				Author:    i.Member.User,
-				ChannelID: i.ChannelID,
-				GuildID:   i.GuildID,
-				Content:   fmt.Sprintf("/loan offer @%s %d %.2f %d", targetUser.Username, amount, interest, days),
-			},
-		}
-		m.Mentions = []*discordgo.User{targetUser}
-
-		// Criar args
-		args := []string{"offer", fmt.Sprintf("%d", amount), fmt.Sprintf("%.2f", interest), fmt.Sprintf("%d", days)}
-
-		CmdLoanOffer(s, m, args)
-
-		// Responder que a oferta foi criada
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Content: fmt.Sprintf("📩 Loan offer sent to <@%s>!", targetUser.ID),
-				Flags:   discordgo.MessageFlagsEphemeral,
-			},
-		})
+		ExecuteLoanOffer(s, i.ChannelID, i.GuildID, i.Member.User, targetUser, amount, interest, days, i)
 
 	case "pay":
 		loanID := ""
@@ -349,50 +325,9 @@ func handleSlashLoan(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			loanID = options[0].Options[0].StringValue()
 		}
 
-		m := &discordgo.MessageCreate{
-			Message: &discordgo.Message{
-				Author:    i.Member.User,
-				ChannelID: i.ChannelID,
-				GuildID:   i.GuildID,
-				Content:   "!loan pay " + loanID,
-			},
-		}
-
-		args := []string{"pay"}
-		if loanID != "" {
-			args = append(args, loanID)
-		}
-
-		CmdLoanPay(s, m, args)
-
-		// Responder
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Content: "💰 Processing loan payment...",
-				Flags:   discordgo.MessageFlagsEphemeral,
-			},
-		})
+		ExecuteLoanPay(s, i.ChannelID, i.Member.User.ID, loanID, i)
 
 	case "list":
-		m := &discordgo.MessageCreate{
-			Message: &discordgo.Message{
-				Author:    i.Member.User,
-				ChannelID: i.ChannelID,
-				GuildID:   i.GuildID,
-				Content:   "!loan list",
-			},
-		}
-
-		CmdLoanList(s, m, []string{"list"})
-
-		// Responder
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Content: "📋 Listing your active loans...",
-				Flags:   discordgo.MessageFlagsEphemeral,
-			},
-		})
+		ExecuteLoanList(s, i.ChannelID, i.Member.User, true, i)
 	}
 }

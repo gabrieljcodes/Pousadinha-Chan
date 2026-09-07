@@ -1,16 +1,16 @@
 package database
 
 import (
+	"crypto/sha256"
 	"database/sql"
 	"fmt"
 	"log"
-	"os"
 	"time"
 
 	"estudocoin/pkg/config"
 )
 
-// Initialize inicializa o banco de dados baseado na configuração
+// Initialize initializes the database based on configuration
 func Initialize() {
 	var err error
 
@@ -30,7 +30,7 @@ func Initialize() {
 
 
 
-// NewPostgres cria e inicializa um banco PostgreSQL
+// NewPostgres creates and initializes a PostgreSQL database
 func NewPostgres(connString string) (Database, error) {
 	db := NewPostgresDatabase(connString)
 	if err := db.Open(); err != nil {
@@ -42,9 +42,9 @@ func NewPostgres(connString string) (Database, error) {
 	return db, nil
 }
 
-// Helper functions para facilitar a migração das queries existentes
+// Helper functions to facilitate migration of existing queries
 
-// prepareQuery converte uma query com ? para o formato do PostgreSQL ($1, $2, etc.)
+// prepareQuery converts a query with ? to PostgreSQL format ($1, $2, etc.)
 func prepareQuery(query string) string {
 	result := ""
 	placeholderIndex := 1
@@ -59,52 +59,58 @@ func prepareQuery(query string) string {
 	return result
 }
 
-// GetBalance retorna o saldo de um usuário com retry em caso de erro
+// GetBalance returns a user's balance with retry on error
 func GetBalance(userID string) int {
 	var balance int
-	query := prepareQuery("SELECT balance FROM users WHERE id = ?")
-	
-	// Tentar até 3 vezes com pequeno delay
+	// Ensure user exists atomically
+	_, _ = DB.Exec(`INSERT INTO users (id, balance) VALUES ($1, 0) ON CONFLICT (id) DO NOTHING`, userID)
+
+	// Retry up to 3 times with a short delay on transient error
 	for i := 0; i < 3; i++ {
-		err := DB.QueryRow(query, userID).Scan(&balance)
+		err := DB.QueryRow(`SELECT balance FROM users WHERE id = $1`, userID).Scan(&balance)
 		if err == nil {
 			return balance
 		}
-		
-		if err == sql.ErrNoRows {
-			// Usuário não existe, criar com saldo 0
-			_, insertErr := DB.Exec(prepareQuery("INSERT INTO users (id, balance) VALUES (?, 0)"), userID)
-			if insertErr != nil {
-				log.Printf("[GetBalance] Error inserting user %s: %v (attempt %d)", userID, insertErr, i+1)
-				time.Sleep(100 * time.Millisecond)
-				continue
-			}
-			return 0
-		}
-		
-		// Outro erro - logar e tentar novamente
 		log.Printf("[GetBalance] Error getting balance for %s: %v (attempt %d)", userID, err, i+1)
 		time.Sleep(100 * time.Millisecond)
 	}
-	
+
 	log.Printf("[GetBalance] Failed to get balance for %s after 3 attempts, returning 0", userID)
 	return 0
 }
 
-// GetLeaderboard retorna o ranking de saldos (excluindo o bot e incluindo investimentos)
+// GetLeaderboard returns the balance leaderboard (excluding the bot and including investments)
+// using a single aggregated SQL query instead of N+1 queries.
 func GetLeaderboard(limit int) ([]UserBalance, error) {
-	// Buscar todos os usuários (exceto o bot) com seus saldos
-	var rows *sql.Rows
-	var err error
-	
-	if BotUserID != "" {
-		query := prepareQuery("SELECT id, balance FROM users WHERE id != ? ORDER BY balance DESC")
-		rows, err = DB.Query(query, BotUserID)
-	} else {
-		query := prepareQuery("SELECT id, balance FROM users ORDER BY balance DESC")
-		rows, err = DB.Query(query)
+	if limit <= 0 {
+		limit = 10
 	}
-	
+
+	query := `
+		SELECT 
+			u.id, 
+			COALESCE(u.balance, 0) AS balance,
+			COALESCE(s.stock_val, 0) AS stock_value,
+			COALESCE(c.crypto_cnt, 0) AS crypto_value,
+			(COALESCE(u.balance, 0) + COALESCE(s.stock_val, 0)) AS total_net_worth
+		FROM users u
+		LEFT JOIN (
+			SELECT si.user_id, FLOOR(SUM(si.shares * COALESCE(sp.last_price, 0)))::BIGINT AS stock_val
+			FROM stock_investments si
+			LEFT JOIN stock_prices sp ON sp.ticker = si.ticker
+			GROUP BY si.user_id
+		) s ON s.user_id = u.id
+		LEFT JOIN (
+			SELECT ci.user_id, COUNT(*)::BIGINT AS crypto_cnt
+			FROM crypto_investments ci
+			WHERE ci.coins > 0
+			GROUP BY ci.user_id
+		) c ON c.user_id = u.id
+		WHERE ($1 = '' OR u.id != $1)
+		ORDER BY total_net_worth DESC
+		LIMIT $2;`
+
+	rows, err := DB.Query(query, BotUserID, limit)
 	if err != nil {
 		log.Printf("[LEADERBOARD ERROR] Query failed: %v", err)
 		return nil, err
@@ -114,58 +120,20 @@ func GetLeaderboard(limit int) ([]UserBalance, error) {
 	var users []UserBalance
 	for rows.Next() {
 		var u UserBalance
-		if err := rows.Scan(&u.ID, &u.Balance); err != nil {
+		if err := rows.Scan(&u.ID, &u.Balance, &u.StockValue, &u.CryptoValue, &u.TotalNetWorth); err != nil {
+			log.Printf("[LEADERBOARD ERROR] Scan row failed: %v", err)
 			continue
 		}
-		// Pular o bot se ainda estiver na lista
-		if BotUserID != "" && u.ID == BotUserID {
-			continue
-		}
-		
-		// Calcular valor em ações
-		stockValue := 0
-		stockInvestments, _ := GetAllInvestmentsByUser(u.ID)
-		for _, inv := range stockInvestments {
-			price, _ := GetStockPriceDB(inv.Ticker)
-			stockValue += int(inv.Shares * price)
-		}
-		u.StockValue = stockValue
-		
-		// Para crypto, vamos apenas contar o número de cryptos diferentes
-		// (os preços de crypto são voláteis e buscados em tempo real da API)
-		cryptoInvestments, _ := GetAllCryptoInvestmentsByUser(u.ID)
-		cryptoCount := 0
-		for _, inv := range cryptoInvestments {
-			if inv.Coins > 0 {
-				cryptoCount++
-			}
-		}
-		u.CryptoValue = cryptoCount // Usamos para armazenar a contagem por enquanto
-		
-		// Patrimônio total (balance + stocks, crypto não incluído por ser volátil)
-		u.TotalNetWorth = u.Balance + u.StockValue
-		
 		users = append(users, u)
 	}
-	
-	// Ordenar por patrimônio total (bubble sort simples)
-	for i := 0; i < len(users); i++ {
-		for j := i + 1; j < len(users); j++ {
-			if users[j].TotalNetWorth > users[i].TotalNetWorth {
-				users[i], users[j] = users[j], users[i]
-			}
-		}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
-	
-	// Limitar resultados
-	if len(users) > limit {
-		users = users[:limit]
-	}
-	
+
 	return users, nil
 }
 
-// AddCoins adiciona moedas a um usuário
+// AddCoins adds coins to a user
 func AddCoins(userID string, amount int) error {
 	query := `INSERT INTO users (id, balance) VALUES ($1, $2) 
 			  ON CONFLICT(id) DO UPDATE SET balance = users.balance + $2`
@@ -173,57 +141,94 @@ func AddCoins(userID string, amount int) error {
 	return err
 }
 
-// RemoveCoins remove moedas de um usuário
+// RemoveCoins removes coins from a user atomically, ensuring balance does not drop below zero
 func RemoveCoins(userID string, amount int) error {
-	current := GetBalance(userID)
-	if current < amount {
-		return sql.ErrNoRows
+	if amount <= 0 {
+		return nil
 	}
-	query := prepareQuery("UPDATE users SET balance = balance - ? WHERE id = ?")
-	_, err := DB.Exec(query, amount, userID)
-	return err
+	res, err := DB.Exec(`UPDATE users SET balance = balance - $1 WHERE id = $2 AND balance >= $1`, amount, userID)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return sql.ErrNoRows // Insufficient funds or user not found
+	}
+	return nil
 }
 
-// BotUserID é o ID do bot (deve ser definido no main.go)
+// BotUserID is the bot's user ID (must be set in main.go)
 var BotUserID string
 
-// CollectLostBet envia o dinheiro perdido em apostas para o perfil do bot
+// CollectLostBet sends lost bet coins to the bot user profile
 func CollectLostBet(userID string, amount int) error {
 	if BotUserID == "" {
-		// Se o ID do bot não estiver definido, apenas remove as moedas do usuário
+		// If bot ID is not set, simply remove coins from user
 		return RemoveCoins(userID, amount)
 	}
 	
-	// Transfere do usuário para o bot
+	// Transfer from user to bot
 	return TransferCoins(userID, BotUserID, amount)
 }
 
-// TransferCoins transfere moedas entre usuários
+// TransferCoins transfers coins between users atomically and without deadlock risks
 func TransferCoins(fromID, toID string, amount int) error {
+	if fromID == toID || amount <= 0 {
+		return fmt.Errorf("invalid transfer parameters")
+	}
+
 	tx, err := DB.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 
-	var fromBalance int
-	err = tx.QueryRow(prepareQuery("SELECT balance FROM users WHERE id = ?"), fromID).Scan(&fromBalance)
+	// 1. Ensure receiver exists first so row can be locked
+	_, err = tx.Exec(`INSERT INTO users (id, balance) VALUES ($1, 0) ON CONFLICT (id) DO NOTHING`, toID)
 	if err != nil {
 		return err
 	}
 
-	if fromBalance < amount {
+	// 2. Lock both user rows in deterministic order (lexicographically) to eliminate deadlocks
+	firstID, secondID := fromID, toID
+	if firstID > secondID {
+		firstID, secondID = secondID, firstID
+	}
+
+	rows, err := tx.Query(`SELECT id, balance FROM users WHERE id IN ($1, $2) ORDER BY id FOR UPDATE`, firstID, secondID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	balances := make(map[string]int)
+	for rows.Next() {
+		var id string
+		var bal int
+		if err := rows.Scan(&id, &bal); err != nil {
+			return err
+		}
+		balances[id] = bal
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	fromBalance, exists := balances[fromID]
+	if !exists || fromBalance < amount {
 		return sql.ErrNoRows
 	}
 
-	_, err = tx.Exec(prepareQuery("UPDATE users SET balance = balance - ? WHERE id = ?"), amount, fromID)
+	// 3. Atomically update balances
+	_, err = tx.Exec(`UPDATE users SET balance = balance - $1 WHERE id = $2`, amount, fromID)
 	if err != nil {
 		return err
 	}
 
-	_, err = tx.Exec(`INSERT INTO users (id, balance) VALUES ($1, $2) 
-					  ON CONFLICT(id) DO UPDATE SET balance = users.balance + $2`,
-		toID, amount)
+	_, err = tx.Exec(`UPDATE users SET balance = balance + $1 WHERE id = $2`, amount, toID)
 	if err != nil {
 		return err
 	}
@@ -231,7 +236,7 @@ func TransferCoins(fromID, toID string, amount int) error {
 	return tx.Commit()
 }
 
-// DailyStreakInfo contém informações sobre a streak de daily do usuário
+// DailyStreakInfo contains information about a user's daily streak
 type DailyStreakInfo struct {
 	Streak     int
 	MaxStreak  int
@@ -240,7 +245,7 @@ type DailyStreakInfo struct {
 	NextDaily  time.Time
 }
 
-// GetDailyStreakInfo retorna informações completas sobre o daily do usuário
+// GetDailyStreakInfo returns full information about a user's daily streak
 func GetDailyStreakInfo(userID string) *DailyStreakInfo {
 	info := &DailyStreakInfo{
 		Streak:    0,
@@ -269,15 +274,15 @@ func GetDailyStreakInfo(userID string) *DailyStreakInfo {
 			info.CanClaim = timeSince >= 24*time.Hour
 			info.NextDaily = lastDaily.Time.Add(24 * time.Hour)
 
-			// Verifica se perdeu a streak (mais de 48 horas desde o último claim)
+			// Check if streak was lost (more than 48 hours since last claim)
 			if timeSince > 48*time.Hour {
 				info.Streak = 0
 			}
 		}
 	}
 
-	// Calcula a recompensa baseada na streak
-	// Streak 0 = 100, Streak 1 = 200, ... até max 5000
+	// Calculate reward based on streak
+	// Streak 0 = 100, Streak 1 = 200, ... up to max 5000
 	info.Reward = (info.Streak + 1) * 100
 	if info.Reward > 5000 {
 		info.Reward = 5000
@@ -286,22 +291,22 @@ func GetDailyStreakInfo(userID string) *DailyStreakInfo {
 	return info
 }
 
-// CanDaily verifica se o usuário pode coletar o daily
+// CanDaily checks if the user can claim their daily reward
 func CanDaily(userID string) bool {
 	return GetDailyStreakInfo(userID).CanClaim
 }
 
-// GetNextDailyTime retorna quando o próximo daily estará disponível
+// GetNextDailyTime returns when the next daily reward will be available
 func GetNextDailyTime(userID string) time.Time {
 	return GetDailyStreakInfo(userID).NextDaily
 }
 
-// GetDailyReward calcula a recompensa do daily baseada na streak atual
+// GetDailyReward calculates the daily reward based on current streak
 func GetDailyReward(userID string) int {
 	return GetDailyStreakInfo(userID).Reward
 }
 
-// ClaimDaily coleta o daily e atualiza a streak
+// ClaimDaily claims the daily reward and updates the streak
 func ClaimDaily(userID string) (*DailyStreakInfo, error) {
 	info := GetDailyStreakInfo(userID)
 
@@ -311,33 +316,33 @@ func ClaimDaily(userID string) (*DailyStreakInfo, error) {
 
 	now := time.Now()
 
-	// Verifica se a streak continua (coletou entre 24h e 48h atrás)
+	// Check if streak continues (claimed between 24h and 48h ago)
 	timeSinceLast := time.Since(info.NextDaily.Add(-24 * time.Hour))
 	if timeSinceLast >= 0 && timeSinceLast <= 48*time.Hour {
-		// Continua a streak
+		// Continue streak
 		info.Streak++
 	} else {
-		// Reseta a streak
+		// Reset streak
 		info.Streak = 0
 	}
 
-	// Atualiza max streak se necessário
+	// Update max streak if needed
 	if info.Streak > info.MaxStreak {
 		info.MaxStreak = info.Streak
 	}
 
-	// Recalcula a recompensa
+	// Recalculate reward
 	info.Reward = (info.Streak + 1) * 100
 	if info.Reward > 5000 {
 		info.Reward = 5000
 	}
 
-	// Atualiza no banco de dados
+	// Update in database (balance initialized to 0 for new user, actual reward credited by caller AddCoins)
 	query := `INSERT INTO users (id, balance, last_daily, daily_streak, max_daily_streak) 
-			  VALUES ($1, $2, $3, $4, $5) 
+			  VALUES ($1, 0, $2, $3, $4) 
 			  ON CONFLICT(id) DO UPDATE 
-			  SET last_daily = $3, daily_streak = $4, max_daily_streak = $5`
-	_, err := DB.Exec(query, userID, info.Reward, now, info.Streak, info.MaxStreak)
+			  SET last_daily = $2, daily_streak = $3, max_daily_streak = $4`
+	_, err := DB.Exec(query, userID, now, info.Streak, info.MaxStreak)
 	if err != nil {
 		return info, err
 	}
@@ -345,27 +350,36 @@ func ClaimDaily(userID string) (*DailyStreakInfo, error) {
 	return info, nil
 }
 
-// CreateAPIKey cria uma nova chave de API
-func CreateAPIKey(key, userID, name string) error {
-	query := prepareQuery("INSERT INTO api_keys (key, user_id, name, created_at) VALUES (?, ?, ?, ?)")
-	_, err := DB.Exec(query, key, userID, name, time.Now())
+// HashAPIKey computes the SHA-256 hash of a raw API key
+func HashAPIKey(key string) string {
+	hash := sha256.Sum256([]byte(key))
+	return fmt.Sprintf("%x", hash[:])
+}
+
+// CreateAPIKey creates a new API key storing its secure SHA-256 hash
+func CreateAPIKey(rawKey, userID, name string) error {
+	hashedKey := HashAPIKey(rawKey)
+	query := `INSERT INTO api_keys (key, user_id, name, created_at) VALUES ($1, $2, $3, $4)`
+	_, err := DB.Exec(query, hashedKey, userID, name, time.Now())
 	return err
 }
 
-// GetUserByAPIKey retorna o userID de uma chave de API
+// GetUserByAPIKey returns the userID associated with an API key,
+// supporting both secure SHA-256 hashes and legacy plaintext keys.
 func GetUserByAPIKey(key string) (string, error) {
+	hashedKey := HashAPIKey(key)
 	var userID string
-	query := prepareQuery("SELECT user_id FROM api_keys WHERE key = ?")
-	err := DB.QueryRow(query, key).Scan(&userID)
+	query := `SELECT user_id FROM api_keys WHERE key = $1 OR key = $2 LIMIT 1`
+	err := DB.QueryRow(query, hashedKey, key).Scan(&userID)
 	if err != nil {
 		return "", err
 	}
 	return userID, nil
 }
 
-// ListAPIKeys lista todas as chaves de API de um usuário
+// ListAPIKeys lists all API keys for a user
 func ListAPIKeys(userID string) ([]APIKeyStruct, error) {
-	query := prepareQuery("SELECT key, name, created_at FROM api_keys WHERE user_id = ?")
+	query := `SELECT key, name, created_at FROM api_keys WHERE user_id = $1 ORDER BY created_at DESC`
 	rows, err := DB.Query(query, userID)
 	if err != nil {
 		return nil, err
@@ -383,14 +397,15 @@ func ListAPIKeys(userID string) ([]APIKeyStruct, error) {
 	return keys, nil
 }
 
-// DeleteAPIKey deleta uma chave de API
+// DeleteAPIKey deletes an API key matching a prefix or full key
 func DeleteAPIKey(userID, prefix string) error {
-	query := prepareQuery("DELETE FROM api_keys WHERE user_id = ? AND key LIKE ?")
-	_, err := DB.Exec(query, userID, prefix+"%")
+	hashedPrefix := HashAPIKey(prefix)
+	query := `DELETE FROM api_keys WHERE user_id = $1 AND (key LIKE $2 OR key = $3)`
+	_, err := DB.Exec(query, userID, prefix+"%", hashedPrefix)
 	return err
 }
 
-// SetWebhook define a URL de webhook de um usuário
+// SetWebhook sets a user's webhook URL
 func SetWebhook(userID, url string) error {
 	query := `INSERT INTO users (id, balance, webhook_url) VALUES ($1, 0, $2) 
 			  ON CONFLICT(id) DO UPDATE SET webhook_url = $2`
@@ -398,7 +413,7 @@ func SetWebhook(userID, url string) error {
 	return err
 }
 
-// GetWebhook retorna a URL de webhook de um usuário
+// GetWebhook returns a user's webhook URL
 func GetWebhook(userID string) (string, error) {
 	var url sql.NullString
 	query := prepareQuery("SELECT webhook_url FROM users WHERE id = ?")
@@ -409,7 +424,7 @@ func GetWebhook(userID string) (string, error) {
 	return url.String, nil
 }
 
-// Loan representa um empréstimo no banco de dados
+// Loan represents a loan in the database
 type Loan struct {
 	ID           string
 	LenderID     string
@@ -424,7 +439,7 @@ type Loan struct {
 	GuildID      string
 }
 
-// SaveLoan salva um novo empréstimo no banco de dados
+// SaveLoan saves a new loan in the database
 func SaveLoan(loan *Loan) error {
 	query := `INSERT INTO loans (id, lender_id, borrower_id, amount, interest_rate, due_date, total_owed, paid, created_at, channel_id, guild_id) 
 			  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
@@ -433,17 +448,301 @@ func SaveLoan(loan *Loan) error {
 	return err
 }
 
-// MarkLoanAsPaid marca um empréstimo como pago
+// AcceptLoanAtomic transfers funds from lender to borrower and registers the loan in a single atomic transaction.
+func AcceptLoanAtomic(loan *Loan) error {
+	if loan == nil || loan.LenderID == loan.BorrowerID || loan.Amount <= 0 {
+		return fmt.Errorf("invalid loan parameters")
+	}
+
+	tx, err := DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// 1. Ensure borrower user row exists
+	_, err = tx.Exec(`INSERT INTO users (id, balance) VALUES ($1, 0) ON CONFLICT (id) DO NOTHING`, loan.BorrowerID)
+	if err != nil {
+		return err
+	}
+
+	// 2. Lock and verify lender balance
+	var lenderBalance int
+	err = tx.QueryRow(`SELECT balance FROM users WHERE id = $1 FOR UPDATE`, loan.LenderID).Scan(&lenderBalance)
+	if err != nil {
+		return err
+	}
+	if lenderBalance < loan.Amount {
+		return sql.ErrNoRows // Insufficient balance
+	}
+
+	// 3. Deduct from lender and credit borrower
+	_, err = tx.Exec(`UPDATE users SET balance = balance - $1 WHERE id = $2`, loan.Amount, loan.LenderID)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(`UPDATE users SET balance = balance + $1 WHERE id = $2`, loan.Amount, loan.BorrowerID)
+	if err != nil {
+		return err
+	}
+
+	// 4. Insert loan record
+	insertLoanSQL := `INSERT INTO loans (id, lender_id, borrower_id, amount, interest_rate, due_date, total_owed, paid, created_at, channel_id, guild_id) 
+					  VALUES ($1, $2, $3, $4, $5, $6, $7, false, $8, $9, $10)`
+	_, err = tx.Exec(insertLoanSQL, loan.ID, loan.LenderID, loan.BorrowerID, loan.Amount,
+		loan.InterestRate, loan.DueDate, loan.TotalOwed, loan.CreatedAt, loan.ChannelID, loan.GuildID)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+// PayLoanAtomic processes a loan payment atomically using row-level locking to prevent race conditions.
+func PayLoanAtomic(loanID, payerID string) (*Loan, error) {
+	tx, err := DB.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	// 1. Lock the loan row
+	loan := &Loan{}
+	queryLoan := `SELECT id, lender_id, borrower_id, amount, interest_rate, due_date, total_owed, paid, created_at, channel_id, guild_id 
+				  FROM loans WHERE id = $1 FOR UPDATE`
+	err = tx.QueryRow(queryLoan, loanID).Scan(
+		&loan.ID, &loan.LenderID, &loan.BorrowerID, &loan.Amount,
+		&loan.InterestRate, &loan.DueDate, &loan.TotalOwed, &loan.Paid,
+		&loan.CreatedAt, &loan.ChannelID, &loan.GuildID,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if loan.Paid {
+		return nil, fmt.Errorf("loan is already paid")
+	}
+
+	if payerID != "" && loan.BorrowerID != payerID {
+		return nil, fmt.Errorf("only the borrower can pay this loan")
+	}
+
+	// 2. Lock borrower row and verify balance
+	var borrowerBalance int
+	err = tx.QueryRow(`SELECT balance FROM users WHERE id = $1 FOR UPDATE`, loan.BorrowerID).Scan(&borrowerBalance)
+	if err != nil {
+		return nil, err
+	}
+	if borrowerBalance < loan.TotalOwed {
+		return nil, fmt.Errorf("insufficient balance")
+	}
+
+	// 3. Deduct from borrower and credit lender
+	_, err = tx.Exec(`UPDATE users SET balance = balance - $1 WHERE id = $2`, loan.TotalOwed, loan.BorrowerID)
+	if err != nil {
+		return nil, err
+	}
+	_, err = tx.Exec(`UPDATE users SET balance = balance + $1 WHERE id = $2`, loan.TotalOwed, loan.LenderID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 4. Mark loan as paid
+	_, err = tx.Exec(`UPDATE loans SET paid = TRUE WHERE id = $1`, loan.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	loan.Paid = true
+	return loan, tx.Commit()
+}
+
+// AutoCollectDueLoan processes an overdue loan. If the borrower has full funds, it repays and marks paid.
+// If the borrower has partial funds, it collects available funds, reduces total_owed, and keeps the loan overdue.
+// Returns: loan, collectedAmount, remainingDebt, fullyPaid, error.
+func AutoCollectDueLoan(loanID string) (*Loan, int, int, bool, error) {
+	tx, err := DB.Begin()
+	if err != nil {
+		return nil, 0, 0, false, err
+	}
+	defer tx.Rollback()
+
+	// 1. Lock the loan row
+	loan := &Loan{}
+	queryLoan := `SELECT id, lender_id, borrower_id, amount, interest_rate, due_date, total_owed, paid, created_at, channel_id, guild_id 
+				  FROM loans WHERE id = $1 FOR UPDATE SKIP LOCKED`
+	err = tx.QueryRow(queryLoan, loanID).Scan(
+		&loan.ID, &loan.LenderID, &loan.BorrowerID, &loan.Amount,
+		&loan.InterestRate, &loan.DueDate, &loan.TotalOwed, &loan.Paid,
+		&loan.CreatedAt, &loan.ChannelID, &loan.GuildID,
+	)
+	if err != nil {
+		return nil, 0, 0, false, err
+	}
+
+	if loan.Paid {
+		return loan, 0, 0, true, nil
+	}
+
+	// 2. Lock borrower balance
+	var borrowerBalance int
+	err = tx.QueryRow(`SELECT balance FROM users WHERE id = $1 FOR UPDATE`, loan.BorrowerID).Scan(&borrowerBalance)
+	if err != nil {
+		return nil, 0, 0, false, err
+	}
+
+	if borrowerBalance >= loan.TotalOwed {
+		// Full collection
+		collected := loan.TotalOwed
+		_, err = tx.Exec(`UPDATE users SET balance = balance - $1 WHERE id = $2`, collected, loan.BorrowerID)
+		if err != nil {
+			return nil, 0, 0, false, err
+		}
+		_, err = tx.Exec(`UPDATE users SET balance = balance + $1 WHERE id = $2`, collected, loan.LenderID)
+		if err != nil {
+			return nil, 0, 0, false, err
+		}
+		_, err = tx.Exec(`UPDATE loans SET paid = TRUE WHERE id = $1`, loan.ID)
+		if err != nil {
+			return nil, 0, 0, false, err
+		}
+		loan.Paid = true
+		return loan, collected, 0, true, tx.Commit()
+	}
+
+	// Partial collection (collect whatever is available > 0, do NOT negative balance)
+	collected := borrowerBalance
+	if collected > 0 {
+		_, err = tx.Exec(`UPDATE users SET balance = balance - $1 WHERE id = $2`, collected, loan.BorrowerID)
+		if err != nil {
+			return nil, 0, 0, false, err
+		}
+		_, err = tx.Exec(`UPDATE users SET balance = balance + $1 WHERE id = $2`, collected, loan.LenderID)
+		if err != nil {
+			return nil, 0, 0, false, err
+		}
+		// Reduce debt
+		_, err = tx.Exec(`UPDATE loans SET total_owed = total_owed - $1 WHERE id = $2`, collected, loan.ID)
+		if err != nil {
+			return nil, 0, 0, false, err
+		}
+		loan.TotalOwed -= collected
+	}
+
+	remaining := loan.TotalOwed
+	return loan, collected, remaining, false, tx.Commit()
+}
+
+// GetActiveLoansByUser returns active unpaid loans for a user (as borrower or lender)
+func GetActiveLoansByUser(userID string, limit int) ([]*Loan, error) {
+	if limit <= 0 {
+		limit = 15
+	}
+	query := `SELECT id, lender_id, borrower_id, amount, interest_rate, due_date, total_owed, paid, created_at, channel_id, guild_id 
+			  FROM loans 
+			  WHERE (borrower_id = $1 OR lender_id = $1) AND paid = FALSE 
+			  ORDER BY due_date ASC 
+			  LIMIT $2`
+	rows, err := DB.Query(query, userID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var loans []*Loan
+	for rows.Next() {
+		loan := &Loan{}
+		err := rows.Scan(&loan.ID, &loan.LenderID, &loan.BorrowerID, &loan.Amount,
+			&loan.InterestRate, &loan.DueDate, &loan.TotalOwed, &loan.Paid,
+			&loan.CreatedAt, &loan.ChannelID, &loan.GuildID)
+		if err != nil {
+			continue
+		}
+		loans = append(loans, loan)
+	}
+	return loans, nil
+}
+
+// GetActiveLoansByBorrower returns all active unpaid loans where the user is the borrower
+func GetActiveLoansByBorrower(borrowerID string) ([]*Loan, error) {
+	query := `SELECT id, lender_id, borrower_id, amount, interest_rate, due_date, total_owed, paid, created_at, channel_id, guild_id 
+			  FROM loans 
+			  WHERE borrower_id = $1 AND paid = FALSE 
+			  ORDER BY due_date ASC`
+	rows, err := DB.Query(query, borrowerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var loans []*Loan
+	for rows.Next() {
+		loan := &Loan{}
+		err := rows.Scan(&loan.ID, &loan.LenderID, &loan.BorrowerID, &loan.Amount,
+			&loan.InterestRate, &loan.DueDate, &loan.TotalOwed, &loan.Paid,
+			&loan.CreatedAt, &loan.ChannelID, &loan.GuildID)
+		if err != nil {
+			continue
+		}
+		loans = append(loans, loan)
+	}
+	return loans, nil
+}
+
+// GetLoanByID returns a single loan by ID
+func GetLoanByID(loanID string) (*Loan, error) {
+	loan := &Loan{}
+	query := `SELECT id, lender_id, borrower_id, amount, interest_rate, due_date, total_owed, paid, created_at, channel_id, guild_id 
+			  FROM loans WHERE id = $1`
+	err := DB.QueryRow(query, loanID).Scan(
+		&loan.ID, &loan.LenderID, &loan.BorrowerID, &loan.Amount,
+		&loan.InterestRate, &loan.DueDate, &loan.TotalOwed, &loan.Paid,
+		&loan.CreatedAt, &loan.ChannelID, &loan.GuildID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return loan, nil
+}
+
+// GetOverdueUnpaidLoans returns all unpaid loans that are past their due date
+func GetOverdueUnpaidLoans() ([]*Loan, error) {
+	query := `SELECT id, lender_id, borrower_id, amount, interest_rate, due_date, total_owed, paid, created_at, channel_id, guild_id 
+			  FROM loans 
+			  WHERE paid = FALSE AND due_date <= NOW() 
+			  ORDER BY due_date ASC 
+			  LIMIT 50`
+	rows, err := DB.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var loans []*Loan
+	for rows.Next() {
+		loan := &Loan{}
+		err := rows.Scan(&loan.ID, &loan.LenderID, &loan.BorrowerID, &loan.Amount,
+			&loan.InterestRate, &loan.DueDate, &loan.TotalOwed, &loan.Paid,
+			&loan.CreatedAt, &loan.ChannelID, &loan.GuildID)
+		if err != nil {
+			continue
+		}
+		loans = append(loans, loan)
+	}
+	return loans, nil
+}
+
+// MarkLoanAsPaid marks a loan as paid
 func MarkLoanAsPaid(loanID string) error {
-	query := prepareQuery("UPDATE loans SET paid = ? WHERE id = ?")
-	_, err := DB.Exec(query, true, loanID)
+	query := `UPDATE loans SET paid = TRUE WHERE id = $1`
+	_, err := DB.Exec(query, loanID)
 	return err
 }
 
-// GetActiveLoans retorna todos os empréstimos ativos (não pagos)
+// GetActiveLoans returns all active (unpaid) loans
 func GetActiveLoans() ([]*Loan, error) {
-	query := prepareQuery("SELECT id, lender_id, borrower_id, amount, interest_rate, due_date, total_owed, paid, created_at, channel_id, guild_id FROM loans WHERE paid = ?")
-	rows, err := DB.Query(query, false)
+	query := `SELECT id, lender_id, borrower_id, amount, interest_rate, due_date, total_owed, paid, created_at, channel_id, guild_id FROM loans WHERE paid = FALSE`
+	rows, err := DB.Query(query)
 	if err != nil {
 		return nil, err
 	}

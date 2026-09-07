@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// Database define a interface para operações de banco de dados
+// Database defines the interface for database operations
 type Database interface {
 	// Connection
 	Open() error
@@ -13,20 +13,20 @@ type Database interface {
 	Ping() error
 	GetDB() *sql.DB
 
-	// Query Builders - retornam queries formatadas para o driver específico
+	// Query Builders - return formatted queries for the specific driver
 	Query(query string, args ...interface{}) (*sql.Rows, error)
 	QueryRow(query string, args ...interface{}) *sql.Row
 	Exec(query string, args ...interface{}) (sql.Result, error)
 	Begin() (*sql.Tx, error)
 
-	// Placeholder retorna o placeholder correto para o driver ($N para PostgreSQL)
+	// Placeholder returns the correct placeholder for the driver ($N for PostgreSQL)
 	Placeholder(index int) string
 
-	// UpsertSyntax retorna a sintaxe correta para upsert
+	// UpsertSyntax returns the correct syntax for upsert
 	UpsertSyntax(table string, conflictCols []string, updateCols []string, values []interface{}) (string, []interface{})
 }
 
-// UserBalance representa o saldo de um usuário
+// UserBalance represents a user's balance
 type UserBalance struct {
 	ID              string
 	Balance         int
@@ -35,19 +35,19 @@ type UserBalance struct {
 	TotalNetWorth   int
 }
 
-// APIKeyStruct representa uma chave de API
+// APIKeyStruct represents an API key
 type APIKeyStruct struct {
 	Key       string
 	Name      string
 	CreatedAt time.Time
 }
 
-// Investment representa um investimento em ações
+// Investment represents a stock investment
 type Investment struct {
 	UserID string
 	Ticker string
 	Shares float64
 }
 
-// DB é a instância global do database
+// DB is the global database instance
 var DB Database

@@ -39,7 +39,7 @@ func VoiceStateUpdate(s *discordgo.Session, v *discordgo.VoiceStateUpdate) {
 	log.Printf("[VOICE] Event: user=%s, before=%s, after=%s, mute=%v, hasSession=%v",
 		userID, beforeChannel, v.ChannelID, v.SelfMute, hasSession)
 
-	// CASO 1: Usuário saiu completamente do Discord (after vazio)
+	// CASE 1: User completely left Discord (after is empty)
 	if v.ChannelID == "" {
 		if hasSession {
 			payAndDelete(userID, sess)
@@ -47,32 +47,32 @@ func VoiceStateUpdate(s *discordgo.Session, v *discordgo.VoiceStateUpdate) {
 		return
 	}
 
-	// CASO 2: Usuário mudou de canal (before diferente de after)
+	// CASE 2: User changed channel (before differs from after)
 	if hasSession && beforeChannel != "" && beforeChannel != v.ChannelID {
 		payAndDelete(userID, sess)
-		// Continua para verificar se pode iniciar nova sessão no novo canal
+		// Continue to check if a new session can start in the new channel
 	}
 
-	// CASO 3: Usuário mutou/desmutou no mesmo canal
+	// CASE 3: User muted/unmuted in the same channel
 	if hasSession && sess.ChannelID == v.ChannelID {
 		if v.SelfMute || v.Mute || v.SelfDeaf || v.Deaf {
-			// Mutou - fecha sessão mas guarda segundos acumulados
+			// Muted - close session but save accumulated seconds
 			_, remaining := payAndDelete(userID, sess)
-			// Guarda segundos restantes em memória temporária
+			// Save remaining seconds in temporary memory
 			if remaining > 0 {
 				sessions[userID] = VoiceSession{
 					StartTime:          time.Now(), // placeholder
-					ChannelID:          "",         // marcador de "mutado"
+					ChannelID:          "",         // "muted" marker
 					AccumulatedSeconds: remaining,
 				}
 			}
 			return
 		}
-		// Desmutou - verificar se é elegível
-		// (sessão continua aberta)
+		// Unmuted - check if eligible
+		// (session remains open)
 	}
 
-	// Verificar elegibilidade para nova sessão
+	// Check eligibility for a new session
 	if v.SelfMute || v.Mute || v.SelfDeaf || v.Deaf {
 		return
 	}
@@ -82,10 +82,10 @@ func VoiceStateUpdate(s *discordgo.Session, v *discordgo.VoiceStateUpdate) {
 		return
 	}
 
-	// Iniciar nova sessão
+	// Start new session
 	accumulated := 0
 	if hasSession && sess.ChannelID == "" {
-		// Estava mutado com segundos acumulados
+		// Was muted with accumulated seconds
 		accumulated = sess.AccumulatedSeconds
 		delete(sessions, userID)
 	}
@@ -99,8 +99,8 @@ func VoiceStateUpdate(s *discordgo.Session, v *discordgo.VoiceStateUpdate) {
 		userID, v.ChannelID, accumulated, count)
 }
 
-// payAndDelete paga o tempo acumulado e remove a sessão
-// Retorna minutos pagos e segundos restantes
+// payAndDelete pays out accumulated time and removes the session
+// Returns paid minutes and remaining seconds
 func payAndDelete(userID string, sess VoiceSession) (minutes int, remaining int) {
 	duration := time.Since(sess.StartTime)
 	totalSecs := int(duration.Seconds()) + sess.AccumulatedSeconds
@@ -173,7 +173,7 @@ func InitializeVoiceSessions(s *discordgo.Session) {
 	log.Println("[VOICE] Initialization complete")
 }
 
-// CloseAllVoiceSessions paga todos os usuários em sessões ativas quando o bot fecha
+// CloseAllVoiceSessions pays all users in active sessions when the bot shuts down
 func CloseAllVoiceSessions() {
 	mu.Lock()
 	defer mu.Unlock()
@@ -181,7 +181,7 @@ func CloseAllVoiceSessions() {
 	log.Printf("[VOICE] Closing %d active voice sessions...", len(sessions))
 
 	for userID, sess := range sessions {
-		// Só paga se tiver um canal válido (não estiver mutado)
+		// Only pay if channel is valid (not muted)
 		if sess.ChannelID != "" {
 			duration := time.Since(sess.StartTime)
 			totalSecs := int(duration.Seconds()) + sess.AccumulatedSeconds
@@ -195,7 +195,7 @@ func CloseAllVoiceSessions() {
 				log.Printf("[VOICE SHUTDOWN] User %s had less than 1 minute, no payment", userID)
 			}
 		} else {
-			// Usuário estava mutado, salva segundos acumulados para próxima sessão
+			// User was muted, log accumulated seconds saved
 			if sess.AccumulatedSeconds > 0 {
 				log.Printf("[VOICE SHUTDOWN] User %s was muted with %d seconds accumulated (saved)", userID, sess.AccumulatedSeconds)
 			}

@@ -16,7 +16,7 @@ var (
 	queueLen = 0
 	queueMu  sync.Mutex
 	
-	// Mapa para rastrear usuários em jogos ativos
+	// Map to track users in active games
 	activePlayers = make(map[string]bool)
 	playersMu     sync.RWMutex
 )
@@ -40,7 +40,7 @@ func Enqueue(job GameJob) {
 
 func processQueue() {
 	for job := range jobQueue {
-		// Marcar usuário como em jogo
+		// Mark user as in-game
 		playersMu.Lock()
 		activePlayers[job.UserID] = true
 		playersMu.Unlock()
@@ -54,21 +54,21 @@ func processQueue() {
 		// Wait here until the game signals it is done
 		<-finishChan
 		
-		// Remover usuário dos jogos ativos
+		// Remove user from active games
 		playersMu.Lock()
 		delete(activePlayers, job.UserID)
 		playersMu.Unlock()
 	}
 }
 
-// IsUserInGame verifica se um usuário está em um jogo ativo
+// IsUserInGame checks if a user is currently in an active game
 func IsUserInGame(userID string) bool {
 	playersMu.RLock()
 	defer playersMu.RUnlock()
 	return activePlayers[userID]
 }
 
-// WaitForGameFinish espera o usuário terminar o jogo atual
+// WaitForGameFinish waits for the user to finish their current game
 func WaitForGameFinish(userID string) {
 	for {
 		playersMu.RLock()
@@ -79,7 +79,7 @@ func WaitForGameFinish(userID string) {
 			return
 		}
 		
-		// Esperar um pouco antes de verificar novamente
+		// Wait a bit before checking again
 		time.Sleep(500 * time.Millisecond)
 	}
 }

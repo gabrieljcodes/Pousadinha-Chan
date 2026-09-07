@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// GetInvestment retorna a quantidade de ações que um usuário tem de um ticker
+// GetInvestment returns the number of shares a user holds for a ticker
 func GetInvestment(userID, ticker string) (float64, error) {
 	var shares float64
 	query := prepareQuery("SELECT shares FROM stock_investments WHERE user_id = ? AND ticker = ?")
@@ -26,25 +26,27 @@ func AddShares(userID, ticker string, amount float64) error {
 	return err
 }
 
-// RemoveShares remove ações de um usuário
+// RemoveShares removes shares from a user atomically
 func RemoveShares(userID, ticker string, amount float64) error {
-	current, err := GetInvestment(userID, ticker)
+	if amount <= 0 {
+		return nil
+	}
+
+	res, err := DB.Exec(`UPDATE stock_investments SET shares = shares - $1 WHERE user_id = $2 AND ticker = $3 AND shares >= $1`, amount, userID, ticker)
 	if err != nil {
 		return err
 	}
-	if current < amount {
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
 		return sql.ErrNoRows
 	}
 
-	newAmount := current - amount
-	if newAmount <= 0.000001 { // Float precision safety, effectively 0
-		query := prepareQuery("DELETE FROM stock_investments WHERE user_id = ? AND ticker = ?")
-		_, err = DB.Exec(query, userID, ticker)
-	} else {
-		query := prepareQuery("UPDATE stock_investments SET shares = ? WHERE user_id = ? AND ticker = ?")
-		_, err = DB.Exec(query, newAmount, userID, ticker)
-	}
-	return err
+	// Clean up dust or zero shares
+	_, _ = DB.Exec(`DELETE FROM stock_investments WHERE user_id = $1 AND ticker = $2 AND shares <= 0.000001`, userID, ticker)
+	return nil
 }
 
 func SetStockPriceDB(ticker string, price float64) error {
@@ -55,7 +57,7 @@ func SetStockPriceDB(ticker string, price float64) error {
 	return err
 }
 
-// GetStockPriceDB retorna o preço de uma ação
+// GetStockPriceDB returns the price of a stock
 func GetStockPriceDB(ticker string) (float64, error) {
 	var price float64
 	query := prepareQuery("SELECT last_price FROM stock_prices WHERE ticker = ?")
@@ -69,7 +71,7 @@ func GetStockPriceDB(ticker string) (float64, error) {
 	return price, nil
 }
 
-// GetAllInvestmentsByTicker retorna todos os investimentos de um ticker específico
+// GetAllInvestmentsByTicker returns all investments for a specific ticker
 func GetAllInvestmentsByTicker(ticker string) ([]Investment, error) {
 	query := prepareQuery("SELECT user_id, shares FROM stock_investments WHERE ticker = ?")
 	rows, err := DB.Query(query, ticker)
@@ -90,7 +92,7 @@ func GetAllInvestmentsByTicker(ticker string) ([]Investment, error) {
 	return investments, nil
 }
 
-// GetAllInvestmentsByUser retorna todos os investimentos de um usuário
+// GetAllInvestmentsByUser returns all stock investments for a user
 func GetAllInvestmentsByUser(userID string) ([]Investment, error) {
 	query := prepareQuery("SELECT ticker, shares FROM stock_investments WHERE user_id = ?")
 	rows, err := DB.Query(query, userID)

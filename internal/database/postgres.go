@@ -4,45 +4,46 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"os"
+	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
-// PostgresDatabase implementa a interface Database para PostgreSQL usando pgx (recomendado pelo Supabase)
+// PostgresDatabase implements the Database interface for PostgreSQL using pgx (recommended by Supabase)
 type PostgresDatabase struct {
 	connString string
 	db         *sql.DB
 }
 
-// NewPostgresDatabase cria uma nova instância do database PostgreSQL
+// NewPostgresDatabase creates a new instance of the PostgreSQL database
 func NewPostgresDatabase(connString string) *PostgresDatabase {
 	return &PostgresDatabase{
 		connString: connString,
 	}
 }
 
-// Open abre a conexão com o banco de dados
+// Open opens the connection to the database
 func (p *PostgresDatabase) Open() error {
 	log.Printf("Connecting to PostgreSQL using pgx driver...")
 	log.Printf("Connection string (masked): %s", maskPassword(p.connString))
 
-	// Usar pgx como driver em vez de pq - melhor suporte para Supabase pooler
+	// Use pgx driver instead of pq - better support for Supabase pooler
 	db, err := sql.Open("pgx", p.connString)
 	if err != nil {
 		return fmt.Errorf("failed to open database: %w", err)
 	}
 
-	// Configurar pool de conexões otimizado para Supabase
-	db.SetMaxOpenConns(10)
+	// Configure connection pool optimized for Supabase pooler / PgBouncer
+	db.SetMaxOpenConns(15)
 	db.SetMaxIdleConns(5)
-	db.SetConnMaxLifetime(0)
+	db.SetConnMaxLifetime(5 * time.Minute)
+	db.SetConnMaxIdleTime(2 * time.Minute)
 
 	p.db = db
 	return nil
 }
 
-// maskPassword oculta a senha na string de conexão para logs
+// maskPassword hides the password in the connection string for logs
 func maskPassword(connString string) string {
 	result := connString
 	if idx := indexOf(result, "://"); idx >= 0 {
@@ -67,7 +68,7 @@ func indexOf(s, substr string) int {
 	return -1
 }
 
-// Close fecha a conexão com o banco de dados
+// Close closes the database connection
 func (p *PostgresDatabase) Close() error {
 	if p.db != nil {
 		return p.db.Close()
@@ -75,7 +76,7 @@ func (p *PostgresDatabase) Close() error {
 	return nil
 }
 
-// Ping verifica se a conexão está ativa
+// Ping checks if the database connection is active
 func (p *PostgresDatabase) Ping() error {
 	if p.db == nil {
 		return fmt.Errorf("database not connected")
@@ -83,39 +84,39 @@ func (p *PostgresDatabase) Ping() error {
 	return p.db.Ping()
 }
 
-// GetDB retorna a instância *sql.DB subjacente
+// GetDB returns the underlying *sql.DB instance
 func (p *PostgresDatabase) GetDB() *sql.DB {
 	return p.db
 }
 
-// Query executa uma query SELECT
+// Query executes a SELECT query
 func (p *PostgresDatabase) Query(query string, args ...interface{}) (*sql.Rows, error) {
 	return p.db.Query(query, args...)
 }
 
-// QueryRow executa uma query que retorna uma única linha
+// QueryRow executes a query returning a single row
 func (p *PostgresDatabase) QueryRow(query string, args ...interface{}) *sql.Row {
 	return p.db.QueryRow(query, args...)
 }
 
-// Exec executa uma query que não retorna linhas
+// Exec executes a query without returning rows
 func (p *PostgresDatabase) Exec(query string, args ...interface{}) (sql.Result, error) {
 	return p.db.Exec(query, args...)
 }
 
-// Begin inicia uma transação
+// Begin begins a transaction
 func (p *PostgresDatabase) Begin() (*sql.Tx, error) {
 	return p.db.Begin()
 }
 
-// Placeholder retorna $N para PostgreSQL (1-indexed)
+// Placeholder returns $N for PostgreSQL (1-indexed)
 func (p *PostgresDatabase) Placeholder(index int) string {
 	return fmt.Sprintf("$%d", index)
 }
 
-// UpsertSyntax retorna a sintaxe de upsert para PostgreSQL (INSERT ON CONFLICT)
+// UpsertSyntax returns the upsert syntax for PostgreSQL (INSERT ON CONFLICT)
 func (p *PostgresDatabase) UpsertSyntax(table string, conflictCols []string, updateCols []string, values []interface{}) (string, []interface{}) {
-	// Construir colunas
+	// Build column names
 	allCols := append(conflictCols, updateCols...)
 	colNames := ""
 	placeholders := ""
@@ -131,7 +132,7 @@ func (p *PostgresDatabase) UpsertSyntax(table string, conflictCols []string, upd
 		placeholderIndex++
 	}
 
-	// Construir updates com placeholders
+	// Build update clauses with placeholders
 	updates := ""
 	updatePlaceholderIndex := placeholderIndex
 	for i, col := range updateCols {
@@ -139,12 +140,12 @@ func (p *PostgresDatabase) UpsertSyntax(table string, conflictCols []string, upd
 			updates += ", "
 		}
 		updates += fmt.Sprintf("%s = %s", col, p.Placeholder(updatePlaceholderIndex))
-		// Adicionar valores para update
+		// Append values for update
 		values = append(values, values[len(conflictCols)+i])
 		updatePlaceholderIndex++
 	}
 
-	// Construir conflict target
+	// Build conflict target
 	conflictTarget := ""
 	for i, col := range conflictCols {
 		if i > 0 {
@@ -159,87 +160,206 @@ func (p *PostgresDatabase) UpsertSyntax(table string, conflictCols []string, upd
 	return query, values
 }
 
-// CreateTables cria as tabelas necessárias para PostgreSQL
+// CreateTables creates required PostgreSQL tables and applies necessary schema migrations
 func (p *PostgresDatabase) CreateTables() error {
+	log.Println("Creating PostgreSQL tables and verifying schema migrations...")
 
-
-	log.Println("Creating PostgreSQL tables if not exists...")
-
-	createTableSQL := `CREATE TABLE IF NOT EXISTS users (
-		id TEXT PRIMARY KEY,
-		balance INTEGER DEFAULT 0,
-		last_daily TIMESTAMP,
-		webhook_url TEXT,
-		daily_streak INTEGER DEFAULT 0,
-		max_daily_streak INTEGER DEFAULT 0
-	);`
-	if _, err := p.db.Exec(createTableSQL); err != nil {
-		log.Printf("Warning: error creating users table (may already exist): %v", err)
+	// 1. Base table creation (optimized types for fresh setups)
+	createTableQueries := []string{
+		`CREATE TABLE IF NOT EXISTS users (
+			id TEXT PRIMARY KEY,
+			balance BIGINT DEFAULT 0,
+			last_daily TIMESTAMPTZ,
+			webhook_url TEXT,
+			daily_streak INTEGER DEFAULT 0,
+			max_daily_streak INTEGER DEFAULT 0
+		);`,
+		`CREATE TABLE IF NOT EXISTS api_keys (
+			key TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL,
+			name TEXT,
+			created_at TIMESTAMPTZ DEFAULT NOW()
+		);`,
+		`CREATE TABLE IF NOT EXISTS stock_prices (
+			ticker TEXT PRIMARY KEY,
+			last_price NUMERIC(20, 6) DEFAULT 0,
+			updated_at TIMESTAMPTZ DEFAULT NOW()
+		);`,
+		`CREATE TABLE IF NOT EXISTS stock_investments (
+			user_id TEXT NOT NULL,
+			ticker TEXT NOT NULL,
+			shares NUMERIC(28, 12) DEFAULT 0,
+			PRIMARY KEY (user_id, ticker)
+		);`,
+		`CREATE TABLE IF NOT EXISTS loans (
+			id TEXT PRIMARY KEY,
+			lender_id TEXT NOT NULL,
+			borrower_id TEXT NOT NULL,
+			amount BIGINT DEFAULT 0,
+			interest_rate NUMERIC(8, 4) DEFAULT 0,
+			due_date TIMESTAMPTZ,
+			total_owed BIGINT DEFAULT 0,
+			paid BOOLEAN DEFAULT FALSE,
+			created_at TIMESTAMPTZ DEFAULT NOW(),
+			channel_id TEXT,
+			guild_id TEXT
+		);`,
 	}
 
-	// Migration: Add streak columns if they don't exist
-	migrationQueries := []string{
-		`ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_streak INTEGER DEFAULT 0;`,
-		`ALTER TABLE users ADD COLUMN IF NOT EXISTS max_daily_streak INTEGER DEFAULT 0;`,
-	}
-	for _, query := range migrationQueries {
+	for _, query := range createTableQueries {
 		if _, err := p.db.Exec(query); err != nil {
-			log.Printf("Warning: error running migration: %v", err)
+			log.Printf("Warning: error creating table: %v", err)
 		}
 	}
 
-	createApiTableSQL := `CREATE TABLE IF NOT EXISTS api_keys (
-		key TEXT PRIMARY KEY,
-		user_id TEXT NOT NULL,
-		name TEXT,
-		created_at TIMESTAMP
-	);`
-	if _, err := p.db.Exec(createApiTableSQL); err != nil {
-		log.Printf("Warning: error creating api_keys table (may already exist): %v", err)
-	}
-
-	createStockInvestmentsSQL := `CREATE TABLE IF NOT EXISTS stock_investments (
-		user_id TEXT NOT NULL,
-		ticker TEXT NOT NULL,
-		shares REAL DEFAULT 0,
-		PRIMARY KEY (user_id, ticker)
-	);`
-	if _, err := p.db.Exec(createStockInvestmentsSQL); err != nil {
-		log.Printf("Warning: error creating stock_investments table (may already exist): %v", err)
-	}
-
-	createStockPricesSQL := `CREATE TABLE IF NOT EXISTS stock_prices (
-		ticker TEXT PRIMARY KEY,
-		last_price REAL DEFAULT 0,
-		updated_at TIMESTAMP
-	);`
-	if _, err := p.db.Exec(createStockPricesSQL); err != nil {
-		log.Printf("Warning: error creating stock_prices table (may already exist): %v", err)
-	}
-
-	// Criar tabelas de crypto
+	// Create crypto tables
 	if err := p.CreateCryptoTables(); err != nil {
 		log.Printf("Warning: error creating crypto tables: %v", err)
 	}
 
-	// Criar tabela de empréstimos
-	createLoansTableSQL := `CREATE TABLE IF NOT EXISTS loans (
-		id TEXT PRIMARY KEY,
-		lender_id TEXT NOT NULL,
-		borrower_id TEXT NOT NULL,
-		amount INTEGER DEFAULT 0,
-		interest_rate REAL DEFAULT 0,
-		due_date TIMESTAMP,
-		total_owed INTEGER DEFAULT 0,
-		paid BOOLEAN DEFAULT FALSE,
-		created_at TIMESTAMP,
-		channel_id TEXT,
-		guild_id TEXT
-	);`
-	if _, err := p.db.Exec(createLoansTableSQL); err != nil {
-		log.Printf("Warning: error creating loans table: %v", err)
+	// 2. Safe Schema Type Migrations (for existing databases)
+	alterQueries := []string{
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_streak INTEGER DEFAULT 0;`,
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS max_daily_streak INTEGER DEFAULT 0;`,
+		`ALTER TABLE users ALTER COLUMN balance TYPE BIGINT;`,
+		`ALTER TABLE users ALTER COLUMN last_daily TYPE TIMESTAMPTZ;`,
+		`ALTER TABLE api_keys ALTER COLUMN created_at TYPE TIMESTAMPTZ;`,
+		`ALTER TABLE stock_prices ALTER COLUMN last_price TYPE NUMERIC(20, 6);`,
+		`ALTER TABLE stock_prices ALTER COLUMN updated_at TYPE TIMESTAMPTZ;`,
+		`ALTER TABLE stock_investments ALTER COLUMN shares TYPE NUMERIC(28, 12);`,
+		`ALTER TABLE crypto_investments ALTER COLUMN coins TYPE NUMERIC(28, 12);`,
+		`ALTER TABLE loans ALTER COLUMN amount TYPE BIGINT;`,
+		`ALTER TABLE loans ALTER COLUMN total_owed TYPE BIGINT;`,
+		`ALTER TABLE loans ALTER COLUMN interest_rate TYPE NUMERIC(8, 4);`,
+		`ALTER TABLE loans ALTER COLUMN due_date TYPE TIMESTAMPTZ;`,
+		`ALTER TABLE loans ALTER COLUMN created_at TYPE TIMESTAMPTZ;`,
 	}
 
-	log.Println("Table creation completed")
+	for _, query := range alterQueries {
+		if _, err := p.db.Exec(query); err != nil {
+			log.Printf("Notice: schema migration step: %v", err)
+		}
+	}
+
+	// 3. Heal orphaned records before adding foreign keys
+	healQueries := []string{
+		`INSERT INTO users (id, balance) SELECT DISTINCT user_id, 0 FROM api_keys WHERE user_id NOT IN (SELECT id FROM users) ON CONFLICT (id) DO NOTHING;`,
+		`INSERT INTO users (id, balance) SELECT DISTINCT user_id, 0 FROM stock_investments WHERE user_id NOT IN (SELECT id FROM users) ON CONFLICT (id) DO NOTHING;`,
+		`INSERT INTO users (id, balance) SELECT DISTINCT user_id, 0 FROM crypto_investments WHERE user_id NOT IN (SELECT id FROM users) ON CONFLICT (id) DO NOTHING;`,
+		`INSERT INTO users (id, balance) SELECT DISTINCT lender_id, 0 FROM loans WHERE lender_id NOT IN (SELECT id FROM users) ON CONFLICT (id) DO NOTHING;`,
+		`INSERT INTO users (id, balance) SELECT DISTINCT borrower_id, 0 FROM loans WHERE borrower_id NOT IN (SELECT id FROM users) ON CONFLICT (id) DO NOTHING;`,
+	}
+	for _, query := range healQueries {
+		_, _ = p.db.Exec(query)
+	}
+
+	// 4. Foreign Key Constraints (ON DELETE CASCADE)
+	fkBlock := `
+	DO $$
+	BEGIN
+		IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_api_keys_user') THEN
+			ALTER TABLE api_keys ADD CONSTRAINT fk_api_keys_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+		END IF;
+		IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_stock_investments_user') THEN
+			ALTER TABLE stock_investments ADD CONSTRAINT fk_stock_investments_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+		END IF;
+		IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_crypto_investments_user') THEN
+			ALTER TABLE crypto_investments ADD CONSTRAINT fk_crypto_investments_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+		END IF;
+		IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_loans_lender') THEN
+			ALTER TABLE loans ADD CONSTRAINT fk_loans_lender FOREIGN KEY (lender_id) REFERENCES users(id) ON DELETE CASCADE;
+		END IF;
+		IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_loans_borrower') THEN
+			ALTER TABLE loans ADD CONSTRAINT fk_loans_borrower FOREIGN KEY (borrower_id) REFERENCES users(id) ON DELETE CASCADE;
+		END IF;
+	END $$;`
+	if _, err := p.db.Exec(fkBlock); err != nil {
+		log.Printf("Notice: foreign key configuration: %v", err)
+	}
+
+	// 5. Check Constraints
+	chkBlock := `
+	DO $$
+	BEGIN
+		IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_users_balance') THEN
+			ALTER TABLE users ADD CONSTRAINT chk_users_balance CHECK (balance >= 0);
+		END IF;
+		IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_stock_prices_last_price') THEN
+			ALTER TABLE stock_prices ADD CONSTRAINT chk_stock_prices_last_price CHECK (last_price >= 0);
+		END IF;
+		IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_stock_investments_shares') THEN
+			ALTER TABLE stock_investments ADD CONSTRAINT chk_stock_investments_shares CHECK (shares >= 0);
+		END IF;
+		IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_crypto_investments_coins') THEN
+			ALTER TABLE crypto_investments ADD CONSTRAINT chk_crypto_investments_coins CHECK (coins >= 0);
+		END IF;
+		IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_loans_total_owed') THEN
+			ALTER TABLE loans ADD CONSTRAINT chk_loans_total_owed CHECK (total_owed >= 0);
+		END IF;
+	END $$;`
+	if _, err := p.db.Exec(chkBlock); err != nil {
+		log.Printf("Notice: check constraint configuration: %v", err)
+	}
+
+	// 6. Performance & Partial Indexes
+	indexQueries := []string{
+		`CREATE INDEX IF NOT EXISTS idx_api_keys_user_id ON api_keys (user_id);`,
+		`CREATE INDEX IF NOT EXISTS idx_stock_investments_ticker ON stock_investments (ticker);`,
+		`CREATE INDEX IF NOT EXISTS idx_crypto_investments_symbol ON crypto_investments (symbol);`,
+		`CREATE INDEX IF NOT EXISTS idx_loans_due_date_unpaid ON loans (due_date) WHERE paid = FALSE;`,
+		`CREATE INDEX IF NOT EXISTS idx_loans_borrower_unpaid ON loans (borrower_id) WHERE paid = FALSE;`,
+		`CREATE INDEX IF NOT EXISTS idx_loans_lender_id ON loans (lender_id);`,
+	}
+	for _, query := range indexQueries {
+		if _, err := p.db.Exec(query); err != nil {
+			log.Printf("Notice: index creation: %v", err)
+		}
+	}
+
+	// 7. Security: Enable Row Level Security (RLS) on all tables & set policies
+	rlsQueries := []string{
+		`ALTER TABLE users ENABLE ROW LEVEL SECURITY;`,
+		`ALTER TABLE api_keys ENABLE ROW LEVEL SECURITY;`,
+		`ALTER TABLE stock_prices ENABLE ROW LEVEL SECURITY;`,
+		`ALTER TABLE stock_investments ENABLE ROW LEVEL SECURITY;`,
+		`ALTER TABLE crypto_investments ENABLE ROW LEVEL SECURITY;`,
+		`ALTER TABLE loans ENABLE ROW LEVEL SECURITY;`,
+	}
+	for _, query := range rlsQueries {
+		if _, err := p.db.Exec(query); err != nil {
+			log.Printf("Notice: RLS configuration: %v", err)
+		}
+	}
+
+	rlsPolicyBlock := `
+	DO $$
+	BEGIN
+		IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'stock_prices' AND policyname = 'allow_public_read_stock_prices') THEN
+			CREATE POLICY allow_public_read_stock_prices ON stock_prices FOR SELECT TO anon, authenticated USING (true);
+		END IF;
+		IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'users' AND policyname = 'service_role_all_users') THEN
+			CREATE POLICY service_role_all_users ON users FOR ALL TO service_role USING (true) WITH CHECK (true);
+		END IF;
+		IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'api_keys' AND policyname = 'service_role_all_api_keys') THEN
+			CREATE POLICY service_role_all_api_keys ON api_keys FOR ALL TO service_role USING (true) WITH CHECK (true);
+		END IF;
+		IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'stock_investments' AND policyname = 'service_role_all_stock_investments') THEN
+			CREATE POLICY service_role_all_stock_investments ON stock_investments FOR ALL TO service_role USING (true) WITH CHECK (true);
+		END IF;
+		IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'stock_prices' AND policyname = 'service_role_all_stock_prices') THEN
+			CREATE POLICY service_role_all_stock_prices ON stock_prices FOR ALL TO service_role USING (true) WITH CHECK (true);
+		END IF;
+		IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'crypto_investments' AND policyname = 'service_role_all_crypto_investments') THEN
+			CREATE POLICY service_role_all_crypto_investments ON crypto_investments FOR ALL TO service_role USING (true) WITH CHECK (true);
+		END IF;
+		IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'loans' AND policyname = 'service_role_all_loans') THEN
+			CREATE POLICY service_role_all_loans ON loans FOR ALL TO service_role USING (true) WITH CHECK (true);
+		END IF;
+	END $$;`
+	if _, err := p.db.Exec(rlsPolicyBlock); err != nil {
+		log.Printf("Notice: RLS policy configuration: %v", err)
+	}
+
+	log.Println("Table creation, migrations, indexing, and security policies completed successfully")
 	return nil
 }

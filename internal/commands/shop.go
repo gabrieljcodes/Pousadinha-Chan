@@ -113,15 +113,15 @@ func CmdBuy(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
 			return
 		}
 
-		// Verificar se o usuário está em um jogo ativo
+		// Check if user is in an active game
 		if games.IsUserInGame(targetUser.ID) {
-			msg, _ := s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("⏳ Aguardando", 
-				fmt.Sprintf("%s está em um jogo ativo. Aguardando o jogo terminar para aplicar o punishment...", targetUser.Username)))
+			msg, _ := s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("⏳ Waiting", 
+				fmt.Sprintf("%s is in an active game. Waiting for the game to finish to apply punishment...", targetUser.Username)))
 			
-			// Esperar o jogo acabar
+			// Wait for game to finish
 			games.WaitForGameFinish(targetUser.ID)
 			
-			// Deletar mensagem de espera
+			// Delete waiting message
 			if msg != nil {
 				s.ChannelMessageDelete(m.ChannelID, msg.ID)
 			}
@@ -172,15 +172,15 @@ func CmdBuy(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
 			return
 		}
 
-		// Verificar se o usuário está em um jogo ativo
+		// Check if user is in an active game
 		if games.IsUserInGame(targetUser.ID) {
-			msg, _ := s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("⏳ Aguardando", 
-				fmt.Sprintf("%s está em um jogo ativo. Aguardando o jogo terminar para aplicar o mute...", targetUser.Username)))
+			msg, _ := s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("⏳ Waiting", 
+				fmt.Sprintf("%s is in an active game. Waiting for the game to finish to apply mute...", targetUser.Username)))
 			
-			// Esperar o jogo acabar
+			// Wait for game to finish
 			games.WaitForGameFinish(targetUser.ID)
 			
-			// Deletar mensagem de espera
+			// Delete waiting message
 			if msg != nil {
 				s.ChannelMessageDelete(m.ChannelID, msg.ID)
 			}

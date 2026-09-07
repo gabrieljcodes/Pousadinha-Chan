@@ -55,10 +55,10 @@ func setupDatabaseConfig() {
 }
 
 func buildPostgresConnectionString() string {
-	// Para Supabase, usar a DATABASE_URL completa se disponível (funciona com pgx)
+	// For Supabase, use the full DATABASE_URL if available (works with pgx)
 	if dbURL := os.Getenv("DATABASE_URL"); dbURL != "" {
 		log.Println("Using DATABASE_URL from environment")
-		// Adicionar parâmetro para desabilitar cache de prepared statements (evita erros no pooler)
+		// Add parameter to disable prepared statement caching (prevents pooler errors)
 		if !strings.Contains(dbURL, "statement_cache_mode") {
 			if strings.Contains(dbURL, "?") {
 				return dbURL + "&statement_cache_mode=describe"
@@ -68,7 +68,7 @@ func buildPostgresConnectionString() string {
 		return dbURL
 	}
 
-	// Caso contrário, construir a string de conexão a partir das variáveis individuais
+	// Otherwise, construct connection string from individual variables
 	host := os.Getenv("DB_HOST")
 	if host == "" {
 		log.Fatal("DB_HOST is required for PostgreSQL. Set it in .env file or use DATABASE_URL")

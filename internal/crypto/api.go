@@ -10,9 +10,9 @@ import (
 
 const CoinGeckoBaseURL = "https://api.coingecko.com/api/v3"
 
-// GetCryptoPrices busca os preços atuais de todas as criptomoedas
+// GetCryptoPrices fetches the current prices of all cryptocurrencies
 func GetCryptoPrices() (map[string]float64, error) {
-	// Construir lista de IDs
+	// Build ID list
 	var ids []string
 	for _, c := range AvailableCryptos {
 		ids = append(ids, c.ID)
@@ -40,7 +40,7 @@ func GetCryptoPrices() (map[string]float64, error) {
 		return nil, err
 	}
 
-	// Converter para map mais simples: cryptoID -> price
+	// Convert to simpler map: cryptoID -> price
 	prices := make(map[string]float64)
 	for id, priceData := range data {
 		if usdPrice, ok := priceData["usd"]; ok {
@@ -51,7 +51,7 @@ func GetCryptoPrices() (map[string]float64, error) {
 	return prices, nil
 }
 
-// GetSingleCryptoPrice busca o preço de uma única criptomoeda
+// GetSingleCryptoPrice fetches the price of a single cryptocurrency
 func GetSingleCryptoPrice(cryptoID string) (float64, error) {
 	url := fmt.Sprintf("%s/simple/price?ids=%s&vs_currencies=usd", CoinGeckoBaseURL, cryptoID)
 	

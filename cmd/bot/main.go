@@ -76,8 +76,8 @@ func main() {
 	// Start Event Betting
 	games.StartEventBetting(dg)
 
-	// Load active loans and schedule auto-collections
-	commands.LoadActiveLoans(dg)
+	// Start loan overdue collector background worker
+	commands.StartLoanWorker(dg)
 
 	// Register Slash Commands
 	log.Println("Registering slash commands...")

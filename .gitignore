@@ -3,3 +3,5 @@ pousadinha-chan.db
 pousadinha-chan
 main
 config.json
+.agents/
+skills-lock.json

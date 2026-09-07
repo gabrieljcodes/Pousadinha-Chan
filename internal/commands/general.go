@@ -18,7 +18,7 @@ type HelpSection struct {
 	Value string
 }
 
-// getHelpSections retorna as seções de help em tempo de execução (para usar config carregado)
+// getHelpSections returns the help sections at runtime (to use loaded config)
 func getHelpSections() []HelpSection {
 	return []HelpSection{
 		{

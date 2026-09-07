@@ -422,7 +422,7 @@ func HandleSellStock(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-// PrepareQuery é um helper que converte placeholders para o formato do PostgreSQL
+// PrepareQuery is a helper that converts placeholders to PostgreSQL format ($1, $2, etc.)
 func PrepareQuery(query string) string {
 	result := ""
 	placeholderIndex := 1

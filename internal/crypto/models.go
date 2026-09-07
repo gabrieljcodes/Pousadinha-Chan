@@ -11,7 +11,7 @@ type Crypto struct {
 // CryptoResponse represents the API response from CoinGecko
 type CryptoResponse map[string]map[string]float64
 
-// AvailableCryptos lista todas as criptomoedas disponíveis
+// AvailableCryptos lists all available cryptocurrencies
 var AvailableCryptos = []Crypto{
 	// Major Cryptocurrencies
 	{ID: "bitcoin", Symbol: "BTC", Name: "Bitcoin", Type: "major"},
@@ -40,7 +40,7 @@ var AvailableCryptos = []Crypto{
 	{ID: "grok", Symbol: "GROK", Name: "Grok", Type: "meme"},
 }
 
-// GetCryptoBySymbol retorna uma crypto pelo símbolo
+// GetCryptoBySymbol returns a crypto by its symbol
 func GetCryptoBySymbol(symbol string) *Crypto {
 	for _, c := range AvailableCryptos {
 		if c.Symbol == symbol {
@@ -50,7 +50,7 @@ func GetCryptoBySymbol(symbol string) *Crypto {
 	return nil
 }
 
-// GetCryptoByID retorna uma crypto pelo ID do CoinGecko
+// GetCryptoByID returns a crypto by its CoinGecko ID
 func GetCryptoByID(id string) *Crypto {
 	for _, c := range AvailableCryptos {
 		if c.ID == id {

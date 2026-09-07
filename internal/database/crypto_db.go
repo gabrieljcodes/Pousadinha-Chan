@@ -11,12 +11,12 @@ type CryptoInvestment struct {
 	Coins  float64
 }
 
-// CreateCryptoTables cria as tabelas necessárias para criptomoedas
+// CreateCryptoTables creates the necessary tables for cryptocurrencies
 func (p *PostgresDatabase) CreateCryptoTables() error {
 	createCryptoInvestmentsSQL := `CREATE TABLE IF NOT EXISTS crypto_investments (
 		"user_id" TEXT NOT NULL,
 		"symbol" TEXT NOT NULL,
-		"coins" REAL DEFAULT 0,
+		"coins" NUMERIC(28, 12) DEFAULT 0,
 		PRIMARY KEY (user_id, symbol)
 	);`
 	if _, err := p.db.Exec(createCryptoInvestmentsSQL); err != nil {
@@ -27,7 +27,7 @@ func (p *PostgresDatabase) CreateCryptoTables() error {
 
 
 
-// GetCryptoInvestment retorna a quantidade de coins que um usuário tem de uma crypto
+// GetCryptoInvestment returns the amount of coins a user holds for a crypto
 func GetCryptoInvestment(userID, symbol string) (float64, error) {
 	var coins float64
 	query := prepareQuery("SELECT coins FROM crypto_investments WHERE user_id = ? AND symbol = ?")
@@ -48,28 +48,30 @@ func AddCryptoShares(userID, symbol string, coins float64) error {
 	return err
 }
 
-// RemoveCryptoShares remove coins de um usuário
+// RemoveCryptoShares removes coins from a user atomically
 func RemoveCryptoShares(userID, symbol string, coins float64) error {
-	current, err := GetCryptoInvestment(userID, symbol)
+	if coins <= 0 {
+		return nil
+	}
+
+	res, err := DB.Exec(`UPDATE crypto_investments SET coins = coins - $1 WHERE user_id = $2 AND symbol = $3 AND coins >= $1`, coins, userID, symbol)
 	if err != nil {
 		return err
 	}
-	if current < coins {
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
 		return sql.ErrNoRows
 	}
 
-	newAmount := current - coins
-	if newAmount <= 0.00000001 { // Float precision safety
-		query := prepareQuery("DELETE FROM crypto_investments WHERE user_id = ? AND symbol = ?")
-		_, err = DB.Exec(query, userID, symbol)
-	} else {
-		query := prepareQuery("UPDATE crypto_investments SET coins = ? WHERE user_id = ? AND symbol = ?")
-		_, err = DB.Exec(query, newAmount, userID, symbol)
-	}
-	return err
+	// Clean up dust or zero coins
+	_, _ = DB.Exec(`DELETE FROM crypto_investments WHERE user_id = $1 AND symbol = $2 AND coins <= 0.00000001`, userID, symbol)
+	return nil
 }
 
-// GetAllCryptoInvestmentsByUser retorna todos os investimentos em crypto de um usuário
+// GetAllCryptoInvestmentsByUser returns all crypto investments for a user
 func GetAllCryptoInvestmentsByUser(userID string) ([]CryptoInvestment, error) {
 	query := prepareQuery("SELECT symbol, coins FROM crypto_investments WHERE user_id = ?")
 	rows, err := DB.Query(query, userID)

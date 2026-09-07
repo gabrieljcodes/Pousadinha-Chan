@@ -28,7 +28,7 @@ func CmdDaily(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
-	// Adiciona as moedas
+	// Add coins
 	err = database.AddCoins(userID, info.Reward)
 	if err != nil {
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Error adding coins."))
@@ -126,7 +126,7 @@ func CmdLeaderboard(s *discordgo.Session, m *discordgo.MessageCreate) {
 			name = discordUser.Username
 		}
 		
-		// Mostrar patrimônio total com detalhes
+		// Show total net worth with details
 		description += fmt.Sprintf("**%d.** %s - **%d %s** 💰 (🪙 %d | 📈 %d)\n", 
 			i+1, name, u.TotalNetWorth, config.Bot.CurrencyName, u.Balance, u.StockValue)
 	}

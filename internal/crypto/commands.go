@@ -93,31 +93,31 @@ func handleCryptoBuy(s *discordgo.Session, m *discordgo.MessageCreate, args []st
 		return
 	}
 
-	// Verificar se a crypto existe
+	// Check if crypto exists
 	crypto := GetCryptoBySymbol(symbol)
 	if crypto == nil {
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Invalid cryptocurrency symbol. Use `!crypto market` to see available options."))
 		return
 	}
 
-	// Verificar saldo
+	// Check balance
 	balance := database.GetBalance(m.Author.ID)
 	if balance < amount {
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Insufficient funds."))
 		return
 	}
 
-	// Buscar preço atual
+	// Fetch current price
 	price, err := GetSingleCryptoPrice(crypto.ID)
 	if err != nil || price <= 0 {
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Could not fetch crypto price. Try again later."))
 		return
 	}
 
-	// Calcular quantidade de coins
+	// Calculate coins quantity
 	coins := float64(amount) / price
 
-	// Transação
+	// Transaction
 	if err := database.RemoveCoins(m.Author.ID, amount); err != nil {
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Transaction failed."))
 		return
@@ -130,7 +130,7 @@ func handleCryptoBuy(s *discordgo.Session, m *discordgo.MessageCreate, args []st
 		return
 	}
 
-	// Mensagem especial para meme coins
+	// Special message for meme coins
 	emoji := "🚀"
 	warning := ""
 	if crypto.Type == "meme" {
@@ -152,14 +152,14 @@ func handleCryptoSell(s *discordgo.Session, m *discordgo.MessageCreate, args []s
 	symbol := strings.ToUpper(args[0])
 	amountStr := args[1]
 
-	// Verificar se a crypto existe
+	// Check if crypto exists
 	crypto := GetCryptoBySymbol(symbol)
 	if crypto == nil {
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Invalid cryptocurrency symbol."))
 		return
 	}
 
-	// Verificar quantidade possuída
+	// Check owned amount
 	ownedCoins, _ := database.GetCryptoInvestment(m.Author.ID, symbol)
 	if ownedCoins <= 0 {
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(fmt.Sprintf("You don't own any %s.", symbol)))
@@ -184,7 +184,7 @@ func handleCryptoSell(s *discordgo.Session, m *discordgo.MessageCreate, args []s
 		return
 	}
 
-	// Buscar preço atual
+	// Fetch current price
 	price, err := GetSingleCryptoPrice(crypto.ID)
 	if err != nil || price <= 0 {
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Could not fetch crypto price. Try again later."))
@@ -222,7 +222,7 @@ func handleCryptoPortfolio(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
-	// Buscar preços atuais
+	// Fetch current prices
 	prices, err := GetCryptoPrices()
 	if err != nil {
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Could not fetch current prices."))
@@ -246,8 +246,8 @@ func handleCryptoPortfolio(s *discordgo.Session, m *discordgo.MessageCreate) {
 		value := inv.Coins * price
 		totalValue += value
 
-		// Calcular valor investido (média seria ideal, mas vamos simplificar)
-		// Por simplicidade, não rastreamos preço médio de compra
+		// Calculate invested value (average cost basis would be ideal, but keep it simple)
+		// For simplicity, we don't track average purchase price
 
 		emoji := "🟢"
 		if crypto.Type == "meme" {
