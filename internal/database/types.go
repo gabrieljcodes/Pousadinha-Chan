@@ -44,9 +44,10 @@ type APIKeyStruct struct {
 
 // Investment represents a stock investment
 type Investment struct {
-	UserID string
-	Ticker string
-	Shares float64
+	UserID        string
+	Ticker        string
+	Shares        float64
+	TotalInvested float64
 }
 
 // DB is the global database instance

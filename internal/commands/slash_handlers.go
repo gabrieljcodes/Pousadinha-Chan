@@ -1,8 +1,10 @@
 package commands
 
 import (
+	"estudocoin/internal/crypto"
 	"estudocoin/internal/database"
 	"estudocoin/internal/games"
+	"estudocoin/internal/stockmarket"
 	"estudocoin/internal/webhook"
 	"estudocoin/pkg/config"
 	"estudocoin/pkg/utils"
@@ -70,6 +72,10 @@ func SlashHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		handleSlashBlackjack(s, i)
 	case "loan":
 		handleSlashLoan(s, i)
+	case "stock":
+		handleSlashStock(s, i)
+	case "crypto":
+		handleSlashCrypto(s, i)
 	}
 }
 
@@ -456,5 +462,55 @@ func handleSlashLoan(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	case "list":
 		ExecuteLoanList(s, i.ChannelID, i.Member.User, true, i)
+	}
+}
+
+func handleSlashStock(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	options := i.ApplicationCommandData().Options
+	if len(options) == 0 {
+		return
+	}
+
+	userID := i.Member.User.ID
+	subCommand := options[0].Name
+
+	switch subCommand {
+	case "market":
+		respondEmbed(s, i, stockmarket.ExecuteMarket())
+	case "buy":
+		ticker := options[0].Options[0].StringValue()
+		amount := int(options[0].Options[1].IntValue())
+		respondEmbed(s, i, stockmarket.ExecuteBuy(userID, ticker, amount))
+	case "sell":
+		ticker := options[0].Options[0].StringValue()
+		shares := options[0].Options[1].StringValue()
+		respondEmbed(s, i, stockmarket.ExecuteSell(userID, ticker, shares))
+	case "portfolio":
+		respondEmbed(s, i, stockmarket.ExecutePortfolio(userID))
+	}
+}
+
+func handleSlashCrypto(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	options := i.ApplicationCommandData().Options
+	if len(options) == 0 {
+		return
+	}
+
+	userID := i.Member.User.ID
+	subCommand := options[0].Name
+
+	switch subCommand {
+	case "market":
+		respondEmbed(s, i, crypto.ExecuteCryptoMarket())
+	case "buy":
+		symbol := options[0].Options[0].StringValue()
+		amount := int(options[0].Options[1].IntValue())
+		respondEmbed(s, i, crypto.ExecuteCryptoBuy(userID, symbol, amount))
+	case "sell":
+		symbol := options[0].Options[0].StringValue()
+		coins := options[0].Options[1].StringValue()
+		respondEmbed(s, i, crypto.ExecuteCryptoSell(userID, symbol, coins))
+	case "portfolio":
+		respondEmbed(s, i, crypto.ExecuteCryptoPortfolio(userID))
 	}
 }

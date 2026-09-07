@@ -6,9 +6,10 @@ import (
 
 // CryptoInvestment represents a cryptocurrency investment
 type CryptoInvestment struct {
-	UserID string
-	Symbol string
-	Coins  float64
+	UserID        string
+	Symbol        string
+	Coins         float64
+	TotalInvested float64
 }
 
 // CreateCryptoTables creates the necessary tables for cryptocurrencies
@@ -17,6 +18,7 @@ func (p *PostgresDatabase) CreateCryptoTables() error {
 		"user_id" TEXT NOT NULL,
 		"symbol" TEXT NOT NULL,
 		"coins" NUMERIC(28, 12) DEFAULT 0,
+		"total_invested" NUMERIC(28, 4) DEFAULT 0,
 		PRIMARY KEY (user_id, symbol)
 	);`
 	if _, err := p.db.Exec(createCryptoInvestmentsSQL); err != nil {
@@ -24,8 +26,6 @@ func (p *PostgresDatabase) CreateCryptoTables() error {
 	}
 	return nil
 }
-
-
 
 // GetCryptoInvestment returns the amount of coins a user holds for a crypto
 func GetCryptoInvestment(userID, symbol string) (float64, error) {
@@ -41,20 +41,25 @@ func GetCryptoInvestment(userID, symbol string) (float64, error) {
 	return coins, nil
 }
 
-func AddCryptoShares(userID, symbol string, coins float64) error {
-	query := `INSERT INTO crypto_investments (user_id, symbol, coins) VALUES ($1, $2, $3) 
-			  ON CONFLICT(user_id, symbol) DO UPDATE SET coins = crypto_investments.coins + $3`
-	_, err := DB.Exec(query, userID, symbol, coins)
+func AddCryptoShares(userID, symbol string, coins float64, cost int) error {
+	query := `INSERT INTO crypto_investments (user_id, symbol, coins, total_invested) VALUES ($1, $2, $3, $4) 
+			  ON CONFLICT(user_id, symbol) DO UPDATE SET 
+			    coins = crypto_investments.coins + $3,
+			    total_invested = crypto_investments.total_invested + $4`
+	_, err := DB.Exec(query, userID, symbol, coins, cost)
 	return err
 }
 
-// RemoveCryptoShares removes coins from a user atomically
+// RemoveCryptoShares removes coins from a user atomically and proportionally reduces cost basis
 func RemoveCryptoShares(userID, symbol string, coins float64) error {
 	if coins <= 0 {
 		return nil
 	}
 
-	res, err := DB.Exec(`UPDATE crypto_investments SET coins = coins - $1 WHERE user_id = $2 AND symbol = $3 AND coins >= $1`, coins, userID, symbol)
+	res, err := DB.Exec(`UPDATE crypto_investments 
+		SET total_invested = CASE WHEN coins <= $1 THEN 0 ELSE total_invested * (1 - ($1 / coins)) END,
+		    coins = coins - $1 
+		WHERE user_id = $2 AND symbol = $3 AND coins >= $1`, coins, userID, symbol)
 	if err != nil {
 		return err
 	}
@@ -73,7 +78,7 @@ func RemoveCryptoShares(userID, symbol string, coins float64) error {
 
 // GetAllCryptoInvestmentsByUser returns all crypto investments for a user
 func GetAllCryptoInvestmentsByUser(userID string) ([]CryptoInvestment, error) {
-	query := prepareQuery("SELECT symbol, coins FROM crypto_investments WHERE user_id = ?")
+	query := `SELECT symbol, coins, COALESCE(total_invested, 0) FROM crypto_investments WHERE user_id = $1`
 	rows, err := DB.Query(query, userID)
 	if err != nil {
 		return nil, err
@@ -84,7 +89,7 @@ func GetAllCryptoInvestmentsByUser(userID string) ([]CryptoInvestment, error) {
 	for rows.Next() {
 		var i CryptoInvestment
 		i.UserID = userID
-		if err := rows.Scan(&i.Symbol, &i.Coins); err != nil {
+		if err := rows.Scan(&i.Symbol, &i.Coins, &i.TotalInvested); err != nil {
 			continue
 		}
 		if i.Coins > 0 {

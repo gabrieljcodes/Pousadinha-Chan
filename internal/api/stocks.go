@@ -7,6 +7,7 @@ import (
 	"estudocoin/pkg/config"
 	"estudocoin/pkg/utils"
 	"fmt"
+	"math"
 	"net/http"
 	"strings"
 )
@@ -253,10 +254,12 @@ func HandleBuyStock(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Add shares using the appropriate upsert syntax
-	query := `INSERT INTO stock_investments (user_id, ticker, shares) VALUES ($1, $2, $3) 
-			  ON CONFLICT(user_id, ticker) DO UPDATE SET shares = stock_investments.shares + $3`
+	query := `INSERT INTO stock_investments (user_id, ticker, shares, total_invested) VALUES ($1, $2, $3, $4) 
+			  ON CONFLICT(user_id, ticker) DO UPDATE SET 
+			    shares = stock_investments.shares + $3,
+			    total_invested = stock_investments.total_invested + $4`
 
-	_, err = tx.Exec(query, userID, ticker, shares)
+	_, err = tx.Exec(query, userID, ticker, shares, req.Amount)
 	
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -360,7 +363,7 @@ func HandleSellStock(w http.ResponseWriter, r *http.Request) {
 		database.SetStockPriceDB(ticker, price)
 	}
 
-	payout := int(req.Shares * price)
+	payout := int(math.Round(req.Shares * price))
 
 	// Transaction
 	tx, err := database.DB.Begin()
@@ -371,24 +374,28 @@ func HandleSellStock(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
-	// Remove shares
-	newAmount := ownedShares - req.Shares
-	var query string
-	if newAmount <= 0.000001 {
-		query = PrepareQuery("DELETE FROM stock_investments WHERE user_id = ? AND ticker = ?")
-		_, err = tx.Exec(query, userID, ticker)
-	} else {
-		query = PrepareQuery("UPDATE stock_investments SET shares = ? WHERE user_id = ? AND ticker = ?")
-		_, err = tx.Exec(query, newAmount, userID, ticker)
-	}
+	// Remove shares and proportionally adjust total_invested
+	res, err := tx.Exec(`UPDATE stock_investments 
+		SET total_invested = CASE WHEN shares <= $1 THEN 0 ELSE total_invested * (1 - ($1 / shares)) END,
+		    shares = shares - $1 
+		WHERE user_id = $2 AND ticker = $3 AND shares >= $1`, req.Shares, userID, ticker)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(ErrorResponse{Error: "Failed to remove shares"})
 		return
 	}
+	rowsAffected, _ := res.RowsAffected()
+	if rowsAffected == 0 {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(ErrorResponse{Error: "Not enough shares"})
+		return
+	}
+
+	// Clean up dust
+	_, _ = tx.Exec(`DELETE FROM stock_investments WHERE user_id = $1 AND ticker = $2 AND shares <= 0.000001`, userID, ticker)
 
 	// Add coins
-	query = PrepareQuery("UPDATE users SET balance = balance + ? WHERE id = ?")
+	query := PrepareQuery("UPDATE users SET balance = balance + ? WHERE id = ?")
 	if _, err := tx.Exec(query, payout, userID); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(ErrorResponse{Error: "Failed to add coins"})

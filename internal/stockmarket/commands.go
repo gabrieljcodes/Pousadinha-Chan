@@ -5,6 +5,7 @@ import (
 	"estudocoin/pkg/config"
 	"estudocoin/pkg/utils"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -21,50 +22,61 @@ func CmdStock(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
 
 	switch subcmd {
 	case "market", "list":
-		handleMarket(s, m)
+		s.ChannelMessageSendEmbed(m.ChannelID, ExecuteMarket())
 	case "buy":
-		handleBuy(s, m, args[1:])
+		if len(args) < 3 {
+			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Usage: `!stock buy <ticker> <amount>`"))
+			return
+		}
+		amount, err := strconv.Atoi(args[2])
+		if err != nil || amount <= 0 {
+			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Invalid amount."))
+			return
+		}
+		s.ChannelMessageSendEmbed(m.ChannelID, ExecuteBuy(m.Author.ID, args[1], amount))
 	case "sell":
-		handleSell(s, m, args[1:])
+		if len(args) < 3 {
+			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Usage: `!stock sell <ticker> <shares|all>`"))
+			return
+		}
+		s.ChannelMessageSendEmbed(m.ChannelID, ExecuteSell(m.Author.ID, args[1], args[2]))
 	case "portfolio", "p":
-		handlePortfolio(s, m)
+		s.ChannelMessageSendEmbed(m.ChannelID, ExecutePortfolio(m.Author.ID))
 	default:
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Unknown subcommand. Use `market`, `buy`, `sell`, or `portfolio`."))
 	}
 }
 
-func handleMarket(s *discordgo.Session, m *discordgo.MessageCreate) {
+// ExecuteMarket returns current market stock prices embed
+func ExecuteMarket() *discordgo.MessageEmbed {
 	var sb strings.Builder
-	multiplier := config.Economy.StockPriceMultiplier
-	if multiplier <= 0 {
-		multiplier = 1
-	}
-	sb.WriteString(fmt.Sprintf("Current Market Prices (Updates every 10m, Earnings Multiplier: %.1fx):\n\n", multiplier))
+	sb.WriteString("Current Market Prices (Real-Time Yahoo Finance):\n\n")
 
 	for _, company := range Companies {
 		price, _ := database.GetStockPriceDB(company.Ticker)
+		if price <= 0 {
+			data, err := GetStockPrice(company.Ticker)
+			if err == nil {
+				price = data.Price
+				_ = database.SetStockPriceDB(company.Ticker, price)
+			}
+		}
+
 		priceStr := fmt.Sprintf("%.2f", price)
-		if price == 0 {
+		if price <= 0 {
 			priceStr = "Fetching..."
 		}
 		sb.WriteString(fmt.Sprintf("**%s** (%s): $%s\n", company.Name, company.Ticker, priceStr))
 	}
 
-	s.ChannelMessageSendEmbed(m.ChannelID, utils.GoldEmbed("Stock Market", sb.String()))
+	return utils.GoldEmbed("Stock Market", sb.String())
 }
 
-func handleBuy(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
-	if len(args) < 2 {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Usage: `!stock buy <ticker> <amount>`"))
-		return
-	}
-
-	ticker := strings.ToUpper(args[0])
-	amountStr := args[1]
-	amount, err := strconv.Atoi(amountStr)
-	if err != nil || amount <= 0 {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Invalid amount."))
-		return
+// ExecuteBuy processes a stock purchase and returns an embed response
+func ExecuteBuy(userID, ticker string, amount int) *discordgo.MessageEmbed {
+	ticker = strings.ToUpper(strings.TrimSpace(ticker))
+	if amount <= 0 {
+		return utils.ErrorEmbed("Invalid amount.")
 	}
 
 	// Verify ticker
@@ -74,58 +86,49 @@ func handleBuy(s *discordgo.Session, m *discordgo.MessageCreate, args []string) 
 			valid = true
 			break
 		}
-}
+	}
 	if !valid {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Invalid Ticker. Check `!stock market`."))
-		return
+		return utils.ErrorEmbed("Invalid Ticker. Check `/stock market` or `!stock market`.")
 	}
 
 	// Check Balance
-	balance := database.GetBalance(m.Author.ID)
+	balance := database.GetBalance(userID)
 	if balance < amount {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Insufficient funds."))
-		return
+		return utils.ErrorEmbed("Insufficient funds.")
 	}
 
 	// Get Price
 	price, err := database.GetStockPriceDB(ticker)
 	if err != nil || price <= 0 {
-		// Try fetching live if DB is empty
 		data, err := GetStockPrice(ticker)
 		if err != nil {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Could not fetch stock price. Try again later."))
-			return
+			return utils.ErrorEmbed("Could not fetch stock price. Try again later.")
 		}
 		price = data.Price
-		database.SetStockPriceDB(ticker, price)
+		_ = database.SetStockPriceDB(ticker, price)
 	}
 
 	shares := float64(amount) / price
 
 	// Transaction
-	if err := database.RemoveCoins(m.Author.ID, amount); err != nil {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Transaction failed."))
-		return
+	if err := database.RemoveCoins(userID, amount); err != nil {
+		return utils.ErrorEmbed("Transaction failed.")
 	}
 
-	if err := database.AddShares(m.Author.ID, ticker, shares); err != nil {
+	if err := database.AddShares(userID, ticker, shares, amount); err != nil {
 		// Refund
-		database.AddCoins(m.Author.ID, amount)
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Database error. Refunded."))
-		return
+		_ = database.AddCoins(userID, amount)
+		return utils.ErrorEmbed("Database error. Refunded.")
 	}
 
-	s.ChannelMessageSendEmbed(m.ChannelID, utils.SuccessEmbed("Investment Successful", fmt.Sprintf("You bought **%.4f** shares of **%s** for **%d %s** (at $%.2f/share).", shares, ticker, amount, config.Bot.CurrencyName, price)))
+	return utils.SuccessEmbed("Investment Successful",
+		fmt.Sprintf("You bought **%.4f** shares of **%s** for **%d %s** (at $%.2f/share).",
+			shares, ticker, amount, config.Bot.CurrencyName, price))
 }
 
-func handleSell(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
-	if len(args) < 2 {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Usage: `!stock sell <ticker> <shares|all>`"))
-		return
-	}
-
-	ticker := strings.ToUpper(args[0])
-	amountStr := args[1]
+// ExecuteSell processes a stock sale and returns an embed response
+func ExecuteSell(userID, ticker, amountStr string) *discordgo.MessageEmbed {
+	ticker = strings.ToUpper(strings.TrimSpace(ticker))
 
 	// Verify ticker
 	valid := false
@@ -136,14 +139,12 @@ func handleSell(s *discordgo.Session, m *discordgo.MessageCreate, args []string)
 		}
 	}
 	if !valid {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Invalid Ticker."))
-		return
+		return utils.ErrorEmbed("Invalid Ticker.")
 	}
 
-	ownedShares, _ := database.GetInvestment(m.Author.ID, ticker)
+	ownedShares, _ := database.GetInvestment(userID, ticker)
 	if ownedShares <= 0 {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("You don't own any shares of this company."))
-		return
+		return utils.ErrorEmbed("You don't own any shares of this company.")
 	}
 
 	var sharesToSell float64
@@ -153,15 +154,13 @@ func handleSell(s *discordgo.Session, m *discordgo.MessageCreate, args []string)
 	} else {
 		val, err := strconv.ParseFloat(amountStr, 64)
 		if err != nil || val <= 0 {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Invalid number of shares."))
-			return
+			return utils.ErrorEmbed("Invalid number of shares.")
 		}
 		sharesToSell = val
 	}
 
 	if sharesToSell > ownedShares {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("You don't have that many shares."))
-		return
+		return utils.ErrorEmbed(fmt.Sprintf("You don't have that many shares. You own **%.4f**.", ownedShares))
 	}
 
 	// Get Price
@@ -169,46 +168,96 @@ func handleSell(s *discordgo.Session, m *discordgo.MessageCreate, args []string)
 	if err != nil || price <= 0 {
 		data, err := GetStockPrice(ticker)
 		if err != nil {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Could not fetch stock price."))
-			return
+			return utils.ErrorEmbed("Could not fetch stock price.")
 		}
 		price = data.Price
-		database.SetStockPriceDB(ticker, price)
+		_ = database.SetStockPriceDB(ticker, price)
 	}
 
-	payout := int(sharesToSell * price)
+	payout := int(math.Round(sharesToSell * price))
 
-	if err := database.RemoveShares(m.Author.ID, ticker, sharesToSell); err != nil {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Database error."))
-		return
+	if err := database.RemoveShares(userID, ticker, sharesToSell); err != nil {
+		return utils.ErrorEmbed("Database error.")
 	}
 
-	database.AddCoins(m.Author.ID, payout)
-	s.ChannelMessageSendEmbed(m.ChannelID, utils.SuccessEmbed("Sale Successful", fmt.Sprintf("You sold **%.4f** shares of **%s** for **%d %s** (at $%.2f/share).", sharesToSell, ticker, payout, config.Bot.CurrencyName, price)))
+	_ = database.AddCoins(userID, payout)
+	return utils.SuccessEmbed("Sale Successful",
+		fmt.Sprintf("You sold **%.4f** shares of **%s** for **%d %s** (at $%.2f/share).",
+			sharesToSell, ticker, payout, config.Bot.CurrencyName, price))
 }
 
-func handlePortfolio(s *discordgo.Session, m *discordgo.MessageCreate) {
-	investments, err := database.GetAllInvestmentsByUser(m.Author.ID)
+// ExecutePortfolio generates a user's stock portfolio embed
+func ExecutePortfolio(userID string) *discordgo.MessageEmbed {
+	investments, err := database.GetAllInvestmentsByUser(userID)
 	if err != nil {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Database error."))
-		return
+		return utils.ErrorEmbed("Database error.")
 	}
 
 	if len(investments) == 0 {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("Portfolio", "You have no investments."))
-		return
+		return utils.InfoEmbed("Portfolio", "You have no stock investments.")
 	}
 
 	var sb strings.Builder
 	totalVal := 0.0
+	totalInvested := 0.0
 
 	for _, inv := range investments {
+		if inv.Shares <= 0.000001 {
+			continue
+		}
+
 		price, _ := database.GetStockPriceDB(inv.Ticker)
+		if price <= 0 {
+			data, err := GetStockPrice(inv.Ticker)
+			if err == nil {
+				price = data.Price
+				_ = database.SetStockPriceDB(inv.Ticker, price)
+			}
+		}
+
 		val := inv.Shares * price
+		cost := inv.TotalInvested
 		totalVal += val
-		sb.WriteString(fmt.Sprintf("**%s**: %.4f shares (~%d %s @ $%.2f)\n", inv.Ticker, inv.Shares, int(val), config.Bot.CurrencyName, price))
+		totalInvested += cost
+
+		pnl := val - cost
+		pnlPct := 0.0
+		if cost > 0 {
+			pnlPct = (pnl / cost) * 100.0
+		}
+
+		pnlStr := ""
+		if pnl > 0.5 {
+			pnlStr = fmt.Sprintf("+%d %s (+%.1f%%) 🟢", int(math.Round(pnl)), config.Bot.CurrencyName, pnlPct)
+		} else if pnl < -0.5 {
+			pnlStr = fmt.Sprintf("-%d %s (%.1f%%) 🔴", int(math.Round(-pnl)), config.Bot.CurrencyName, pnlPct)
+		} else {
+			pnlStr = fmt.Sprintf("0 %s (0.0%%) ⚪", config.Bot.CurrencyName)
+		}
+
+		sb.WriteString(fmt.Sprintf("**%s**: %.4f shares (~%d %s @ $%.2f)\n  ↳ Invested: %d %s | P/L: %s\n",
+			inv.Ticker, inv.Shares, int(math.Round(val)), config.Bot.CurrencyName, price,
+			int(math.Round(cost)), config.Bot.CurrencyName, pnlStr))
 	}
 
-	sb.WriteString(fmt.Sprintf("\n**Total Value**: ~%d %s", int(totalVal), config.Bot.CurrencyName))
-	s.ChannelMessageSendEmbed(m.ChannelID, utils.GoldEmbed("Your Portfolio", sb.String()))
+	overallPnl := totalVal - totalInvested
+	overallPct := 0.0
+	if totalInvested > 0 {
+		overallPct = (overallPnl / totalInvested) * 100.0
+	}
+	overallPnlStr := ""
+	if overallPnl > 0.5 {
+		overallPnlStr = fmt.Sprintf("+%d %s (+%.1f%%) 🟢", int(math.Round(overallPnl)), config.Bot.CurrencyName, overallPct)
+	} else if overallPnl < -0.5 {
+		overallPnlStr = fmt.Sprintf("-%d %s (%.1f%%) 🔴", int(math.Round(-overallPnl)), config.Bot.CurrencyName, overallPct)
+	} else {
+		overallPnlStr = fmt.Sprintf("0 %s (0.0%%) ⚪", config.Bot.CurrencyName)
+	}
+
+	sb.WriteString(fmt.Sprintf("\n**Total Value**: ~%d %s\n**Total Invested**: %d %s\n**Net Return**: %s",
+		int(math.Round(totalVal)), config.Bot.CurrencyName,
+		int(math.Round(totalInvested)), config.Bot.CurrencyName,
+		overallPnlStr))
+
+	return utils.GoldEmbed("Your Stock Portfolio", sb.String())
 }

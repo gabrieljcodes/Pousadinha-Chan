@@ -7,6 +7,7 @@ import (
 	"estudocoin/pkg/config"
 	"estudocoin/pkg/utils"
 	"fmt"
+	"math"
 	"net/http"
 	"strings"
 )
@@ -222,9 +223,11 @@ func HandleBuyCrypto(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Add crypto shares
-	query := `INSERT INTO crypto_investments (user_id, symbol, coins) VALUES ($1, $2, $3) 
-			  ON CONFLICT(user_id, symbol) DO UPDATE SET coins = crypto_investments.coins + $3`
-	_, err = tx.Exec(query, userID, symbol, coins)
+	query := `INSERT INTO crypto_investments (user_id, symbol, coins, total_invested) VALUES ($1, $2, $3, $4) 
+			  ON CONFLICT(user_id, symbol) DO UPDATE SET 
+			    coins = crypto_investments.coins + $3,
+			    total_invested = crypto_investments.total_invested + $4`
+	_, err = tx.Exec(query, userID, symbol, coins, req.Amount)
 
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -317,7 +320,7 @@ func HandleSellCrypto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	payout := int(req.Coins * price)
+	payout := int(math.Round(req.Coins * price))
 
 	// Transaction
 	tx, err := database.DB.Begin()
@@ -328,24 +331,28 @@ func HandleSellCrypto(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
-	// Remove crypto shares
-	newAmount := ownedCoins - req.Coins
-	var query string
-	if newAmount <= 0.00000001 {
-		query = PrepareQuery("DELETE FROM crypto_investments WHERE user_id = ? AND symbol = ?")
-		_, err = tx.Exec(query, userID, symbol)
-	} else {
-		query = PrepareQuery("UPDATE crypto_investments SET coins = ? WHERE user_id = ? AND symbol = ?")
-		_, err = tx.Exec(query, newAmount, userID, symbol)
-	}
+	// Remove crypto shares and proportionally adjust total_invested
+	res, err := tx.Exec(`UPDATE crypto_investments 
+		SET total_invested = CASE WHEN coins <= $1 THEN 0 ELSE total_invested * (1 - ($1 / coins)) END,
+		    coins = coins - $1 
+		WHERE user_id = $2 AND symbol = $3 AND coins >= $1`, req.Coins, userID, symbol)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(ErrorResponse{Error: "Failed to remove crypto"})
 		return
 	}
+	rowsAffected, _ := res.RowsAffected()
+	if rowsAffected == 0 {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(ErrorResponse{Error: "Not enough coins"})
+		return
+	}
+
+	// Clean up dust
+	_, _ = tx.Exec(`DELETE FROM crypto_investments WHERE user_id = $1 AND symbol = $2 AND coins <= 0.00000001`, userID, symbol)
 
 	// Add coins
-	query = PrepareQuery("UPDATE users SET balance = balance + ? WHERE id = ?")
+	query := PrepareQuery("UPDATE users SET balance = balance + ? WHERE id = ?")
 	if _, err := tx.Exec(query, payout, userID); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(ErrorResponse{Error: "Failed to add coins"})

@@ -397,4 +397,114 @@ var SlashCommands = []*discordgo.ApplicationCommand{
 			},
 		},
 	},
+	{
+		Name:        "stock",
+		Description: "Stock market trading commands",
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Name:        "market",
+				Description: "View current stock market prices",
+				Type:        discordgo.ApplicationCommandOptionSubCommand,
+			},
+			{
+				Name:        "buy",
+				Description: "Buy shares of a company",
+				Type:        discordgo.ApplicationCommandOptionSubCommand,
+				Options: []*discordgo.ApplicationCommandOption{
+					{
+						Type:        discordgo.ApplicationCommandOptionString,
+						Name:        "ticker",
+						Description: "Company ticker symbol (e.g., NVDA, AAPL, BTC)",
+						Required:    true,
+					},
+					{
+						Type:        discordgo.ApplicationCommandOptionInteger,
+						Name:        "amount",
+						Description: "Amount of EC to invest",
+						Required:    true,
+						MinValue:    &minAmount,
+					},
+				},
+			},
+			{
+				Name:        "sell",
+				Description: "Sell shares of a company",
+				Type:        discordgo.ApplicationCommandOptionSubCommand,
+				Options: []*discordgo.ApplicationCommandOption{
+					{
+						Type:        discordgo.ApplicationCommandOptionString,
+						Name:        "ticker",
+						Description: "Company ticker symbol (e.g., NVDA, AAPL, BTC)",
+						Required:    true,
+					},
+					{
+						Type:        discordgo.ApplicationCommandOptionString,
+						Name:        "shares",
+						Description: "Number of shares to sell or 'all'",
+						Required:    true,
+					},
+				},
+			},
+			{
+				Name:        "portfolio",
+				Description: "View your stock portfolio, cost basis, and returns",
+				Type:        discordgo.ApplicationCommandOptionSubCommand,
+			},
+		},
+	},
+	{
+		Name:        "crypto",
+		Description: "Cryptocurrency trading commands",
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Name:        "market",
+				Description: "View current crypto prices",
+				Type:        discordgo.ApplicationCommandOptionSubCommand,
+			},
+			{
+				Name:        "buy",
+				Description: "Buy cryptocurrency",
+				Type:        discordgo.ApplicationCommandOptionSubCommand,
+				Options: []*discordgo.ApplicationCommandOption{
+					{
+						Type:        discordgo.ApplicationCommandOptionString,
+						Name:        "symbol",
+						Description: "Crypto symbol (e.g., BTC, ETH, SOL, DOGE)",
+						Required:    true,
+					},
+					{
+						Type:        discordgo.ApplicationCommandOptionInteger,
+						Name:        "amount",
+						Description: "Amount of EC to invest",
+						Required:    true,
+						MinValue:    &minAmount,
+					},
+				},
+			},
+			{
+				Name:        "sell",
+				Description: "Sell cryptocurrency",
+				Type:        discordgo.ApplicationCommandOptionSubCommand,
+				Options: []*discordgo.ApplicationCommandOption{
+					{
+						Type:        discordgo.ApplicationCommandOptionString,
+						Name:        "symbol",
+						Description: "Crypto symbol (e.g., BTC, ETH, SOL, DOGE)",
+						Required:    true,
+					},
+					{
+						Type:        discordgo.ApplicationCommandOptionString,
+						Name:        "amount",
+						Description: "Coins amount to sell or 'all'",
+						Required:    true,
+					},
+				},
+			},
+			{
+				Name:        "portfolio",
+				Description: "View your crypto portfolio, cost basis, and returns",
+				Type:        discordgo.ApplicationCommandOptionSubCommand,
+			},
+		},
+	},
 }

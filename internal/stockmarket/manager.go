@@ -3,7 +3,6 @@ package stockmarket
 import (
 	"encoding/json"
 	"estudocoin/internal/database"
-	"estudocoin/pkg/config"
 	"log"
 	"os"
 	"time"
@@ -16,7 +15,10 @@ var Companies []Company
 func LoadCompanies() error {
 	file, err := os.ReadFile("internal/stockmarket/companies.json")
 	if err != nil {
-		return err
+		file, err = os.ReadFile("companies.json")
+		if err != nil {
+			return err
+		}
 	}
 	return json.Unmarshal(file, &Companies)
 }
@@ -51,49 +53,12 @@ func checkMarket(s *discordgo.Session) {
 			continue
 		}
 
-		oldPrice, err := database.GetStockPriceDB(company.Ticker)
-		if err != nil {
-			log.Printf("Error getting old price for %s: %v", company.Ticker, err)
-			continue
-		}
-
 		// Update price in DB (store real price)
 		err = database.SetStockPriceDB(company.Ticker, data.Price)
 		if err != nil {
 			log.Printf("Error updating price for %s: %v", company.Ticker, err)
 			continue
 		}
-
-		// Calculate logic
-		if oldPrice == 0 {
-			// First run or new stock, no payout
-			continue
-		}
-
-		if data.Price > oldPrice {
-			// Calculate real price difference
-			realDiff := data.Price - oldPrice
-			// Apply multiplier only to the profit/loss
-			adjustedDiff := config.Economy.GetAdjustedStockPrice(realDiff)
-
-			// Distribute rewards
-			investments, err := database.GetAllInvestmentsByTicker(company.Ticker)
-			if err != nil {
-				log.Printf("Error getting investments for %s: %v", company.Ticker, err)
-				continue
-			}
-
-			for _, inv := range investments {
-				// Payout = Shares * Adjusted PriceDiff (multiplier applied to profit only)
-				payout := int(inv.Shares * adjustedDiff)
-				if payout > 0 {
-					err := database.AddCoins(inv.UserID, payout)
-					if err != nil {
-						log.Printf("Failed to pay dividends to %s: %v", inv.UserID, err)
-					}
-				}
-			}
-			log.Printf("Distributed dividends for %s (Real Growth: $%.2f, Adjusted: %.2f)", company.Ticker, realDiff, adjustedDiff)
-		}
 	}
+	log.Println("Stock market prices updated successfully.")
 }

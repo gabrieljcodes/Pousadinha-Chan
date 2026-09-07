@@ -19,20 +19,25 @@ func GetInvestment(userID, ticker string) (float64, error) {
 	return shares, nil
 }
 
-func AddShares(userID, ticker string, amount float64) error {
-	query := `INSERT INTO stock_investments (user_id, ticker, shares) VALUES ($1, $2, $3) 
-			  ON CONFLICT(user_id, ticker) DO UPDATE SET shares = stock_investments.shares + $3`
-	_, err := DB.Exec(query, userID, ticker, amount)
+func AddShares(userID, ticker string, amount float64, cost int) error {
+	query := `INSERT INTO stock_investments (user_id, ticker, shares, total_invested) VALUES ($1, $2, $3, $4) 
+			  ON CONFLICT(user_id, ticker) DO UPDATE SET 
+			    shares = stock_investments.shares + $3,
+			    total_invested = stock_investments.total_invested + $4`
+	_, err := DB.Exec(query, userID, ticker, amount, cost)
 	return err
 }
 
-// RemoveShares removes shares from a user atomically
+// RemoveShares removes shares from a user atomically and proportionally reduces cost basis
 func RemoveShares(userID, ticker string, amount float64) error {
 	if amount <= 0 {
 		return nil
 	}
 
-	res, err := DB.Exec(`UPDATE stock_investments SET shares = shares - $1 WHERE user_id = $2 AND ticker = $3 AND shares >= $1`, amount, userID, ticker)
+	res, err := DB.Exec(`UPDATE stock_investments 
+		SET total_invested = CASE WHEN shares <= $1 THEN 0 ELSE total_invested * (1 - ($1 / shares)) END,
+		    shares = shares - $1 
+		WHERE user_id = $2 AND ticker = $3 AND shares >= $1`, amount, userID, ticker)
 	if err != nil {
 		return err
 	}
@@ -73,7 +78,7 @@ func GetStockPriceDB(ticker string) (float64, error) {
 
 // GetAllInvestmentsByTicker returns all investments for a specific ticker
 func GetAllInvestmentsByTicker(ticker string) ([]Investment, error) {
-	query := prepareQuery("SELECT user_id, shares FROM stock_investments WHERE ticker = ?")
+	query := `SELECT user_id, shares, COALESCE(total_invested, 0) FROM stock_investments WHERE ticker = $1`
 	rows, err := DB.Query(query, ticker)
 	if err != nil {
 		return nil, err
@@ -84,7 +89,7 @@ func GetAllInvestmentsByTicker(ticker string) ([]Investment, error) {
 	for rows.Next() {
 		var i Investment
 		i.Ticker = ticker
-		if err := rows.Scan(&i.UserID, &i.Shares); err != nil {
+		if err := rows.Scan(&i.UserID, &i.Shares, &i.TotalInvested); err != nil {
 			continue
 		}
 		investments = append(investments, i)
@@ -94,7 +99,7 @@ func GetAllInvestmentsByTicker(ticker string) ([]Investment, error) {
 
 // GetAllInvestmentsByUser returns all stock investments for a user
 func GetAllInvestmentsByUser(userID string) ([]Investment, error) {
-	query := prepareQuery("SELECT ticker, shares FROM stock_investments WHERE user_id = ?")
+	query := `SELECT ticker, shares, COALESCE(total_invested, 0) FROM stock_investments WHERE user_id = $1`
 	rows, err := DB.Query(query, userID)
 	if err != nil {
 		return nil, err
@@ -105,7 +110,7 @@ func GetAllInvestmentsByUser(userID string) ([]Investment, error) {
 	for rows.Next() {
 		var i Investment
 		i.UserID = userID
-		if err := rows.Scan(&i.Ticker, &i.Shares); err != nil {
+		if err := rows.Scan(&i.Ticker, &i.Shares, &i.TotalInvested); err != nil {
 			continue
 		}
 		investments = append(investments, i)

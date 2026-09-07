@@ -251,7 +251,9 @@ func (p *PostgresDatabase) CreateTables() error {
 		`ALTER TABLE stock_prices ALTER COLUMN last_price TYPE NUMERIC(20, 6);`,
 		`ALTER TABLE stock_prices ALTER COLUMN updated_at TYPE TIMESTAMPTZ;`,
 		`ALTER TABLE stock_investments ALTER COLUMN shares TYPE NUMERIC(28, 12);`,
+		`ALTER TABLE stock_investments ADD COLUMN IF NOT EXISTS total_invested NUMERIC(28, 4) DEFAULT 0;`,
 		`ALTER TABLE crypto_investments ALTER COLUMN coins TYPE NUMERIC(28, 12);`,
+		`ALTER TABLE crypto_investments ADD COLUMN IF NOT EXISTS total_invested NUMERIC(28, 4) DEFAULT 0;`,
 		`ALTER TABLE loans ALTER COLUMN amount TYPE BIGINT;`,
 		`ALTER TABLE loans ALTER COLUMN total_owed TYPE BIGINT;`,
 		`ALTER TABLE loans ALTER COLUMN interest_rate TYPE NUMERIC(8, 4);`,
@@ -325,8 +327,14 @@ func (p *PostgresDatabase) CreateTables() error {
 		IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_stock_investments_shares') THEN
 			ALTER TABLE stock_investments ADD CONSTRAINT chk_stock_investments_shares CHECK (shares >= 0);
 		END IF;
+		IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_stock_investments_total_invested') THEN
+			ALTER TABLE stock_investments ADD CONSTRAINT chk_stock_investments_total_invested CHECK (total_invested >= 0);
+		END IF;
 		IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_crypto_investments_coins') THEN
 			ALTER TABLE crypto_investments ADD CONSTRAINT chk_crypto_investments_coins CHECK (coins >= 0);
+		END IF;
+		IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_crypto_investments_total_invested') THEN
+			ALTER TABLE crypto_investments ADD CONSTRAINT chk_crypto_investments_total_invested CHECK (total_invested >= 0);
 		END IF;
 		IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_loans_total_owed') THEN
 			ALTER TABLE loans ADD CONSTRAINT chk_loans_total_owed CHECK (total_owed >= 0);
