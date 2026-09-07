@@ -93,22 +93,44 @@ var SlashCommands = []*discordgo.ApplicationCommand{
 				},
 			},
 			{
-				Name:        "mute",
-				Description: "Timeout/Mute a user",
+				Name:        "timeout",
+				Description: "Timeout a user from text and voice channels",
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 				Options: []*discordgo.ApplicationCommandOption{
 					{
 						Type:        discordgo.ApplicationCommandOptionUser,
 						Name:        "user",
-						Description: "The user to mute",
+						Description: "The user to timeout",
 						Required:    true,
 					},
 					{
 						Type:        discordgo.ApplicationCommandOptionInteger,
 						Name:        "minutes",
-						Description: "Duration in minutes",
+						Description: "Duration in minutes (1-1440)",
 						Required:    true,
 						MinValue:    &minAmount,
+						MaxValue:    1440.0,
+					},
+				},
+			},
+			{
+				Name:        "mute",
+				Description: "Mute a user in voice calls",
+				Type:        discordgo.ApplicationCommandOptionSubCommand,
+				Options: []*discordgo.ApplicationCommandOption{
+					{
+						Type:        discordgo.ApplicationCommandOptionUser,
+						Name:        "user",
+						Description: "The user to voice mute",
+						Required:    true,
+					},
+					{
+						Type:        discordgo.ApplicationCommandOptionInteger,
+						Name:        "minutes",
+						Description: "Duration in minutes (1-1440)",
+						Required:    true,
+						MinValue:    &minAmount,
+						MaxValue:    1440.0,
 					},
 				},
 			},

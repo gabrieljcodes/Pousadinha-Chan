@@ -9,7 +9,6 @@ import (
 	"estudocoin/pkg/config"
 	"estudocoin/pkg/utils"
 	"fmt"
-	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -290,118 +289,55 @@ func handleSlashPay(s *discordgo.Session, i *discordgo.InteractionCreate) {
 }
 
 func handleSlashShop(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	sym := config.Bot.CurrencySymbol
-	desc := fmt.Sprintf("**Available Items:**\n\n"+
-		"1. **Change Own Nickname**\n"+
-		"   Cost: %d %s\n"+
-		"   Command: `/buy nickname new_name:...`\n\n"+
-		"2. **Change Other's Nickname**\n"+
-		"   Cost: %d %s\n"+
-		"   Command: `/buy rename user:... new_name:...`\n\n"+
-		"3. **Mute/Timeout User**\n"+
-		"   Cost: %d %s per minute\n"+
-		"   Command: `/buy mute user:... minutes:...`",
-		config.Economy.CostNicknameSelf, sym, config.Economy.CostNicknameOther, sym, config.Economy.CostPerMinuteMute, sym)
-
-	respondEmbed(s, i, utils.GoldEmbed(fmt.Sprintf("🛒 %s Shop", config.Bot.BotName), desc))
+	respondEmbed(s, i, ExecuteShop())
 }
 
 func handleSlashBuy(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	options := i.ApplicationCommandData().Options
+	if len(options) == 0 {
+		return
+	}
 	subCommand := options[0].Name
-	userID := i.Member.User.ID
+	userID := ""
+	if i.Member != nil && i.Member.User != nil {
+		userID = i.Member.User.ID
+	} else if i.User != nil {
+		userID = i.User.ID
+	}
 	guildID := i.GuildID
 
+	subOpts := options[0].Options
 	switch subCommand {
 	case "nickname":
-		newName := options[0].Options[0].StringValue()
-		
-		if database.GetBalance(userID) < config.Economy.CostNicknameSelf {
-			respondEmbed(s, i, utils.ErrorEmbed("Insufficient funds."))
+		if len(subOpts) < 1 {
 			return
 		}
-
-		err := s.GuildMemberNickname(guildID, userID, newName)
-		if err != nil {
-			respondEmbed(s, i, utils.ErrorEmbed("Could not change nickname (check my permissions)."))
-			return
-		}
-
-		database.CollectLostBet(userID, config.Economy.CostNicknameSelf)
-		respondEmbed(s, i, utils.SuccessEmbed("Purchase Successful", "Your nickname has been changed!"))
+		newName := subOpts[0].StringValue()
+		respondEmbed(s, i, ExecuteBuyNickname(s, guildID, userID, newName))
 
 	case "rename":
-		targetUser := options[0].Options[0].UserValue(s)
-		newName := options[0].Options[1].StringValue()
-
-		if database.GetBalance(userID) < config.Economy.CostNicknameOther {
-			respondEmbed(s, i, utils.ErrorEmbed("Insufficient funds."))
+		if len(subOpts) < 2 {
 			return
 		}
+		targetUser := subOpts[0].UserValue(s)
+		newName := subOpts[1].StringValue()
+		respondEmbed(s, i, ExecuteBuyRename(s, guildID, userID, targetUser, newName))
 
-		err := s.GuildMemberNickname(guildID, targetUser.ID, newName)
-		if err != nil {
-			respondEmbed(s, i, utils.ErrorEmbed("Error changing nickname (check permissions/hierarchy)."))
+	case "timeout", "punishment":
+		if len(subOpts) < 2 {
 			return
 		}
-
-		database.CollectLostBet(userID, config.Economy.CostNicknameOther)
-		respondEmbed(s, i, utils.SuccessEmbed("Purchase Successful", fmt.Sprintf("Nickname of %s changed.", targetUser.Username)))
+		targetUser := subOpts[0].UserValue(s)
+		minutes := int(subOpts[1].IntValue())
+		respondEmbed(s, i, ExecuteBuyTimeout(s, guildID, userID, targetUser, minutes))
 
 	case "mute":
-		targetUser := options[0].Options[0].UserValue(s)
-		minutes := int(options[0].Options[1].IntValue())
-		
-		cost := minutes * config.Economy.CostPerMinuteMute
-		if database.GetBalance(userID) < cost {
-			respondEmbed(s, i, utils.ErrorEmbed(fmt.Sprintf("Insufficient funds. Cost: %d %s.", cost, config.Bot.CurrencySymbol)))
+		if len(subOpts) < 2 {
 			return
 		}
-
-		// Check if user is in an active game
-		if games.IsUserInGame(targetUser.ID) {
-			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{
-					Embeds: []*discordgo.MessageEmbed{utils.InfoEmbed("⏳ Waiting", 
-						fmt.Sprintf("%s is in an active game. Waiting for the game to finish to apply punishment...", targetUser.Username))},
-				},
-			})
-			
-			// Wait for game to finish
-			games.WaitForGameFinish(targetUser.ID)
-			
-			// Update to application message
-			defer func() {
-				s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-					Embeds: &[]*discordgo.MessageEmbed{utils.SuccessEmbed("Punishment Applied!", 
-						fmt.Sprintf("%s has been timed out until %s.", targetUser.Username, time.Now().Add(time.Duration(minutes)*time.Minute).Format("15:04:05")))},
-				})
-			}()
-		}
-
-		// Check existing timeout
-		member, err := s.GuildMember(guildID, targetUser.ID)
-		if err != nil {
-			respondEmbed(s, i, utils.ErrorEmbed("Member not found."))
-			return
-		}
-
-		var until time.Time
-		if member.CommunicationDisabledUntil != nil && member.CommunicationDisabledUntil.After(time.Now()) {
-			until = member.CommunicationDisabledUntil.Add(time.Duration(minutes) * time.Minute)
-		} else {
-			until = time.Now().Add(time.Duration(minutes) * time.Minute)
-		}
-
-		err = s.GuildMemberTimeout(guildID, targetUser.ID, &until)
-		if err != nil {
-			respondEmbed(s, i, utils.ErrorEmbed("Error applying timeout (check permissions/hierarchy)."))
-			return
-		}
-
-		database.CollectLostBet(userID, cost)
-		respondEmbed(s, i, utils.SuccessEmbed("Silenced!", fmt.Sprintf("%s silenced until %s.", targetUser.Username, until.Format("15:04:05"))))
+		targetUser := subOpts[0].UserValue(s)
+		minutes := int(subOpts[1].IntValue())
+		respondEmbed(s, i, ExecuteBuyMute(s, guildID, userID, targetUser, minutes))
 	}
 }
 
