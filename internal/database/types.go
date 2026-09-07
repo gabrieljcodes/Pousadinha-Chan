@@ -35,6 +35,13 @@ type UserBalance struct {
 	TotalNetWorth   int
 }
 
+// UserStreakRank represents a user's daily streak ranking
+type UserStreakRank struct {
+	ID        string
+	Streak    int
+	MaxStreak int
+}
+
 // APIKeyStruct represents an API key
 type APIKeyStruct struct {
 	Key       string

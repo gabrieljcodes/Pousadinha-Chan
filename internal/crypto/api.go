@@ -2,6 +2,7 @@ package crypto
 
 import (
 	"encoding/json"
+	"estudocoin/internal/database"
 	"fmt"
 	"net/http"
 	"strings"
@@ -82,6 +83,17 @@ func GetCryptoPrices() (map[string]float64, error) {
 	lastFetchTime = time.Now()
 	cryptoCacheMu.Unlock()
 
+	// Persist to database to ensure SQL leaderboard reflects live crypto valuation
+	go func(p map[string]float64) {
+		symbolPrices := make(map[string]float64)
+		for _, c := range AvailableCryptos {
+			if price, ok := p[c.ID]; ok && price > 0 {
+				symbolPrices[c.Symbol] = price
+			}
+		}
+		_ = database.SetCryptoPricesBatchDB(symbolPrices)
+	}(prices)
+
 	return prices, nil
 }
 
@@ -137,6 +149,13 @@ func GetSingleCryptoPrice(cryptoID string) (float64, error) {
 			cryptoCacheMu.Lock()
 			cryptoCache[cryptoID] = usdPrice
 			cryptoCacheMu.Unlock()
+
+			if c := GetCryptoByID(cryptoID); c != nil {
+				go func(sym string, pr float64) {
+					_ = database.SetCryptoPriceDB(sym, pr)
+				}(c.Symbol, usdPrice)
+			}
+
 			return usdPrice, nil
 		}
 	}

@@ -31,7 +31,29 @@ var SlashCommands = []*discordgo.ApplicationCommand{
 	},
 	{
 		Name:        "leaderboard",
-		Description: "See the richest users",
+		Description: "View rankings and leaderboards",
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Type:        discordgo.ApplicationCommandOptionString,
+				Name:        "category",
+				Description: "Category of the leaderboard",
+				Required:    false,
+				Choices: []*discordgo.ApplicationCommandOptionChoice{
+					{
+						Name:  "Patrimônio Geral (Net Worth)",
+						Value: "networth",
+					},
+					{
+						Name:  "Saldo em Carteira (Wallet)",
+						Value: "wallet",
+					},
+					{
+						Name:  "Sequência Diária (Daily Streak)",
+						Value: "streak",
+					},
+				},
+			},
+		},
 	},
 	{
 		Name:        "pay",

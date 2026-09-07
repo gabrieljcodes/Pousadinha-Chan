@@ -80,7 +80,7 @@ func GetBalance(userID string) int {
 }
 
 // GetLeaderboard returns the balance leaderboard (excluding the bot and including investments)
-// using a single aggregated SQL query instead of N+1 queries.
+// using a single aggregated SQL query valuing wallet balance, stocks, and crypto portfolios.
 func GetLeaderboard(limit int) ([]UserBalance, error) {
 	if limit <= 0 {
 		limit = 10
@@ -91,8 +91,8 @@ func GetLeaderboard(limit int) ([]UserBalance, error) {
 			u.id, 
 			COALESCE(u.balance, 0) AS balance,
 			COALESCE(s.stock_val, 0) AS stock_value,
-			COALESCE(c.crypto_cnt, 0) AS crypto_value,
-			(COALESCE(u.balance, 0) + COALESCE(s.stock_val, 0)) AS total_net_worth
+			COALESCE(c.crypto_val, 0) AS crypto_value,
+			(COALESCE(u.balance, 0) + COALESCE(s.stock_val, 0) + COALESCE(c.crypto_val, 0)) AS total_net_worth
 		FROM users u
 		LEFT JOIN (
 			SELECT si.user_id, FLOOR(SUM(si.shares * COALESCE(sp.last_price, 0)))::BIGINT AS stock_val
@@ -101,12 +101,15 @@ func GetLeaderboard(limit int) ([]UserBalance, error) {
 			GROUP BY si.user_id
 		) s ON s.user_id = u.id
 		LEFT JOIN (
-			SELECT ci.user_id, COUNT(*)::BIGINT AS crypto_cnt
+			SELECT ci.user_id, 
+				FLOOR(SUM(ci.coins * COALESCE(cp.last_price, CASE WHEN ci.coins > 0 THEN ci.total_invested / ci.coins ELSE 0 END, 0)))::BIGINT AS crypto_val
 			FROM crypto_investments ci
+			LEFT JOIN crypto_prices cp ON cp.symbol = ci.symbol
 			WHERE ci.coins > 0
 			GROUP BY ci.user_id
 		) c ON c.user_id = u.id
 		WHERE ($1 = '' OR u.id != $1)
+		  AND (COALESCE(u.balance, 0) + COALESCE(s.stock_val, 0) + COALESCE(c.crypto_val, 0)) > 0
 		ORDER BY total_net_worth DESC
 		LIMIT $2;`
 
@@ -131,6 +134,159 @@ func GetLeaderboard(limit int) ([]UserBalance, error) {
 	}
 
 	return users, nil
+}
+
+// GetWalletLeaderboard returns top users ordered strictly by wallet balance (liquid cash)
+func GetWalletLeaderboard(limit int) ([]UserBalance, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+
+	query := `
+		SELECT 
+			u.id, 
+			COALESCE(u.balance, 0) AS balance,
+			COALESCE(s.stock_val, 0) AS stock_value,
+			COALESCE(c.crypto_val, 0) AS crypto_value,
+			(COALESCE(u.balance, 0) + COALESCE(s.stock_val, 0) + COALESCE(c.crypto_val, 0)) AS total_net_worth
+		FROM users u
+		LEFT JOIN (
+			SELECT si.user_id, FLOOR(SUM(si.shares * COALESCE(sp.last_price, 0)))::BIGINT AS stock_val
+			FROM stock_investments si
+			LEFT JOIN stock_prices sp ON sp.ticker = si.ticker
+			GROUP BY si.user_id
+		) s ON s.user_id = u.id
+		LEFT JOIN (
+			SELECT ci.user_id, 
+				FLOOR(SUM(ci.coins * COALESCE(cp.last_price, CASE WHEN ci.coins > 0 THEN ci.total_invested / ci.coins ELSE 0 END, 0)))::BIGINT AS crypto_val
+			FROM crypto_investments ci
+			LEFT JOIN crypto_prices cp ON cp.symbol = ci.symbol
+			WHERE ci.coins > 0
+			GROUP BY ci.user_id
+		) c ON c.user_id = u.id
+		WHERE ($1 = '' OR u.id != $1)
+		  AND COALESCE(u.balance, 0) > 0
+		ORDER BY u.balance DESC
+		LIMIT $2;`
+
+	rows, err := DB.Query(query, BotUserID, limit)
+	if err != nil {
+		log.Printf("[WALLET LEADERBOARD ERROR] Query failed: %v", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []UserBalance
+	for rows.Next() {
+		var u UserBalance
+		if err := rows.Scan(&u.ID, &u.Balance, &u.StockValue, &u.CryptoValue, &u.TotalNetWorth); err != nil {
+			log.Printf("[WALLET LEADERBOARD ERROR] Scan row failed: %v", err)
+			continue
+		}
+		users = append(users, u)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return users, nil
+}
+
+// GetStreakLeaderboard returns top daily streak ranks
+func GetStreakLeaderboard(limit int) ([]UserStreakRank, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+
+	query := `
+		SELECT id, COALESCE(daily_streak, 0), COALESCE(max_daily_streak, 0)
+		FROM users
+		WHERE ($1 = '' OR id != $1)
+		  AND COALESCE(daily_streak, 0) > 0
+		ORDER BY daily_streak DESC, max_daily_streak DESC
+		LIMIT $2;`
+
+	rows, err := DB.Query(query, BotUserID, limit)
+	if err != nil {
+		log.Printf("[STREAK LEADERBOARD ERROR] Query failed: %v", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	var streaks []UserStreakRank
+	for rows.Next() {
+		var s UserStreakRank
+		if err := rows.Scan(&s.ID, &s.Streak, &s.MaxStreak); err != nil {
+			log.Printf("[STREAK LEADERBOARD ERROR] Scan row failed: %v", err)
+			continue
+		}
+		streaks = append(streaks, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return streaks, nil
+}
+
+// GetUserNetWorthAndRank returns the rank and total net worth for a specific user
+func GetUserNetWorthAndRank(userID string) (rank int, netWorth int, err error) {
+	query := `
+		WITH user_nw AS (
+			SELECT 
+				u.id,
+				(COALESCE(u.balance, 0) + COALESCE(s.stock_val, 0) + COALESCE(c.crypto_val, 0)) AS net_worth
+			FROM users u
+			LEFT JOIN (
+				SELECT si.user_id, FLOOR(SUM(si.shares * COALESCE(sp.last_price, 0)))::BIGINT AS stock_val
+				FROM stock_investments si
+				LEFT JOIN stock_prices sp ON sp.ticker = si.ticker
+				GROUP BY si.user_id
+			) s ON s.user_id = u.id
+			LEFT JOIN (
+				SELECT ci.user_id, 
+					FLOOR(SUM(ci.coins * COALESCE(cp.last_price, CASE WHEN ci.coins > 0 THEN ci.total_invested / ci.coins ELSE 0 END, 0)))::BIGINT AS crypto_val
+				FROM crypto_investments ci
+				LEFT JOIN crypto_prices cp ON cp.symbol = ci.symbol
+				WHERE ci.coins > 0
+				GROUP BY ci.user_id
+			) c ON c.user_id = u.id
+			WHERE ($1 = '' OR u.id != $1)
+		)
+		SELECT 
+			COALESCE(target.net_worth, 0) AS net_worth,
+			(SELECT COUNT(*) + 1 FROM user_nw WHERE net_worth > COALESCE(target.net_worth, 0)) AS rank
+		FROM (
+			SELECT net_worth FROM user_nw WHERE id = $2
+			UNION ALL
+			SELECT 0 AS net_worth
+			LIMIT 1
+		) target;`
+
+	err = DB.QueryRow(query, BotUserID, userID).Scan(&netWorth, &rank)
+	if err != nil {
+		return 0, 0, err
+	}
+	return rank, netWorth, nil
+}
+
+// GetUserStreakRank returns the rank and current streak for a specific user
+func GetUserStreakRank(userID string) (rank int, streak int, err error) {
+	query := `
+		SELECT 
+			COALESCE(u.daily_streak, 0),
+			(SELECT COUNT(*) + 1 FROM users WHERE daily_streak > COALESCE(u.daily_streak, 0) AND ($1 = '' OR id != $1))
+		FROM users u
+		WHERE u.id = $2;`
+
+	err = DB.QueryRow(query, BotUserID, userID).Scan(&streak, &rank)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return 0, 0, nil
+		}
+		return 0, 0, err
+	}
+	return rank, streak, nil
 }
 
 // AddCoins adds coins to a user

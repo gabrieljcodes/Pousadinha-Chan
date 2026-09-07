@@ -236,34 +236,18 @@ func handleSlashBalance(s *discordgo.Session, i *discordgo.InteractionCreate) {
 }
 
 func handleSlashLeaderboard(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	users, err := database.GetLeaderboard(10)
-	if err != nil {
-		respondEmbed(s, i, utils.ErrorEmbed("Could not retrieve leaderboard."))
-		return
+	category := "networth"
+	options := i.ApplicationCommandData().Options
+	if len(options) > 0 {
+		category = options[0].StringValue()
 	}
-
-	if len(users) == 0 {
-		respondEmbed(s, i, utils.InfoEmbed("Leaderboard", "No users found."))
-		return
+	userID := ""
+	if i.Member != nil && i.Member.User != nil {
+		userID = i.Member.User.ID
+	} else if i.User != nil {
+		userID = i.User.ID
 	}
-
-	var description string
-	for i, u := range users {
-		// Try to get user from cache or API to display name
-		discordUser, err := s.User(u.ID)
-		name := u.ID
-		if err == nil {
-			name = discordUser.Username
-		}
-		
-		// Show total net worth with details
-		description += fmt.Sprintf("**%d.** %s - **%d %s** 💰 (🪙 %d | 📈 %d)\n", 
-			i+1, name, u.TotalNetWorth, config.Bot.CurrencyName, u.Balance, u.StockValue)
-	}
-	
-	description += "\n💰 = Total | 🪙 = Wallet | 📈 = Stocks"
-
-	respondEmbed(s, i, utils.GoldEmbed("🏆 Richest Users (Net Worth)", description))
+	respondEmbed(s, i, ExecuteLeaderboard(s, i.GuildID, userID, category))
 }
 
 func handleSlashPay(s *discordgo.Session, i *discordgo.InteractionCreate) {

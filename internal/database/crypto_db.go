@@ -2,6 +2,7 @@ package database
 
 import (
 	"database/sql"
+	"time"
 )
 
 // CryptoInvestment represents a cryptocurrency investment
@@ -22,6 +23,15 @@ func (p *PostgresDatabase) CreateCryptoTables() error {
 		PRIMARY KEY (user_id, symbol)
 	);`
 	if _, err := p.db.Exec(createCryptoInvestmentsSQL); err != nil {
+		return err
+	}
+
+	createCryptoPricesSQL := `CREATE TABLE IF NOT EXISTS crypto_prices (
+		"symbol" TEXT PRIMARY KEY,
+		"last_price" NUMERIC(28, 6) DEFAULT 0,
+		"updated_at" TIMESTAMPTZ DEFAULT NOW()
+	);`
+	if _, err := p.db.Exec(createCryptoPricesSQL); err != nil {
 		return err
 	}
 	return nil
@@ -98,3 +108,49 @@ func GetAllCryptoInvestmentsByUser(userID string) ([]CryptoInvestment, error) {
 	}
 	return investments, nil
 }
+
+// SetCryptoPriceDB sets the price of a crypto token in the database
+func SetCryptoPriceDB(symbol string, price float64) error {
+	if DB == nil {
+		return nil
+	}
+	now := time.Now()
+	query := `INSERT INTO crypto_prices (symbol, last_price, updated_at) VALUES ($1, $2, $3)
+			  ON CONFLICT(symbol) DO UPDATE SET last_price = $2, updated_at = $3`
+	_, err := DB.Exec(query, symbol, price, now)
+	return err
+}
+
+// SetCryptoPricesBatchDB stores multiple crypto prices in the database
+func SetCryptoPricesBatchDB(prices map[string]float64) error {
+	if DB == nil || len(prices) == 0 {
+		return nil
+	}
+	now := time.Now()
+	for symbol, price := range prices {
+		query := `INSERT INTO crypto_prices (symbol, last_price, updated_at) VALUES ($1, $2, $3)
+				  ON CONFLICT(symbol) DO UPDATE SET last_price = $2, updated_at = $3`
+		if _, err := DB.Exec(query, symbol, price, now); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// GetCryptoPriceDB gets the stored price of a crypto token
+func GetCryptoPriceDB(symbol string) (float64, error) {
+	if DB == nil {
+		return 0, nil
+	}
+	var price float64
+	query := prepareQuery("SELECT last_price FROM crypto_prices WHERE symbol = ?")
+	err := DB.QueryRow(query, symbol).Scan(&price)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return 0, nil
+		}
+		return 0, err
+	}
+	return price, nil
+}
+

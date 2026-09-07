@@ -185,6 +185,11 @@ func (p *PostgresDatabase) CreateTables() error {
 			last_price NUMERIC(20, 6) DEFAULT 0,
 			updated_at TIMESTAMPTZ DEFAULT NOW()
 		);`,
+		`CREATE TABLE IF NOT EXISTS crypto_prices (
+			symbol TEXT PRIMARY KEY,
+			last_price NUMERIC(28, 6) DEFAULT 0,
+			updated_at TIMESTAMPTZ DEFAULT NOW()
+		);`,
 		`CREATE TABLE IF NOT EXISTS stock_investments (
 			user_id TEXT NOT NULL,
 			ticker TEXT NOT NULL,
@@ -358,6 +363,8 @@ func (p *PostgresDatabase) CreateTables() error {
 
 	// 6. Performance & Partial Indexes
 	indexQueries := []string{
+		`CREATE INDEX IF NOT EXISTS idx_users_balance ON users (balance DESC);`,
+		`CREATE INDEX IF NOT EXISTS idx_users_daily_streak ON users (daily_streak DESC);`,
 		`CREATE INDEX IF NOT EXISTS idx_api_keys_user_id ON api_keys (user_id);`,
 		`CREATE INDEX IF NOT EXISTS idx_stock_investments_ticker ON stock_investments (ticker);`,
 		`CREATE INDEX IF NOT EXISTS idx_crypto_investments_symbol ON crypto_investments (symbol);`,
@@ -381,6 +388,7 @@ func (p *PostgresDatabase) CreateTables() error {
 		`ALTER TABLE api_keys ENABLE ROW LEVEL SECURITY;`,
 		`ALTER TABLE stock_prices ENABLE ROW LEVEL SECURITY;`,
 		`ALTER TABLE stock_investments ENABLE ROW LEVEL SECURITY;`,
+		`ALTER TABLE crypto_prices ENABLE ROW LEVEL SECURITY;`,
 		`ALTER TABLE crypto_investments ENABLE ROW LEVEL SECURITY;`,
 		`ALTER TABLE loans ENABLE ROW LEVEL SECURITY;`,
 		`ALTER TABLE betting_events ENABLE ROW LEVEL SECURITY;`,
@@ -418,6 +426,12 @@ func (p *PostgresDatabase) CreateTables() error {
 		END IF;
 		IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'crypto_investments' AND policyname = 'service_role_all_crypto_investments') THEN
 			CREATE POLICY service_role_all_crypto_investments ON crypto_investments FOR ALL TO service_role USING (true) WITH CHECK (true);
+		END IF;
+		IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'crypto_prices' AND policyname = 'allow_public_read_crypto_prices') THEN
+			CREATE POLICY allow_public_read_crypto_prices ON crypto_prices FOR SELECT TO anon, authenticated USING (true);
+		END IF;
+		IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'crypto_prices' AND policyname = 'service_role_all_crypto_prices') THEN
+			CREATE POLICY service_role_all_crypto_prices ON crypto_prices FOR ALL TO service_role USING (true) WITH CHECK (true);
 		END IF;
 		IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'loans' AND policyname = 'service_role_all_loans') THEN
 			CREATE POLICY service_role_all_loans ON loans FOR ALL TO service_role USING (true) WITH CHECK (true);
