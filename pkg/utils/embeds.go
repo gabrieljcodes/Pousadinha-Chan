@@ -1,11 +1,7 @@
 package utils
 
 import (
-	"bytes"
-	"encoding/json"
-	"estudocoin/internal/database"
-	"net/http"
-	"time"
+	"estudocoin/internal/webhook"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -55,18 +51,5 @@ func GoldEmbed(title, description string) *discordgo.MessageEmbed {
 
 // SendWebhookNotification sends a simple message notification to user's webhook
 func SendWebhookNotification(userID string, message string) {
-	url, err := database.GetWebhook(userID)
-	if err != nil || url == "" {
-		return // No webhook configured
-	}
-
-	payload := map[string]string{
-		"content": message,
-	}
-
-	go func(targetURL string, p map[string]string) {
-		jsonBytes, _ := json.Marshal(p)
-		client := http.Client{Timeout: 5 * time.Second}
-		client.Post(targetURL, "application/json", bytes.NewBuffer(jsonBytes))
-	}(url, payload)
+	webhook.SendGenericNotification(userID, message)
 }

@@ -45,6 +45,7 @@ type UserStreakRank struct {
 // APIKeyStruct represents an API key
 type APIKeyStruct struct {
 	Key       string
+	KeyPrefix string
 	Name      string
 	CreatedAt time.Time
 }

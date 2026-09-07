@@ -4,29 +4,34 @@ import (
 	"estudocoin/internal/database"
 	"estudocoin/internal/webhook"
 	"estudocoin/pkg/utils"
-	"net/url"
 
 	"github.com/bwmarrin/discordgo"
 )
 
 func HandleSlashWebhook(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	options := i.ApplicationCommandData().Options
+	if len(options) == 0 {
+		return
+	}
 	subCommand := options[0].Name
-	userID := i.Member.User.ID
+	userID := ""
+	if i.Member != nil && i.Member.User != nil {
+		userID = i.Member.User.ID
+	} else if i.User != nil {
+		userID = i.User.ID
+	}
 
 	switch subCommand {
 	case "set":
 		rawURL := options[0].Options[0].StringValue()
-		
-		// Validate URL
-		parsed, err := url.ParseRequestURI(rawURL)
-		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
-			respondEmbed(s, i, utils.ErrorEmbed("Invalid URL. Must start with http:// or https://"))
+
+		// Validate URL with SSRF protection
+		if err := webhook.ValidateWebhookURL(rawURL); err != nil {
+			respondEmbed(s, i, utils.ErrorEmbed("Invalid Webhook URL: "+err.Error()))
 			return
 		}
 
-		err = database.SetWebhook(userID, rawURL)
-		if err != nil {
+		if err := database.SetWebhook(userID, rawURL); err != nil {
 			respondEmbed(s, i, utils.ErrorEmbed("Database error saving webhook."))
 			return
 		}

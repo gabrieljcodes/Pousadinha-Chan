@@ -176,6 +176,7 @@ func (p *PostgresDatabase) CreateTables() error {
 		);`,
 		`CREATE TABLE IF NOT EXISTS api_keys (
 			key TEXT PRIMARY KEY,
+			key_prefix TEXT,
 			user_id TEXT NOT NULL,
 			name TEXT,
 			created_at TIMESTAMPTZ DEFAULT NOW()
@@ -252,6 +253,7 @@ func (p *PostgresDatabase) CreateTables() error {
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS max_daily_streak INTEGER DEFAULT 0;`,
 		`ALTER TABLE users ALTER COLUMN balance TYPE BIGINT;`,
 		`ALTER TABLE users ALTER COLUMN last_daily TYPE TIMESTAMPTZ;`,
+		`ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS key_prefix TEXT;`,
 		`ALTER TABLE api_keys ALTER COLUMN created_at TYPE TIMESTAMPTZ;`,
 		`ALTER TABLE stock_prices ALTER COLUMN last_price TYPE NUMERIC(20, 6);`,
 		`ALTER TABLE stock_prices ALTER COLUMN updated_at TYPE TIMESTAMPTZ;`,

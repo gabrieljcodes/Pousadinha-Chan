@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"estudocoin/pkg/config"
@@ -577,17 +578,36 @@ func HashAPIKey(key string) string {
 	return fmt.Sprintf("%x", hash[:])
 }
 
-// CreateAPIKey creates a new API key storing its secure SHA-256 hash
+// CreateAPIKey creates a new API key storing its secure SHA-256 hash and visible prefix
 func CreateAPIKey(rawKey, userID, name string) error {
+	if DB == nil {
+		return nil
+	}
+
+	// Limit to max 5 keys per user
+	var count int
+	err := DB.QueryRow("SELECT COUNT(*) FROM api_keys WHERE user_id = $1", userID).Scan(&count)
+	if err == nil && count >= 5 {
+		return fmt.Errorf("maximum limit of 5 API keys reached. Delete an existing key first")
+	}
+
+	prefix := rawKey
+	if len(rawKey) >= 10 {
+		prefix = rawKey[:10]
+	}
+
 	hashedKey := HashAPIKey(rawKey)
-	query := `INSERT INTO api_keys (key, user_id, name, created_at) VALUES ($1, $2, $3, $4)`
-	_, err := DB.Exec(query, hashedKey, userID, name, time.Now())
+	query := `INSERT INTO api_keys (key, key_prefix, user_id, name, created_at) VALUES ($1, $2, $3, $4, $5)`
+	_, err = DB.Exec(query, hashedKey, prefix, userID, name, time.Now())
 	return err
 }
 
 // GetUserByAPIKey returns the userID associated with an API key,
 // supporting both secure SHA-256 hashes and legacy plaintext keys.
 func GetUserByAPIKey(key string) (string, error) {
+	if DB == nil {
+		return "", sql.ErrNoRows
+	}
 	hashedKey := HashAPIKey(key)
 	var userID string
 	query := `SELECT user_id FROM api_keys WHERE key = $1 OR key = $2 LIMIT 1`
@@ -600,7 +620,10 @@ func GetUserByAPIKey(key string) (string, error) {
 
 // ListAPIKeys lists all API keys for a user
 func ListAPIKeys(userID string) ([]APIKeyStruct, error) {
-	query := `SELECT key, name, created_at FROM api_keys WHERE user_id = $1 ORDER BY created_at DESC`
+	if DB == nil {
+		return nil, nil
+	}
+	query := `SELECT key, COALESCE(key_prefix, ''), name, created_at FROM api_keys WHERE user_id = $1 ORDER BY created_at DESC`
 	rows, err := DB.Query(query, userID)
 	if err != nil {
 		return nil, err
@@ -610,8 +633,11 @@ func ListAPIKeys(userID string) ([]APIKeyStruct, error) {
 	var keys []APIKeyStruct
 	for rows.Next() {
 		var k APIKeyStruct
-		if err := rows.Scan(&k.Key, &k.Name, &k.CreatedAt); err != nil {
+		if err := rows.Scan(&k.Key, &k.KeyPrefix, &k.Name, &k.CreatedAt); err != nil {
 			continue
+		}
+		if k.KeyPrefix == "" && len(k.Key) >= 8 {
+			k.KeyPrefix = k.Key[:8]
 		}
 		keys = append(keys, k)
 	}
@@ -620,10 +646,24 @@ func ListAPIKeys(userID string) ([]APIKeyStruct, error) {
 
 // DeleteAPIKey deletes an API key matching a prefix or full key
 func DeleteAPIKey(userID, prefix string) error {
+	if DB == nil {
+		return nil
+	}
+	prefix = strings.TrimSpace(prefix)
+	if prefix == "" {
+		return fmt.Errorf("prefix cannot be empty")
+	}
 	hashedPrefix := HashAPIKey(prefix)
-	query := `DELETE FROM api_keys WHERE user_id = $1 AND (key LIKE $2 OR key = $3)`
-	_, err := DB.Exec(query, userID, prefix+"%", hashedPrefix)
-	return err
+	query := `DELETE FROM api_keys WHERE user_id = $1 AND (key_prefix = $2 OR key_prefix LIKE $3 OR key LIKE $3 OR key = $4)`
+	res, err := DB.Exec(query, userID, prefix, prefix+"%", hashedPrefix)
+	if err != nil {
+		return err
+	}
+	rowsAffected, _ := res.RowsAffected()
+	if rowsAffected == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }
 
 // SetWebhook sets a user's webhook URL

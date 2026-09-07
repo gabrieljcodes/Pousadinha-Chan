@@ -4,8 +4,7 @@ import (
 	"encoding/json"
 	"estudocoin/internal/crypto"
 	"estudocoin/internal/database"
-	"estudocoin/pkg/config"
-	"estudocoin/pkg/utils"
+	"estudocoin/internal/webhook"
 	"fmt"
 	"math"
 	"net/http"
@@ -69,14 +68,13 @@ type SellCryptoResponse struct {
 // HandleCryptoList returns the list of available cryptocurrencies and their prices
 func HandleCryptoList(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		w.WriteHeader(http.StatusMethodNotAllowed)
+		writeJSON(w, http.StatusMethodNotAllowed, ErrorResponse{Error: "Method not allowed"})
 		return
 	}
 
 	prices, err := crypto.GetCryptoPrices()
 	if err != nil {
-		w.WriteHeader(http.StatusServiceUnavailable)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Could not fetch crypto prices"})
+		writeJSON(w, http.StatusServiceUnavailable, ErrorResponse{Error: "Could not fetch crypto prices"})
 		return
 	}
 
@@ -93,14 +91,13 @@ func HandleCryptoList(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(cryptos)
+	writeJSON(w, http.StatusOK, cryptos)
 }
 
 // HandleCryptoPortfolio returns the user's crypto portfolio
 func HandleCryptoPortfolio(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		w.WriteHeader(http.StatusMethodNotAllowed)
+		writeJSON(w, http.StatusMethodNotAllowed, ErrorResponse{Error: "Method not allowed"})
 		return
 	}
 
@@ -108,15 +105,13 @@ func HandleCryptoPortfolio(w http.ResponseWriter, r *http.Request) {
 
 	investments, err := database.GetAllCryptoInvestmentsByUser(userID)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Database error"})
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Database error"})
 		return
 	}
 
 	prices, err := crypto.GetCryptoPrices()
 	if err != nil {
-		w.WriteHeader(http.StatusServiceUnavailable)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Could not fetch crypto prices"})
+		writeJSON(w, http.StatusServiceUnavailable, ErrorResponse{Error: "Could not fetch crypto prices"})
 		return
 	}
 
@@ -152,14 +147,13 @@ func HandleCryptoPortfolio(w http.ResponseWriter, r *http.Request) {
 		TotalValue: int(totalValue),
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	writeJSON(w, http.StatusOK, response)
 }
 
 // HandleBuyCrypto handles cryptocurrency purchase requests
 func HandleBuyCrypto(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
+		writeJSON(w, http.StatusMethodNotAllowed, ErrorResponse{Error: "Method not allowed"})
 		return
 	}
 
@@ -167,8 +161,7 @@ func HandleBuyCrypto(w http.ResponseWriter, r *http.Request) {
 
 	var req BuyCryptoRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Invalid request body"})
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Invalid request body"})
 		return
 	}
 
@@ -176,31 +169,27 @@ func HandleBuyCrypto(w http.ResponseWriter, r *http.Request) {
 	symbol := strings.ToUpper(req.Symbol)
 	c := crypto.GetCryptoBySymbol(symbol)
 	if c == nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Invalid cryptocurrency symbol"})
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Invalid cryptocurrency symbol"})
 		return
 	}
 
 	// Validate amount
 	if req.Amount <= 0 {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Amount must be positive"})
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Amount must be positive"})
 		return
 	}
 
 	// Check balance
 	balance := database.GetBalance(userID)
 	if balance < req.Amount {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Insufficient funds"})
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Insufficient funds"})
 		return
 	}
 
 	// Get price
 	price, err := crypto.GetSingleCryptoPrice(c.ID)
 	if err != nil || price <= 0 {
-		w.WriteHeader(http.StatusServiceUnavailable)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Could not fetch crypto price"})
+		writeJSON(w, http.StatusServiceUnavailable, ErrorResponse{Error: "Could not fetch crypto price"})
 		return
 	}
 
@@ -209,16 +198,20 @@ func HandleBuyCrypto(w http.ResponseWriter, r *http.Request) {
 	// Transaction
 	tx, err := database.DB.Begin()
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Transaction failed"})
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Transaction failed"})
 		return
 	}
 	defer tx.Rollback()
 
-	// Remove coins
-	if _, err := tx.Exec(PrepareQuery("UPDATE users SET balance = balance - ? WHERE id = ?"), req.Amount, userID); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Transaction failed"})
+	// Atomically remove coins ensuring balance >= amount
+	res, err := tx.Exec(`UPDATE users SET balance = balance - $1 WHERE id = $2 AND balance >= $1`, req.Amount, userID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Transaction failed"})
+		return
+	}
+	rowsAffected, _ := res.RowsAffected()
+	if rowsAffected == 0 {
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Insufficient funds"})
 		return
 	}
 
@@ -230,23 +223,17 @@ func HandleBuyCrypto(w http.ResponseWriter, r *http.Request) {
 	_, err = tx.Exec(query, userID, symbol, coins, req.Amount)
 
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Failed to add crypto"})
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Failed to add crypto"})
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Transaction commit failed"})
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Transaction commit failed"})
 		return
 	}
 
 	// Send webhook notification
-	go func() {
-		message := fmt.Sprintf("🪙 **Crypto Purchase**\nYou bought **%.8f %s** for **%d %s** (at $%.6f/coin).",
-			coins, symbol, req.Amount, config.Bot.CurrencyName, price)
-		utils.SendWebhookNotification(userID, message)
-	}()
+	webhook.SendCryptoNotification(userID, true, symbol, coins, req.Amount, price)
 
 	newBalance := database.GetBalance(userID)
 
@@ -258,14 +245,13 @@ func HandleBuyCrypto(w http.ResponseWriter, r *http.Request) {
 		Balance:    newBalance,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	writeJSON(w, http.StatusOK, response)
 }
 
 // HandleSellCrypto handles cryptocurrency sale requests
 func HandleSellCrypto(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
+		writeJSON(w, http.StatusMethodNotAllowed, ErrorResponse{Error: "Method not allowed"})
 		return
 	}
 
@@ -273,8 +259,7 @@ func HandleSellCrypto(w http.ResponseWriter, r *http.Request) {
 
 	var req SellCryptoRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Invalid request body"})
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Invalid request body"})
 		return
 	}
 
@@ -282,41 +267,35 @@ func HandleSellCrypto(w http.ResponseWriter, r *http.Request) {
 	symbol := strings.ToUpper(req.Symbol)
 	c := crypto.GetCryptoBySymbol(symbol)
 	if c == nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Invalid cryptocurrency symbol"})
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Invalid cryptocurrency symbol"})
 		return
 	}
 
 	// Validate coins
 	if req.Coins <= 0 {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Coins must be positive"})
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Coins must be positive"})
 		return
 	}
 
 	// Check owned coins
 	ownedCoins, err := database.GetCryptoInvestment(userID, symbol)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Database error"})
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Database error"})
 		return
 	}
 	if ownedCoins <= 0 {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "You don't own any of this cryptocurrency"})
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "You don't own any of this cryptocurrency"})
 		return
 	}
 	if req.Coins > ownedCoins {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: fmt.Sprintf("You only own %.8f %s", ownedCoins, symbol)})
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: fmt.Sprintf("You only own %.8f %s", ownedCoins, symbol)})
 		return
 	}
 
 	// Get price
 	price, err := crypto.GetSingleCryptoPrice(c.ID)
 	if err != nil || price <= 0 {
-		w.WriteHeader(http.StatusServiceUnavailable)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Could not fetch crypto price"})
+		writeJSON(w, http.StatusServiceUnavailable, ErrorResponse{Error: "Could not fetch crypto price"})
 		return
 	}
 
@@ -325,8 +304,7 @@ func HandleSellCrypto(w http.ResponseWriter, r *http.Request) {
 	// Transaction
 	tx, err := database.DB.Begin()
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Transaction failed"})
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Transaction failed"})
 		return
 	}
 	defer tx.Rollback()
@@ -337,14 +315,12 @@ func HandleSellCrypto(w http.ResponseWriter, r *http.Request) {
 		    coins = coins - $1 
 		WHERE user_id = $2 AND symbol = $3 AND coins >= $1`, req.Coins, userID, symbol)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Failed to remove crypto"})
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Failed to remove crypto"})
 		return
 	}
 	rowsAffected, _ := res.RowsAffected()
 	if rowsAffected == 0 {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Not enough coins"})
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Not enough coins"})
 		return
 	}
 
@@ -352,25 +328,18 @@ func HandleSellCrypto(w http.ResponseWriter, r *http.Request) {
 	_, _ = tx.Exec(`DELETE FROM crypto_investments WHERE user_id = $1 AND symbol = $2 AND coins <= 0.00000001`, userID, symbol)
 
 	// Add coins
-	query := PrepareQuery("UPDATE users SET balance = balance + ? WHERE id = ?")
-	if _, err := tx.Exec(query, payout, userID); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Failed to add coins"})
+	if _, err := tx.Exec(`UPDATE users SET balance = balance + $1 WHERE id = $2`, payout, userID); err != nil {
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Failed to add coins"})
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Transaction commit failed"})
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Transaction commit failed"})
 		return
 	}
 
 	// Send webhook notification
-	go func() {
-		message := fmt.Sprintf("💰 **Crypto Sale**\nYou sold **%.8f %s** for **%d %s** (at $%.6f/coin).",
-			req.Coins, symbol, payout, config.Bot.CurrencyName, price)
-		utils.SendWebhookNotification(userID, message)
-	}()
+	webhook.SendCryptoNotification(userID, false, symbol, req.Coins, payout, price)
 
 	newBalance := database.GetBalance(userID)
 
@@ -382,6 +351,5 @@ func HandleSellCrypto(w http.ResponseWriter, r *http.Request) {
 		Balance:        newBalance,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	writeJSON(w, http.StatusOK, response)
 }

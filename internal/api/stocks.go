@@ -4,8 +4,7 @@ import (
 	"encoding/json"
 	"estudocoin/internal/database"
 	"estudocoin/internal/stockmarket"
-	"estudocoin/pkg/config"
-	"estudocoin/pkg/utils"
+	"estudocoin/internal/webhook"
 	"fmt"
 	"math"
 	"net/http"
@@ -23,11 +22,11 @@ type StockInfo struct {
 
 // PortfolioItem represents a single investment in the portfolio
 type PortfolioItem struct {
-	Ticker      string  `json:"ticker"`
-	Name        string  `json:"name"`
-	Shares      float64 `json:"shares"`
+	Ticker       string  `json:"ticker"`
+	Name         string  `json:"name"`
+	Shares       float64 `json:"shares"`
 	CurrentPrice float64 `json:"current_price"`
-	Value       int     `json:"value"`
+	Value        int     `json:"value"`
 }
 
 // PortfolioResponse represents the user's portfolio
@@ -44,11 +43,11 @@ type BuyStockRequest struct {
 
 // BuyStockResponse represents a buy response
 type BuyStockResponse struct {
-	Ticker       string  `json:"ticker"`
-	Shares       float64 `json:"shares"`
-	AmountPaid   int     `json:"amount_paid"`
+	Ticker        string  `json:"ticker"`
+	Shares        float64 `json:"shares"`
+	AmountPaid    int     `json:"amount_paid"`
 	PricePerShare float64 `json:"price_per_share"`
-	Balance      int     `json:"balance"`
+	Balance       int     `json:"balance"`
 }
 
 // SellStockRequest represents a sell request
@@ -59,17 +58,17 @@ type SellStockRequest struct {
 
 // SellStockResponse represents a sell response
 type SellStockResponse struct {
-	Ticker        string  `json:"ticker"`
-	Shares        float64 `json:"shares"`
-	AmountReceived int    `json:"amount_received"`
-	PricePerShare float64 `json:"price_per_share"`
-	Balance       int     `json:"balance"`
+	Ticker         string  `json:"ticker"`
+	Shares         float64 `json:"shares"`
+	AmountReceived int     `json:"amount_received"`
+	PricePerShare  float64 `json:"price_per_share"`
+	Balance        int     `json:"balance"`
 }
 
 // HandleStocksList returns the list of available stocks and their prices
 func HandleStocksList(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		w.WriteHeader(http.StatusMethodNotAllowed)
+		writeJSON(w, http.StatusMethodNotAllowed, ErrorResponse{Error: "Method not allowed"})
 		return
 	}
 
@@ -77,11 +76,11 @@ func HandleStocksList(w http.ResponseWriter, r *http.Request) {
 
 	for _, company := range stockmarket.Companies {
 		price, _ := database.GetStockPriceDB(company.Ticker)
-		
+
 		// If no cached price, try to fetch live
 		changeAmount := 0.0
 		changePercentage := 0.0
-		
+
 		if price <= 0 {
 			data, err := stockmarket.GetStockPrice(company.Ticker)
 			if err == nil {
@@ -108,14 +107,13 @@ func HandleStocksList(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(stocks)
+	writeJSON(w, http.StatusOK, stocks)
 }
 
 // HandlePortfolio returns the user's stock portfolio
 func HandlePortfolio(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		w.WriteHeader(http.StatusMethodNotAllowed)
+		writeJSON(w, http.StatusMethodNotAllowed, ErrorResponse{Error: "Method not allowed"})
 		return
 	}
 
@@ -123,8 +121,7 @@ func HandlePortfolio(w http.ResponseWriter, r *http.Request) {
 
 	investments, err := database.GetAllInvestmentsByUser(userID)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Database error"})
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Database error"})
 		return
 	}
 
@@ -172,14 +169,13 @@ func HandlePortfolio(w http.ResponseWriter, r *http.Request) {
 		TotalValue: int(totalValue),
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	writeJSON(w, http.StatusOK, response)
 }
 
 // HandleBuyStock handles stock purchase requests
 func HandleBuyStock(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
+		writeJSON(w, http.StatusMethodNotAllowed, ErrorResponse{Error: "Method not allowed"})
 		return
 	}
 
@@ -187,8 +183,7 @@ func HandleBuyStock(w http.ResponseWriter, r *http.Request) {
 
 	var req BuyStockRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Invalid request body"})
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Invalid request body"})
 		return
 	}
 
@@ -202,23 +197,20 @@ func HandleBuyStock(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !valid {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Invalid ticker"})
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Invalid ticker"})
 		return
 	}
 
 	// Validate amount
 	if req.Amount <= 0 {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Amount must be positive"})
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Amount must be positive"})
 		return
 	}
 
-	// Check balance
+	// Initial balance check
 	balance := database.GetBalance(userID)
 	if balance < req.Amount {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Insufficient funds"})
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Insufficient funds"})
 		return
 	}
 
@@ -227,8 +219,7 @@ func HandleBuyStock(w http.ResponseWriter, r *http.Request) {
 	if err != nil || price <= 0 {
 		data, err := stockmarket.GetStockPrice(ticker)
 		if err != nil {
-			w.WriteHeader(http.StatusServiceUnavailable)
-			json.NewEncoder(w).Encode(ErrorResponse{Error: "Could not fetch stock price"})
+			writeJSON(w, http.StatusServiceUnavailable, ErrorResponse{Error: "Could not fetch stock price"})
 			return
 		}
 		price = data.Price
@@ -240,45 +231,42 @@ func HandleBuyStock(w http.ResponseWriter, r *http.Request) {
 	// Transaction
 	tx, err := database.DB.Begin()
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Transaction failed"})
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Transaction failed"})
 		return
 	}
 	defer tx.Rollback()
 
-	// Remove coins
-	if _, err := tx.Exec(PrepareQuery("UPDATE users SET balance = balance - ? WHERE id = ?"), req.Amount, userID); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Transaction failed"})
+	// Atomically remove coins ensuring balance >= amount
+	res, err := tx.Exec(`UPDATE users SET balance = balance - $1 WHERE id = $2 AND balance >= $1`, req.Amount, userID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Transaction failed"})
+		return
+	}
+	rowsAffected, _ := res.RowsAffected()
+	if rowsAffected == 0 {
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Insufficient funds"})
 		return
 	}
 
-	// Add shares using the appropriate upsert syntax
+	// Add shares using upsert syntax
 	query := `INSERT INTO stock_investments (user_id, ticker, shares, total_invested) VALUES ($1, $2, $3, $4) 
 			  ON CONFLICT(user_id, ticker) DO UPDATE SET 
 			    shares = stock_investments.shares + $3,
 			    total_invested = stock_investments.total_invested + $4`
 
 	_, err = tx.Exec(query, userID, ticker, shares, req.Amount)
-	
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Failed to add shares"})
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Failed to add shares"})
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Transaction commit failed"})
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Transaction commit failed"})
 		return
 	}
 
 	// Send webhook notification
-	go func() {
-		message := fmt.Sprintf("📈 **Stock Purchase**\nYou bought **%.4f** shares of **%s** for **%d %s** (at $%.2f/share).",
-			shares, ticker, req.Amount, config.Bot.CurrencyName, price)
-		utils.SendWebhookNotification(userID, message)
-	}()
+	webhook.SendStockNotification(userID, true, ticker, shares, req.Amount, price)
 
 	newBalance := database.GetBalance(userID)
 
@@ -290,14 +278,13 @@ func HandleBuyStock(w http.ResponseWriter, r *http.Request) {
 		Balance:       newBalance,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	writeJSON(w, http.StatusOK, response)
 }
 
 // HandleSellStock handles stock sale requests
 func HandleSellStock(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
+		writeJSON(w, http.StatusMethodNotAllowed, ErrorResponse{Error: "Method not allowed"})
 		return
 	}
 
@@ -305,8 +292,7 @@ func HandleSellStock(w http.ResponseWriter, r *http.Request) {
 
 	var req SellStockRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Invalid request body"})
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Invalid request body"})
 		return
 	}
 
@@ -320,33 +306,28 @@ func HandleSellStock(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !valid {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Invalid ticker"})
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Invalid ticker"})
 		return
 	}
 
 	// Validate shares
 	if req.Shares <= 0 {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Shares must be positive"})
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Shares must be positive"})
 		return
 	}
 
 	// Check owned shares
 	ownedShares, err := database.GetInvestment(userID, ticker)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Database error"})
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Database error"})
 		return
 	}
 	if ownedShares <= 0 {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "You don't own any shares of this company"})
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "You don't own any shares of this company"})
 		return
 	}
 	if req.Shares > ownedShares {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: fmt.Sprintf("You only own %.4f shares", ownedShares)})
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: fmt.Sprintf("You only own %.4f shares", ownedShares)})
 		return
 	}
 
@@ -355,8 +336,7 @@ func HandleSellStock(w http.ResponseWriter, r *http.Request) {
 	if err != nil || price <= 0 {
 		data, err := stockmarket.GetStockPrice(ticker)
 		if err != nil {
-			w.WriteHeader(http.StatusServiceUnavailable)
-			json.NewEncoder(w).Encode(ErrorResponse{Error: "Could not fetch stock price"})
+			writeJSON(w, http.StatusServiceUnavailable, ErrorResponse{Error: "Could not fetch stock price"})
 			return
 		}
 		price = data.Price
@@ -368,8 +348,7 @@ func HandleSellStock(w http.ResponseWriter, r *http.Request) {
 	// Transaction
 	tx, err := database.DB.Begin()
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Transaction failed"})
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Transaction failed"})
 		return
 	}
 	defer tx.Rollback()
@@ -380,14 +359,12 @@ func HandleSellStock(w http.ResponseWriter, r *http.Request) {
 		    shares = shares - $1 
 		WHERE user_id = $2 AND ticker = $3 AND shares >= $1`, req.Shares, userID, ticker)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Failed to remove shares"})
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Failed to remove shares"})
 		return
 	}
 	rowsAffected, _ := res.RowsAffected()
 	if rowsAffected == 0 {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Not enough shares"})
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Not enough shares"})
 		return
 	}
 
@@ -395,25 +372,18 @@ func HandleSellStock(w http.ResponseWriter, r *http.Request) {
 	_, _ = tx.Exec(`DELETE FROM stock_investments WHERE user_id = $1 AND ticker = $2 AND shares <= 0.000001`, userID, ticker)
 
 	// Add coins
-	query := PrepareQuery("UPDATE users SET balance = balance + ? WHERE id = ?")
-	if _, err := tx.Exec(query, payout, userID); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Failed to add coins"})
+	if _, err := tx.Exec(`UPDATE users SET balance = balance + $1 WHERE id = $2`, payout, userID); err != nil {
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Failed to add coins"})
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Transaction commit failed"})
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Transaction commit failed"})
 		return
 	}
 
 	// Send webhook notification
-	go func() {
-		message := fmt.Sprintf("📉 **Stock Sale**\nYou sold **%.4f** shares of **%s** for **%d %s** (at $%.2f/share).",
-			req.Shares, ticker, payout, config.Bot.CurrencyName, price)
-		utils.SendWebhookNotification(userID, message)
-	}()
+	webhook.SendStockNotification(userID, false, ticker, req.Shares, payout, price)
 
 	newBalance := database.GetBalance(userID)
 
@@ -425,8 +395,7 @@ func HandleSellStock(w http.ResponseWriter, r *http.Request) {
 		Balance:        newBalance,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	writeJSON(w, http.StatusOK, response)
 }
 
 // PrepareQuery is a helper that converts placeholders to PostgreSQL format ($1, $2, etc.)

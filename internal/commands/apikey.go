@@ -1,90 +1,97 @@
 package commands
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"estudocoin/internal/database"
 	"estudocoin/pkg/utils"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/google/uuid"
 )
+
+func generateSecureAPIKey() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	return "ec_live_" + hex.EncodeToString(b)
+}
 
 func HandleSlashApiKey(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	options := i.ApplicationCommandData().Options
+	if len(options) == 0 {
+		return
+	}
 	subCommand := options[0].Name
-	userID := i.Member.User.ID
+	userID := ""
+	if i.Member != nil && i.Member.User != nil {
+		userID = i.Member.User.ID
+	} else if i.User != nil {
+		userID = i.User.ID
+	}
 
 	switch subCommand {
 	case "create":
-		// Create a new key
-		key := uuid.New().String()
-		name := "My Key"
+		name := "Default Key"
 		if len(options[0].Options) > 0 {
-			name = options[0].Options[0].StringValue()
+			name = strings.TrimSpace(options[0].Options[0].StringValue())
+			if name == "" {
+				name = "Default Key"
+			}
 		}
 
+		key := generateSecureAPIKey()
 		err := database.CreateAPIKey(key, userID, name)
 		if err != nil {
-			respondEmbed(s, i, utils.ErrorEmbed("Error creating API key."))
+			respondEmbed(s, i, utils.ErrorEmbed(fmt.Sprintf("Could not create API key: %v", err)))
 			return
 		}
 
-		// Send via DM
-		channel, err := s.UserChannelCreate(userID)
-		if err != nil {
-			respondEmbed(s, i, utils.ErrorEmbed("I cannot DM you. Please open your DMs."))
-			return
-		}
-
-		msg, err := s.ChannelMessageSend(channel.ID, fmt.Sprintf("🔑 **Your API Key** (%s)\n\n`%s`\n\n⚠️ This message will be deleted in 60 seconds.", name, key))
-		
-		if err == nil {
-			respondEmbed(s, i, utils.SuccessEmbed("Check your DM!", "I sent your API Key securely."))
-			
-			// Auto-delete routine
-			go func() {
-				time.Sleep(60 * time.Second)
-				s.ChannelMessageDelete(channel.ID, msg.ID)
-			}()
-		} else {
-			respondEmbed(s, i, utils.ErrorEmbed("Failed to send DM."))
-		}
+		// Send as an Ephemeral response visible only to the caller in Discord
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Flags: discordgo.MessageFlagsEphemeral,
+				Embeds: []*discordgo.MessageEmbed{
+					utils.SuccessEmbed("🔑 API Key Created",
+						fmt.Sprintf("**Name:** %s\n\n**Your Secret Key:**\n`%s`\n\n⚠️ **Save this key now!** It will not be shown again.\nUse `/apikey list` to see active key prefixes.", name, key)),
+				},
+			},
+		})
 
 	case "list":
 		keys, err := database.ListAPIKeys(userID)
 		if err != nil {
-			respondEmbed(s, i, utils.ErrorEmbed("Error listing keys."))
+			respondEmbed(s, i, utils.ErrorEmbed("Error listing API keys."))
 			return
 		}
 
 		if len(keys) == 0 {
-			respondEmbed(s, i, utils.InfoEmbed("No Keys", "You don't have any API keys."))
+			respondEmbed(s, i, utils.InfoEmbed("API Keys", "You don't have any API keys. Use `/apikey create` to generate one."))
 			return
 		}
 
 		var desc strings.Builder
+		desc.WriteString("Use `/apikey delete <prefix>` to revoke a key.\n\n")
 		for _, k := range keys {
-			masked := k.Key[:5] + "..."
-			desc.WriteString(fmt.Sprintf("**%s**: `%s` (Created: %s)\n", k.Name, masked, k.CreatedAt.Format("2006-01-02")))
+			desc.WriteString(fmt.Sprintf("• **%s**: `%s...` (Created: %s)\n", k.Name, k.KeyPrefix, k.CreatedAt.Format("2006-01-02")))
 		}
-		
-		respondEmbed(s, i, utils.GoldEmbed("Your API Keys", desc.String()))
+
+		respondEmbed(s, i, utils.GoldEmbed("🔑 Your API Keys", desc.String()))
 
 	case "delete":
-		prefix := options[0].Options[0].StringValue()
-		if len(prefix) < 5 {
-			respondEmbed(s, i, utils.ErrorEmbed("Provide at least the first 5 characters of the key."))
+		prefix := strings.TrimSpace(options[0].Options[0].StringValue())
+		if len(prefix) < 3 {
+			respondEmbed(s, i, utils.ErrorEmbed("Please provide at least 3 characters of the key prefix."))
 			return
 		}
 
 		err := database.DeleteAPIKey(userID, prefix)
 		if err != nil {
-			respondEmbed(s, i, utils.ErrorEmbed("Error deleting key."))
+			respondEmbed(s, i, utils.ErrorEmbed("No active API key found matching that prefix."))
 			return
 		}
-		
-		respondEmbed(s, i, utils.SuccessEmbed("Key Deleted", "If a key matched that prefix, it has been revoked."))
+
+		respondEmbed(s, i, utils.SuccessEmbed("Key Revoked", fmt.Sprintf("API key matching `%s...` has been revoked.", prefix)))
 	}
 }
