@@ -10,198 +10,247 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-type VoiceSession struct {
-	StartTime          time.Time
-	ChannelID          string
-	AccumulatedSeconds int
+// ActiveUserState tracks when a user became active and when they were last rewarded
+type ActiveUserState struct {
+	GuildID       string
+	ChannelID     string
+	EligibleSince time.Time
+	LastRewarded  time.Time
 }
 
 var (
-	sessions = make(map[string]VoiceSession)
-	mu       sync.Mutex
+	activeVoiceStates = make(map[string]*ActiveUserState)
+	voiceMu           sync.Mutex
+
+	botCache   = make(map[string]bool)
+	botCacheMu sync.RWMutex
+
+	workerStopChan chan struct{}
+	workerRunning  bool
 )
 
-// VoiceStateUpdate handles voice state changes
-func VoiceStateUpdate(s *discordgo.Session, v *discordgo.VoiceStateUpdate) {
-	userID := v.UserID
-	guildID := v.GuildID
-
-	beforeChannel := ""
-	if v.BeforeUpdate != nil {
-		beforeChannel = v.BeforeUpdate.ChannelID
+// IsBot checks whether a user is a Discord bot, with in-memory caching
+func IsBot(s *discordgo.Session, guildID, userID string) bool {
+	botCacheMu.RLock()
+	isBot, found := botCache[userID]
+	botCacheMu.RUnlock()
+	if found {
+		return isBot
 	}
 
-	mu.Lock()
-	defer mu.Unlock()
-
-	sess, hasSession := sessions[userID]
-
-	log.Printf("[VOICE] Event: user=%s, before=%s, after=%s, mute=%v, hasSession=%v",
-		userID, beforeChannel, v.ChannelID, v.SelfMute, hasSession)
-
-	// CASE 1: User completely left Discord (after is empty)
-	if v.ChannelID == "" {
-		if hasSession {
-			payAndDelete(userID, sess)
+	isBot = false
+	if s != nil && s.State != nil {
+		if member, err := s.State.Member(guildID, userID); err == nil && member != nil && member.User != nil {
+			isBot = member.User.Bot
+		} else if member, err := s.GuildMember(guildID, userID); err == nil && member != nil && member.User != nil {
+			isBot = member.User.Bot
 		}
+	}
+
+	botCacheMu.Lock()
+	botCache[userID] = isBot
+	botCacheMu.Unlock()
+	return isBot
+}
+
+// IsVoiceStateEligible checks if a voice state is valid for earning voice rewards:
+// Must be unmuted, undeafened, not in the guild's AFK channel, and not a bot.
+func IsVoiceStateEligible(s *discordgo.Session, guild *discordgo.Guild, vs *discordgo.VoiceState) bool {
+	if vs == nil || vs.ChannelID == "" {
+		return false
+	}
+
+	// Exclude server AFK channel
+	if guild != nil && guild.AfkChannelID != "" && vs.ChannelID == guild.AfkChannelID {
+		return false
+	}
+
+	// Exclude self-mute, server-mute, self-deaf, server-deaf
+	if vs.SelfMute || vs.Mute || vs.SelfDeaf || vs.Deaf {
+		return false
+	}
+
+	// Exclude bot accounts (e.g. music bots)
+	guildID := ""
+	if guild != nil {
+		guildID = guild.ID
+	}
+	if IsBot(s, guildID, vs.UserID) {
+		return false
+	}
+
+	return true
+}
+
+// ProcessVoiceHeartbeat performs an evaluation pass across all voice channels in all guilds:
+// Rewarding channels that contain at least 2 eligible, active human participants.
+func ProcessVoiceHeartbeat(s *discordgo.Session) {
+	if s == nil || s.State == nil {
 		return
 	}
 
-	// CASE 2: User changed channel (before differs from after)
-	if hasSession && beforeChannel != "" && beforeChannel != v.ChannelID {
-		payAndDelete(userID, sess)
-		// Continue to check if a new session can start in the new channel
+	voiceMu.Lock()
+	defer voiceMu.Unlock()
+
+	coinsPerMinute := config.Economy.VoiceCoinsPerMinute
+	if coinsPerMinute <= 0 {
+		coinsPerMinute = 10
 	}
 
-	// CASE 3: User muted/unmuted in the same channel
-	if hasSession && sess.ChannelID == v.ChannelID {
-		if v.SelfMute || v.Mute || v.SelfDeaf || v.Deaf {
-			// Muted - close session but save accumulated seconds
-			_, remaining := payAndDelete(userID, sess)
-			// Save remaining seconds in temporary memory
-			if remaining > 0 {
-				sessions[userID] = VoiceSession{
-					StartTime:          time.Now(), // placeholder
-					ChannelID:          "",         // "muted" marker
-					AccumulatedSeconds: remaining,
-				}
-			}
-			return
-		}
-		// Unmuted - check if eligible
-		// (session remains open)
-	}
-
-	// Check eligibility for a new session
-	if v.SelfMute || v.Mute || v.SelfDeaf || v.Deaf {
-		return
-	}
-
-	count := countUsersInChannel(s, guildID, v.ChannelID)
-	if count < 2 {
-		return
-	}
-
-	// Start new session
-	accumulated := 0
-	if hasSession && sess.ChannelID == "" {
-		// Was muted with accumulated seconds
-		accumulated = sess.AccumulatedSeconds
-		delete(sessions, userID)
-	}
-
-	sessions[userID] = VoiceSession{
-		StartTime:          time.Now(),
-		ChannelID:          v.ChannelID,
-		AccumulatedSeconds: accumulated,
-	}
-	log.Printf("[VOICE] Started session for user %s in channel %s (acc=%d, count=%d)",
-		userID, v.ChannelID, accumulated, count)
-}
-
-// payAndDelete pays out accumulated time and removes the session
-// Returns paid minutes and remaining seconds
-func payAndDelete(userID string, sess VoiceSession) (minutes int, remaining int) {
-	duration := time.Since(sess.StartTime)
-	totalSecs := int(duration.Seconds()) + sess.AccumulatedSeconds
-	minutes = totalSecs / 60
-	remaining = totalSecs % 60
-
-	if minutes > 0 {
-		reward := minutes * config.Economy.VoiceCoinsPerMinute
-		go func(uid string, rew int, mins int) {
-			database.AddCoins(uid, rew)
-			log.Printf("[VOICE REWARD] User %s earned %d coins for %d minutes", uid, rew, mins)
-		}(userID, reward, minutes)
-	}
-
-	delete(sessions, userID)
-	log.Printf("[VOICE] Paid and closed session for user %s (%d min, %d sec remaining)",
-		userID, minutes, remaining)
-	return minutes, remaining
-}
-
-func countUsersInChannel(s *discordgo.Session, guildID, channelID string) int {
-	guild, err := s.State.Guild(guildID)
-	if err != nil {
-		guild, err = s.Guild(guildID)
-		if err != nil {
-			return 0
-		}
-	}
-
-	count := 0
-	for _, vs := range guild.VoiceStates {
-		if vs.ChannelID == channelID && !vs.SelfMute && !vs.Mute && !vs.SelfDeaf && !vs.Deaf {
-			count++
-		}
-	}
-	return count
-}
-
-func InitializeVoiceSessions(s *discordgo.Session) {
-	time.Sleep(2 * time.Second)
-	log.Println("[VOICE] Initializing voice sessions...")
+	now := time.Now()
+	currentlyEligibleUsers := make(map[string]struct{})
 
 	for _, guild := range s.State.Guilds {
-		channelCounts := make(map[string]int)
-		channelUsers := make(map[string][]*discordgo.VoiceState)
+		if guild == nil {
+			continue
+		}
+
+		// Group eligible users by voice channel
+		channelEligibleMap := make(map[string][]string)
 
 		for _, vs := range guild.VoiceStates {
-			if vs.SelfMute || vs.Mute || vs.SelfDeaf || vs.Deaf {
-				continue
+			if IsVoiceStateEligible(s, guild, vs) {
+				channelEligibleMap[vs.ChannelID] = append(channelEligibleMap[vs.ChannelID], vs.UserID)
 			}
-			channelCounts[vs.ChannelID]++
-			channelUsers[vs.ChannelID] = append(channelUsers[vs.ChannelID], vs)
 		}
 
-		for channelID, count := range channelCounts {
-			if count < 2 {
+		// Reward channels with 2 or more eligible human participants
+		for channelID, usersInChannel := range channelEligibleMap {
+			if len(usersInChannel) < 2 {
 				continue
 			}
-			for _, vs := range channelUsers[channelID] {
-				mu.Lock()
-				sessions[vs.UserID] = VoiceSession{
-					StartTime: time.Now(),
-					ChannelID: channelID,
+
+			for _, userID := range usersInChannel {
+				currentlyEligibleUsers[userID] = struct{}{}
+
+				state, exists := activeVoiceStates[userID]
+				if !exists || state.ChannelID != channelID {
+					// User newly eligible in this channel
+					activeVoiceStates[userID] = &ActiveUserState{
+						GuildID:       guild.ID,
+						ChannelID:     channelID,
+						EligibleSince: now,
+						LastRewarded:  now,
+					}
+					log.Printf("[VOICE] User %s became eligible in channel %s (group size: %d)",
+						userID, channelID, len(usersInChannel))
+					continue
 				}
-				mu.Unlock()
-				log.Printf("[VOICE] Init session for %s in %s", vs.UserID, channelID)
+
+				// Check elapsed time since last reward
+				elapsed := now.Sub(state.LastRewarded)
+				if elapsed >= 60*time.Second {
+					minutes := int(elapsed.Minutes())
+					if minutes > 0 {
+						reward := minutes * coinsPerMinute
+						err := database.AddCoins(userID, reward)
+						if err != nil {
+							log.Printf("[VOICE ERROR] Failed to add %d coins to %s: %v", reward, userID, err)
+						} else {
+							log.Printf("[VOICE REWARD] User %s earned %d coins for %d minute(s) in channel %s",
+								userID, reward, minutes, channelID)
+						}
+						// Advance last rewarded by exact credited minutes
+						state.LastRewarded = state.LastRewarded.Add(time.Duration(minutes) * time.Minute)
+					}
+				}
 			}
 		}
 	}
-	log.Println("[VOICE] Initialization complete")
+
+	// Clean up any users who are no longer eligible (disconnected, left channel, alone, or muted)
+	for userID, state := range activeVoiceStates {
+		if _, eligible := currentlyEligibleUsers[userID]; !eligible {
+			log.Printf("[VOICE] User %s is no longer eligible in channel %s (alone, muted, or disconnected)",
+				userID, state.ChannelID)
+			delete(activeVoiceStates, userID)
+		}
+	}
 }
 
-// CloseAllVoiceSessions pays all users in active sessions when the bot shuts down
-func CloseAllVoiceSessions() {
-	mu.Lock()
-	defer mu.Unlock()
-
-	log.Printf("[VOICE] Closing %d active voice sessions...", len(sessions))
-
-	for userID, sess := range sessions {
-		// Only pay if channel is valid (not muted)
-		if sess.ChannelID != "" {
-			duration := time.Since(sess.StartTime)
-			totalSecs := int(duration.Seconds()) + sess.AccumulatedSeconds
-			minutes := totalSecs / 60
-
-			if minutes > 0 {
-				reward := minutes * config.Economy.VoiceCoinsPerMinute
-				database.AddCoins(userID, reward)
-				log.Printf("[VOICE SHUTDOWN] Paid user %s: %d coins for %d minutes", userID, reward, minutes)
-			} else {
-				log.Printf("[VOICE SHUTDOWN] User %s had less than 1 minute, no payment", userID)
-			}
-		} else {
-			// User was muted, log accumulated seconds saved
-			if sess.AccumulatedSeconds > 0 {
-				log.Printf("[VOICE SHUTDOWN] User %s was muted with %d seconds accumulated (saved)", userID, sess.AccumulatedSeconds)
-			}
-		}
-		delete(sessions, userID)
+// VoiceStateUpdate handles immediate voice state events to keep cache fresh
+func VoiceStateUpdate(s *discordgo.Session, v *discordgo.VoiceStateUpdate) {
+	if v == nil {
+		return
 	}
 
-	log.Println("[VOICE] All sessions closed")
+	userID := v.UserID
+
+	voiceMu.Lock()
+	state, exists := activeVoiceStates[userID]
+	if exists {
+		// If user disconnected, muted, or changed channel, clean up active state immediately
+		if v.ChannelID == "" || v.ChannelID != state.ChannelID || v.SelfMute || v.Mute || v.SelfDeaf || v.Deaf {
+			delete(activeVoiceStates, userID)
+			log.Printf("[VOICE] State updated for user %s: session cleared (channel: %s)", userID, v.ChannelID)
+		}
+	}
+	voiceMu.Unlock()
+}
+
+// StartVoiceWorker starts the background 30-second heartbeat ticker
+func StartVoiceWorker(s *discordgo.Session) {
+	voiceMu.Lock()
+	if workerRunning {
+		voiceMu.Unlock()
+		return
+	}
+	workerRunning = true
+	workerStopChan = make(chan struct{})
+	voiceMu.Unlock()
+
+	go func() {
+		log.Println("[VOICE] Voice heartbeat worker started (30s interval)")
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				ProcessVoiceHeartbeat(s)
+			case <-workerStopChan:
+				log.Println("[VOICE] Voice heartbeat worker stopped")
+				return
+			}
+		}
+	}()
+}
+
+// InitializeVoiceSessions starts the background voice worker and performs initial scan
+func InitializeVoiceSessions(s *discordgo.Session) {
+	StartVoiceWorker(s)
+	// Run initial evaluation asynchronously after gateway is ready
+	go func() {
+		time.Sleep(3 * time.Second)
+		ProcessVoiceHeartbeat(s)
+	}()
+}
+
+// CloseAllVoiceSessions cleanly terminates the worker and flushes sessions on shutdown
+func CloseAllVoiceSessions() {
+	voiceMu.Lock()
+	defer voiceMu.Unlock()
+
+	if workerRunning && workerStopChan != nil {
+		close(workerStopChan)
+		workerRunning = false
+	}
+
+	coinsPerMinute := config.Economy.VoiceCoinsPerMinute
+	if coinsPerMinute <= 0 {
+		coinsPerMinute = 10
+	}
+
+	now := time.Now()
+	for userID, state := range activeVoiceStates {
+		elapsed := now.Sub(state.LastRewarded)
+		minutes := int(elapsed.Minutes())
+		if minutes > 0 {
+			reward := minutes * coinsPerMinute
+			_ = database.AddCoins(userID, reward)
+			log.Printf("[VOICE SHUTDOWN] Paid user %s %d coins for %d min", userID, reward, minutes)
+		}
+		delete(activeVoiceStates, userID)
+	}
+	log.Println("[VOICE] All voice sessions closed")
 }

@@ -222,41 +222,7 @@ func handleSlashBlackjack(s *discordgo.Session, i *discordgo.InteractionCreate) 
 }
 
 func handleSlashDaily(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	userID := i.Member.User.ID
-	info := database.GetDailyStreakInfo(userID)
-
-	if !info.CanClaim {
-		discordTime := fmt.Sprintf("<t:%d:R>", info.NextDaily.Unix())
-		respondEmbed(s, i, utils.ErrorEmbed(fmt.Sprintf("You already collected your daily reward! Come back %s.", discordTime)))
-		return
-	}
-
-	info, err := database.ClaimDaily(userID)
-	if err != nil {
-		respondEmbed(s, i, utils.ErrorEmbed("Error claiming daily reward."))
-		return
-	}
-
-	// Add coins
-	err = database.AddCoins(userID, info.Reward)
-	if err != nil {
-		respondEmbed(s, i, utils.ErrorEmbed("Error adding coins."))
-		return
-	}
-
-	streakText := ""
-	if info.Streak > 0 {
-		streakText = fmt.Sprintf("\n\n🔥 **Streak: %d days**", info.Streak+1)
-		if info.Streak+1 >= 50 {
-			streakText += " (MAX)"
-		}
-	}
-	if info.MaxStreak > 0 {
-		streakText += fmt.Sprintf("\n🏆 Max Streak: %d", info.MaxStreak)
-	}
-
-	respondEmbed(s, i, utils.SuccessEmbed("Daily Collected!", 
-		fmt.Sprintf("You received **%d %s**!%s", info.Reward, config.Bot.CurrencyName, streakText)))
+	respondEmbed(s, i, ExecuteDaily(i.Member.User.ID))
 }
 
 func handleSlashBalance(s *discordgo.Session, i *discordgo.InteractionCreate) {

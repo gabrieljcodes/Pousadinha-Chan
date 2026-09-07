@@ -12,42 +12,41 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-func CmdDaily(s *discordgo.Session, m *discordgo.MessageCreate) {
-	userID := m.Author.ID
-	info := database.GetDailyStreakInfo(userID)
-
-	if !info.CanClaim {
-		discordTime := fmt.Sprintf("<t:%d:R>", info.NextDaily.Unix())
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(fmt.Sprintf("You already collected your daily reward! Come back %s.", discordTime)))
-		return
-	}
-
+// ExecuteDaily processes a daily claim and returns a formatted Discord embed
+func ExecuteDaily(userID string) *discordgo.MessageEmbed {
 	info, err := database.ClaimDaily(userID)
 	if err != nil {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Error claiming daily reward."))
-		return
-	}
-
-	// Add coins
-	err = database.AddCoins(userID, info.Reward)
-	if err != nil {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Error adding coins."))
-		return
-	}
-
-	streakText := ""
-	if info.Streak > 0 {
-		streakText = fmt.Sprintf("\n\n🔥 **Streak: %d days**", info.Streak+1)
-		if info.Streak+1 >= 50 {
-			streakText += " (MAX)"
+		if info != nil && !info.CanClaim {
+			discordTime := fmt.Sprintf("<t:%d:R>", info.NextDaily.Unix())
+			return utils.ErrorEmbed(fmt.Sprintf("You already collected your daily reward! Come back %s.", discordTime))
 		}
-	}
-	if info.MaxStreak > 0 {
-		streakText += fmt.Sprintf("\n🏆 Max Streak: %d", info.MaxStreak)
+		return utils.ErrorEmbed("Error claiming daily reward. Please try again.")
 	}
 
-	s.ChannelMessageSendEmbed(m.ChannelID, utils.SuccessEmbed("Daily Collected!", 
-		fmt.Sprintf("You received **%d %s**!%s", info.Reward, config.Bot.CurrencyName, streakText)))
+	dayUnit := "days"
+	if info.Streak == 1 {
+		dayUnit = "day"
+	}
+	streakText := fmt.Sprintf("\n\n🔥 **Streak: %d %s**", info.Streak, dayUnit)
+	if info.Streak >= 50 {
+		streakText += " (MAX)"
+	}
+	if info.IsNewRecord && info.Streak > 1 {
+		streakText += " 🏆 **New Personal Record!**"
+	} else if info.MaxStreak > 0 {
+		streakText += fmt.Sprintf("\n🏆 Max Streak: %d days", info.MaxStreak)
+	}
+
+	if info.StreakReset {
+		streakText += "\n⚠️ *Your previous streak was reset because more than 48 hours passed.*"
+	}
+
+	return utils.SuccessEmbed("Daily Collected!",
+		fmt.Sprintf("You received **%d %s**!%s", info.Reward, config.Bot.CurrencyName, streakText))
+}
+
+func CmdDaily(s *discordgo.Session, m *discordgo.MessageCreate) {
+	s.ChannelMessageSendEmbed(m.ChannelID, ExecuteDaily(m.Author.ID))
 }
 
 func CmdBalance(s *discordgo.Session, m *discordgo.MessageCreate) {

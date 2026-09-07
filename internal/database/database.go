@@ -238,11 +238,29 @@ func TransferCoins(fromID, toID string, amount int) error {
 
 // DailyStreakInfo contains information about a user's daily streak
 type DailyStreakInfo struct {
-	Streak     int
-	MaxStreak  int
-	Reward     int
-	CanClaim   bool
-	NextDaily  time.Time
+	Streak      int
+	MaxStreak   int
+	Reward      int
+	CanClaim    bool
+	NextDaily   time.Time
+	StreakReset bool
+	IsNewRecord bool
+}
+
+// CalculateDailyReward calculates the daily reward based on current streak and config
+func CalculateDailyReward(streak int) int {
+	baseReward := config.Economy.DailyAmount
+	if baseReward <= 0 {
+		baseReward = 100
+	}
+	if streak <= 0 {
+		streak = 1
+	}
+	// Cap scaling at day 50 (50 * baseReward)
+	if streak > 50 {
+		streak = 50
+	}
+	return streak * baseReward
 }
 
 // GetDailyStreakInfo returns full information about a user's daily streak
@@ -250,16 +268,20 @@ func GetDailyStreakInfo(userID string) *DailyStreakInfo {
 	info := &DailyStreakInfo{
 		Streak:    0,
 		MaxStreak: 0,
-		Reward:    100,
 		CanClaim:  true,
 		NextDaily: time.Now(),
+	}
+
+	if DB == nil {
+		info.Reward = CalculateDailyReward(1)
+		return info
 	}
 
 	var lastDaily sql.NullTime
 	var streak sql.NullInt64
 	var maxStreak sql.NullInt64
 
-	query := prepareQuery("SELECT last_daily, daily_streak, max_daily_streak FROM users WHERE id = ?")
+	query := `SELECT last_daily, daily_streak, max_daily_streak FROM users WHERE id = $1`
 	err := DB.QueryRow(query, userID).Scan(&lastDaily, &streak, &maxStreak)
 
 	if err == nil {
@@ -281,12 +303,9 @@ func GetDailyStreakInfo(userID string) *DailyStreakInfo {
 		}
 	}
 
-	// Calculate reward based on streak
-	// Streak 0 = 100, Streak 1 = 200, ... up to max 5000
-	info.Reward = (info.Streak + 1) * 100
-	if info.Reward > 5000 {
-		info.Reward = 5000
-	}
+	// Calculate reward based on next streak
+	nextStreak := info.Streak + 1
+	info.Reward = CalculateDailyReward(nextStreak)
 
 	return info
 }
@@ -306,45 +325,91 @@ func GetDailyReward(userID string) int {
 	return GetDailyStreakInfo(userID).Reward
 }
 
-// ClaimDaily claims the daily reward and updates the streak
+// ClaimDaily atomically claims the daily reward, credits balance, and updates streak
 func ClaimDaily(userID string) (*DailyStreakInfo, error) {
-	info := GetDailyStreakInfo(userID)
+	if DB == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
 
-	if !info.CanClaim {
-		return info, fmt.Errorf("daily not available yet")
+	tx, err := DB.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	// Ensure user exists
+	_, err = tx.Exec(`INSERT INTO users (id, balance, daily_streak, max_daily_streak) 
+		VALUES ($1, 0, 0, 0) ON CONFLICT (id) DO NOTHING`, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Lock the user row for update to prevent concurrent double-claim race conditions
+	var lastDaily sql.NullTime
+	var currentStreak int
+	var maxStreak int
+
+	err = tx.QueryRow(`SELECT last_daily, COALESCE(daily_streak, 0), COALESCE(max_daily_streak, 0) 
+		FROM users WHERE id = $1 FOR UPDATE`, userID).Scan(&lastDaily, &currentStreak, &maxStreak)
+	if err != nil {
+		return nil, err
 	}
 
 	now := time.Now()
-
-	// Check if streak continues (claimed between 24h and 48h ago)
-	timeSinceLast := time.Since(info.NextDaily.Add(-24 * time.Hour))
-	if timeSinceLast >= 0 && timeSinceLast <= 48*time.Hour {
-		// Continue streak
-		info.Streak++
-	} else {
-		// Reset streak
-		info.Streak = 0
+	info := &DailyStreakInfo{
+		Streak:    currentStreak,
+		MaxStreak: maxStreak,
 	}
 
-	// Update max streak if needed
+	if lastDaily.Valid {
+		timeSince := now.Sub(lastDaily.Time)
+		if timeSince < 24*time.Hour {
+			info.CanClaim = false
+			info.NextDaily = lastDaily.Time.Add(24 * time.Hour)
+			return info, fmt.Errorf("daily not available yet")
+		}
+
+		if timeSince <= 48*time.Hour && currentStreak > 0 {
+			// Continue streak
+			info.Streak = currentStreak + 1
+		} else {
+			// Expired: reset streak to 1
+			info.Streak = 1
+			if currentStreak > 0 {
+				info.StreakReset = true
+			}
+		}
+	} else {
+		// First claim ever
+		info.Streak = 1
+	}
+
+	// Update max streak
 	if info.Streak > info.MaxStreak {
+		if info.MaxStreak > 0 {
+			info.IsNewRecord = true
+		}
 		info.MaxStreak = info.Streak
 	}
 
-	// Recalculate reward
-	info.Reward = (info.Streak + 1) * 100
-	if info.Reward > 5000 {
-		info.Reward = 5000
+	// Calculate reward for this streak
+	info.Reward = CalculateDailyReward(info.Streak)
+	info.CanClaim = false
+	info.NextDaily = now.Add(24 * time.Hour)
+
+	// Atomically add reward to balance and update daily streak/timestamps in single step
+	_, err = tx.Exec(`UPDATE users 
+		SET balance = balance + $1, 
+		    last_daily = $2, 
+		    daily_streak = $3, 
+		    max_daily_streak = $4 
+		WHERE id = $5`, info.Reward, now, info.Streak, info.MaxStreak, userID)
+	if err != nil {
+		return nil, err
 	}
 
-	// Update in database (balance initialized to 0 for new user, actual reward credited by caller AddCoins)
-	query := `INSERT INTO users (id, balance, last_daily, daily_streak, max_daily_streak) 
-			  VALUES ($1, 0, $2, $3, $4) 
-			  ON CONFLICT(id) DO UPDATE 
-			  SET last_daily = $2, daily_streak = $3, max_daily_streak = $4`
-	_, err := DB.Exec(query, userID, now, info.Streak, info.MaxStreak)
-	if err != nil {
-		return info, err
+	if err := tx.Commit(); err != nil {
+		return nil, err
 	}
 
 	return info, nil
