@@ -26,7 +26,15 @@ func CmdBet(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
 
 	switch game {
 	case "aviator":
-		games.StartAviatorText(s, m, amount)
+		var autoCashout float64
+		if len(args) >= 3 {
+			targetStr := strings.TrimSuffix(strings.ToLower(args[2]), "x")
+			targetStr = strings.Replace(targetStr, ",", ".", 1)
+			if parsed, err := strconv.ParseFloat(targetStr, 64); err == nil {
+				autoCashout = parsed
+			}
+		}
+		games.StartAviatorText(s, m, amount, autoCashout)
 	case "cups":
 		games.StartCupGameText(s, m, amount)
 	case "blackjack", "bj", "21":

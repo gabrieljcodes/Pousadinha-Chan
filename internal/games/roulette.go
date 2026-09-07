@@ -1,12 +1,13 @@
 package games
 
 import (
+	"crypto/rand"
+	"encoding/binary"
 	"estudocoin/internal/database"
 	"estudocoin/pkg/config"
 	"estudocoin/pkg/utils"
 	"fmt"
 	"log"
-	"math/rand"
 	"strings"
 	"sync"
 	"time"
@@ -15,12 +16,10 @@ import (
 )
 
 const (
-	MinRouletteBet  = 50
-	BetPhaseMinutes = 2 // Time before spin to place bets
+	MinRouletteBet = 50
 )
 
-// Roulette numbers with their colors
-// 0 = Green, Red/Black alternating
+// European roulette numbers with colors (0 = Green, 18 Red, 18 Black)
 var rouletteNumbers = []struct {
 	Number int
 	Color  string // "green", "red", "black"
@@ -36,10 +35,10 @@ type BetType string
 
 const (
 	BetNumber  BetType = "number"  // Straight up - 35:1
-	BetColor   BetType = "color"   // Red/Black - 1:1
+	BetColor   BetType = "color"   // Red/Black - 1:1 (0 loses)
 	BetEvenOdd BetType = "evenodd" // Even/Odd - 1:1 (0 loses)
-	BetHalf    BetType = "half"    // 1-18 / 19-36 - 1:1
-	BetDozen   BetType = "dozen"   // 1st 12, 2nd 12, 3rd 12 - 2:1
+	BetHalf    BetType = "half"    // 1-18 / 19-36 - 1:1 (0 loses)
+	BetDozen   BetType = "dozen"   // 1st 12, 2nd 12, 3rd 12 - 2:1 (0 loses)
 )
 
 type RouletteBet struct {
@@ -60,21 +59,39 @@ type RouletteRound struct {
 	mu        sync.RWMutex
 }
 
+type RouletteHistoryItem struct {
+	Number int
+	Color  string
+}
+
+type UserRoundStats struct {
+	TotalWagered int
+	TotalPayout  int
+	NetProfit    int
+}
+
 var (
 	currentRound    *RouletteRound
+	wheelMu      sync.RWMutex
 	rouletteSession *discordgo.Session
 	rouletteTicker  *time.Ticker
 	rouletteStop    chan bool
+	recentHistory   []RouletteHistoryItem
 )
 
+// spinWheelCrypto generates a uniform random number between 0 and 36 using crypto/rand
+func spinWheelCrypto() int {
+	var b [4]byte
+	_, _ = rand.Read(b[:])
+	return int(binary.LittleEndian.Uint32(b[:]) % 37)
+}
+
 func StartRoulette(s *discordgo.Session) {
-	// Check if roulette is enabled
 	if !config.Economy.RouletteEnabled {
 		log.Println("Roulette is disabled in configuration")
 		return
 	}
 
-	// Check if channel is configured
 	if config.Bot.RouletteChannelID == "" {
 		log.Println("Roulette channel ID not configured. Set 'roulette_channel_id' in config.json")
 		return
@@ -90,10 +107,8 @@ func StartRoulette(s *discordgo.Session) {
 
 	log.Printf("Starting Roulette with %d minute intervals in channel %s", interval, config.Bot.RouletteChannelID)
 
-	// Start first round immediately
 	startNewRound()
 
-	// Schedule next rounds
 	rouletteTicker = time.NewTicker(time.Duration(interval) * time.Minute)
 	go func() {
 		for {
@@ -116,6 +131,21 @@ func StopRoulette() {
 		close(rouletteStop)
 		rouletteTicker = nil
 	}
+
+	// Refund active round bets if the bot stops
+	wheelMu.Lock()
+	if currentRound != nil {
+		currentRound.mu.Lock()
+		if !currentRound.Spinning && len(currentRound.Bets) > 0 {
+			for _, bet := range currentRound.Bets {
+				_ = database.AddCoins(bet.UserID, bet.Amount)
+			}
+			log.Printf("Refunded %d bets on roulette shutdown", len(currentRound.Bets))
+			currentRound.Bets = nil
+		}
+		currentRound.mu.Unlock()
+	}
+	wheelMu.Unlock()
 }
 
 func startNewRound() {
@@ -132,52 +162,75 @@ func startNewRound() {
 		EndTime:   now.Add(time.Duration(interval) * time.Minute),
 	}
 
+	wheelMu.Lock()
 	currentRound = round
+	wheelMu.Unlock()
 
 	log.Printf("Starting new roulette round. Next spin at %s", round.EndTime.Format("15:04:05"))
 
-	// Post betting open message
 	postBettingOpenEmbed(round)
 }
 
 func spinRoulette() {
-	if currentRound == nil {
+	wheelMu.Lock()
+	round := currentRound
+	if round == nil {
+		wheelMu.Unlock()
 		log.Println("No active roulette round to spin")
 		return
 	}
 
-	currentRound.mu.Lock()
-	if currentRound.Spinning {
-		currentRound.mu.Unlock()
+	round.mu.Lock()
+	if round.Spinning {
+		round.mu.Unlock()
+		wheelMu.Unlock()
 		log.Println("Roulette already spinning")
 		return
 	}
-	currentRound.Spinning = true
-	currentRound.mu.Unlock()
+	round.Spinning = true
+	round.mu.Unlock()
+	wheelMu.Unlock()
 
-	// Generate result
-	rand.Seed(time.Now().UnixNano())
-	result := rand.Intn(37) // 0-36
-	currentRound.Result = result
-	currentRound.Color = rouletteNumbers[result].Color
+	result := spinWheelCrypto()
+	resultColor := rouletteNumbers[result].Color
 
-	log.Printf("Roulette result: %d (%s)", result, currentRound.Color)
+	round.mu.Lock()
+	round.Result = result
+	round.Color = resultColor
+	round.mu.Unlock()
 
-	// Process payouts
-	payouts := processPayouts(currentRound)
+	// Update recent history
+	wheelMu.Lock()
+	recentHistory = append([]RouletteHistoryItem{{Number: result, Color: resultColor}}, recentHistory...)
+	if len(recentHistory) > 5 {
+		recentHistory = recentHistory[:5]
+	}
+	wheelMu.Unlock()
 
-	// Post result
-	postResultEmbed(currentRound, payouts)
+	log.Printf("Roulette result: %d (%s)", result, resultColor)
+
+	userStats := processPayouts(round)
+	postResultEmbed(round, userStats)
 }
 
-func processPayouts(round *RouletteRound) map[string]int {
-	payouts := make(map[string]int)
+// calculatePayouts calculates total wagered, total payout, and net profit for each player
+func calculatePayouts(round *RouletteRound) map[string]*UserRoundStats {
+	stats := make(map[string]*UserRoundStats)
 	resultNum := round.Result
 	resultColor := round.Color
 
 	round.mu.RLock()
 	defer round.mu.RUnlock()
 
+	// Step 1: Accumulate total wagered per player
+	for _, bet := range round.Bets {
+		if _, exists := stats[bet.UserID]; !exists {
+			stats[bet.UserID] = &UserRoundStats{}
+		}
+		stats[bet.UserID].TotalWagered += bet.Amount
+	}
+
+	// Step 2: Compute winnings per bet
 	for _, bet := range round.Bets {
 		won := false
 		multiplier := 0
@@ -185,72 +238,94 @@ func processPayouts(round *RouletteRound) map[string]int {
 		switch bet.BetType {
 		case BetNumber:
 			betNum := 0
-			fmt.Sscanf(bet.Value, "%d", &betNum)
+			_, _ = fmt.Sscanf(bet.Value, "%d", &betNum)
 			if betNum == resultNum {
 				won = true
 				multiplier = 35
 			}
 		case BetColor:
-			if bet.Value == resultColor {
+			if resultNum != 0 && bet.Value == resultColor {
 				won = true
 				multiplier = 1
 			}
 		case BetEvenOdd:
-			if resultNum == 0 {
-				// 0 loses on even/odd bets
-				won = false
-			} else if bet.Value == "even" && resultNum%2 == 0 {
-				won = true
-				multiplier = 1
-			} else if bet.Value == "odd" && resultNum%2 == 1 {
-				won = true
-				multiplier = 1
+			if resultNum != 0 {
+				if bet.Value == "even" && resultNum%2 == 0 {
+					won = true
+					multiplier = 1
+				} else if bet.Value == "odd" && resultNum%2 == 1 {
+					won = true
+					multiplier = 1
+				}
 			}
 		case BetHalf:
-			if bet.Value == "1-18" && resultNum >= 1 && resultNum <= 18 {
-				won = true
-				multiplier = 1
-			} else if bet.Value == "19-36" && resultNum >= 19 && resultNum <= 36 {
-				won = true
-				multiplier = 1
+			if resultNum != 0 {
+				if bet.Value == "1-18" && resultNum >= 1 && resultNum <= 18 {
+					won = true
+					multiplier = 1
+				} else if bet.Value == "19-36" && resultNum >= 19 && resultNum <= 36 {
+					won = true
+					multiplier = 1
+				}
 			}
 		case BetDozen:
-			if bet.Value == "1st" && resultNum >= 1 && resultNum <= 12 {
-				won = true
-				multiplier = 2
-			} else if bet.Value == "2nd" && resultNum >= 13 && resultNum <= 24 {
-				won = true
-				multiplier = 2
-			} else if bet.Value == "3rd" && resultNum >= 25 && resultNum <= 36 {
-				won = true
-				multiplier = 2
+			if resultNum != 0 {
+				if bet.Value == "1st" && resultNum >= 1 && resultNum <= 12 {
+					won = true
+					multiplier = 2
+				} else if bet.Value == "2nd" && resultNum >= 13 && resultNum <= 24 {
+					won = true
+					multiplier = 2
+				} else if bet.Value == "3rd" && resultNum >= 25 && resultNum <= 36 {
+					won = true
+					multiplier = 2
+				}
 			}
 		}
 
 		if won {
 			winnings := bet.Amount + (bet.Amount * multiplier)
-			database.AddCoins(bet.UserID, winnings)
-			payouts[bet.UserID] += winnings - bet.Amount // Track net profit
+			stats[bet.UserID].TotalPayout += winnings
 		}
 	}
 
-	return payouts
+	// Step 3: Compute exact net profit
+	for _, s := range stats {
+		s.NetProfit = s.TotalPayout - s.TotalWagered
+	}
+
+	return stats
+}
+
+func processPayouts(round *RouletteRound) map[string]*UserRoundStats {
+	stats := calculatePayouts(round)
+
+	if database.DB != nil {
+		for userID, s := range stats {
+			if s.TotalPayout > 0 {
+				_ = database.AddCoins(userID, s.TotalPayout)
+			}
+		}
+	}
+
+	return stats
 }
 
 func PlaceRouletteBet(userID, username string, betType BetType, value string, amount int) (bool, string) {
-	if currentRound == nil {
-		return false, "No active roulette round."
-	}
+	wheelMu.RLock()
+	round := currentRound
+	wheelMu.RUnlock()
 
-	currentRound.mu.RLock()
-	if currentRound.Spinning {
-		currentRound.mu.RUnlock()
-		return false, "Too late! The wheel is already spinning."
+	if round == nil {
+		return false, "No active roulette round. The casino wheel may be initializing."
 	}
-	currentRound.mu.RUnlock()
 
 	if amount < MinRouletteBet {
 		return false, fmt.Sprintf("Minimum bet is %d %s", MinRouletteBet, config.Bot.CurrencySymbol)
+	}
+
+	if !isValidBet(betType, value) {
+		return false, "Invalid bet type or value. Use `!wheel` to see valid options."
 	}
 
 	balance := database.GetBalance(userID)
@@ -258,26 +333,24 @@ func PlaceRouletteBet(userID, username string, betType BetType, value string, am
 		return false, fmt.Sprintf("Insufficient balance! You have %d %s", balance, config.Bot.CurrencySymbol)
 	}
 
-	// Validate bet
-	if !isValidBet(betType, value) {
-		return false, "Invalid bet."
+	round.mu.Lock()
+	defer round.mu.Unlock()
+
+	if round.Spinning || time.Now().After(round.EndTime) {
+		return false, "Too late! The wheel is already spinning for this round."
 	}
 
-	// Deduct bet (goes to bot)
 	if err := database.CollectLostBet(userID, amount); err != nil {
-		return false, "Error placing bet."
+		return false, "Error deducting bet coins."
 	}
 
-	// Add to round
-	currentRound.mu.Lock()
-	currentRound.Bets = append(currentRound.Bets, RouletteBet{
+	round.Bets = append(round.Bets, RouletteBet{
 		UserID:   userID,
 		Username: username,
 		BetType:  betType,
 		Value:    value,
 		Amount:   amount,
 	})
-	currentRound.mu.Unlock()
 
 	return true, ""
 }
@@ -286,8 +359,8 @@ func isValidBet(betType BetType, value string) bool {
 	switch betType {
 	case BetNumber:
 		var num int
-		_, err := fmt.Sscanf(value, "%d", &num)
-		return err == nil && num >= 0 && num <= 36
+		n, err := fmt.Sscanf(value, "%d", &num)
+		return err == nil && n == 1 && num >= 0 && num <= 36
 	case BetColor:
 		return value == "red" || value == "black"
 	case BetEvenOdd:
@@ -300,26 +373,37 @@ func isValidBet(betType BetType, value string) bool {
 	return false
 }
 
+func formatRecentHistory() string {
+	wheelMu.RLock()
+	defer wheelMu.RUnlock()
+
+	if len(recentHistory) == 0 {
+		return "None yet"
+	}
+
+	var parts []string
+	for _, item := range recentHistory {
+		emoji := "🟢"
+		if item.Color == "red" {
+			emoji = "🔴"
+		} else if item.Color == "black" {
+			emoji = "⚫"
+		}
+		parts = append(parts, fmt.Sprintf("%s %d", emoji, item.Number))
+	}
+	return strings.Join(parts, "  |  ")
+}
+
 func postBettingOpenEmbed(round *RouletteRound) {
 	channelID := config.Bot.RouletteChannelID
-	if channelID == "" {
-		log.Println("No roulette channel configured, skipping betting open message")
+	if channelID == "" || rouletteSession == nil {
 		return
 	}
-
-	if rouletteSession == nil {
-		log.Println("Roulette session not initialized")
-		return
-	}
-
-	timeUntilSpin := round.EndTime.Sub(time.Now())
-	minutes := int(timeUntilSpin.Minutes())
-	seconds := int(timeUntilSpin.Seconds()) % 60
 
 	embed := &discordgo.MessageEmbed{
 		Title:       "🎰 ROULETTE - Betting Open!",
-		Description: fmt.Sprintf("Place your bets! The wheel spins in **%d minutes and %d seconds**.", minutes, seconds),
-		Color:       0x00FF00,
+		Description: fmt.Sprintf("Place your bets! The wheel spins <t:%d:R>.", round.EndTime.Unix()),
+		Color:       utils.ColorGreen,
 		Fields: []*discordgo.MessageEmbedField{
 			{
 				Name: "📋 Available Bets",
@@ -336,40 +420,36 @@ func postBettingOpenEmbed(round *RouletteRound) {
 				Inline: true,
 			},
 			{
-				Name:   "⏰ Next Spin",
-				Value:  fmt.Sprintf("<t:%d:R>", round.EndTime.Unix()),
+				Name:   "⏰ Spin Time",
+				Value:  fmt.Sprintf("<t:%d:T>", round.EndTime.Unix()),
 				Inline: true,
+			},
+			{
+				Name:   "📜 Recent Spins",
+				Value:  formatRecentHistory(),
+				Inline: false,
 			},
 		},
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: "🍀 Good luck!",
+			Text: "🍀 Use !wheel time to check countdown from any channel!",
 		},
 	}
 
 	_, err := rouletteSession.ChannelMessageSendEmbed(channelID, embed)
 	if err != nil {
 		log.Printf("Error sending roulette betting open message: %v", err)
-	} else {
-		log.Printf("Sent roulette betting open message to channel %s", channelID)
 	}
 }
 
-func postResultEmbed(round *RouletteRound, payouts map[string]int) {
+func postResultEmbed(round *RouletteRound, userStats map[string]*UserRoundStats) {
 	channelID := config.Bot.RouletteChannelID
-	if channelID == "" {
-		log.Println("No roulette channel configured, skipping result message")
-		return
-	}
-
-	if rouletteSession == nil {
-		log.Println("Roulette session not initialized")
+	if channelID == "" || rouletteSession == nil {
 		return
 	}
 
 	resultNum := round.Result
 	resultColor := round.Color
 
-	// Get emoji for number
 	emoji := "🟢"
 	if resultColor == "red" {
 		emoji = "🔴"
@@ -377,17 +457,23 @@ func postResultEmbed(round *RouletteRound, payouts map[string]int) {
 		emoji = "⚫"
 	}
 
-	// Build winners list
-	winnersList := "No winners this round."
-	if len(payouts) > 0 {
-		var sb strings.Builder
-		for userID, profit := range payouts {
-			sb.WriteString(fmt.Sprintf("<@%s>: +%d %s\n", userID, profit, config.Bot.CurrencySymbol))
+	// Build honest winners/participants list
+	var winnersSb strings.Builder
+	winnerCount := 0
+
+	for userID, stats := range userStats {
+		if stats.NetProfit > 0 {
+			winnerCount++
+			winnersSb.WriteString(fmt.Sprintf("• <@%s>: **+%d %s** *(Payout: %d %s, Bet: %d %s)*\n",
+				userID, stats.NetProfit, config.Bot.CurrencySymbol, stats.TotalPayout, config.Bot.CurrencySymbol, stats.TotalWagered, config.Bot.CurrencySymbol))
 		}
-		winnersList = sb.String()
 	}
 
-	// Get total bets
+	winnersList := "No winners this round."
+	if winnerCount > 0 {
+		winnersList = winnersSb.String()
+	}
+
 	round.mu.RLock()
 	totalBets := len(round.Bets)
 	totalAmount := 0
@@ -396,33 +482,36 @@ func postResultEmbed(round *RouletteRound, payouts map[string]int) {
 	}
 	round.mu.RUnlock()
 
-	color := 0xFFD700
+	color := 0x2ECC71 // Green
 	if resultColor == "red" {
-		color = 0xFF0000
+		color = 0xE74C3C // Red
 	} else if resultColor == "black" {
-		color = 0x000000
-	} else {
-		color = 0x00FF00
+		color = 0x34495E // Dark
 	}
 
 	embed := &discordgo.MessageEmbed{
 		Title:       "🎰 ROULETTE - Result!",
-		Description: fmt.Sprintf("# %s **%d**\n\nThe ball landed on **%s %d**!", emoji, resultNum, strings.ToUpper(resultColor), resultNum),
+		Description: fmt.Sprintf("# %s **%d (%s)**\n\nThe ball landed on **%s %d**!", emoji, resultNum, strings.ToUpper(resultColor), strings.ToUpper(resultColor), resultNum),
 		Color:       color,
 		Fields: []*discordgo.MessageEmbedField{
 			{
-				Name:   "🏆 Winners",
+				Name:   "🏆 Net Winners",
 				Value:  winnersList,
 				Inline: false,
 			},
 			{
 				Name:   "📊 Round Stats",
-				Value:  fmt.Sprintf("Total Bets: %d\nTotal Wagered: %d %s", totalBets, totalAmount, config.Bot.CurrencySymbol),
+				Value:  fmt.Sprintf("Total Bets: %d | Total Wagered: %d %s", totalBets, totalAmount, config.Bot.CurrencySymbol),
+				Inline: false,
+			},
+			{
+				Name:   "📜 Recent Spins",
+				Value:  formatRecentHistory(),
 				Inline: false,
 			},
 		},
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: "Next round starting soon...",
+			Text: "Next round starting shortly...",
 		},
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
@@ -430,57 +519,76 @@ func postResultEmbed(round *RouletteRound, payouts map[string]int) {
 	_, err := rouletteSession.ChannelMessageSendEmbed(channelID, embed)
 	if err != nil {
 		log.Printf("Error sending roulette result message: %v", err)
-	} else {
-		log.Printf("Sent roulette result message to channel %s", channelID)
 	}
 }
 
-func GetCurrentRoundInfo() (time.Time, bool) {
-	if currentRound == nil {
-		return time.Time{}, false
+func GetCurrentRoundInfo() (time.Time, bool, int, int) {
+	wheelMu.RLock()
+	round := currentRound
+	wheelMu.RUnlock()
+
+	if round == nil {
+		return time.Time{}, false, 0, 0
 	}
-	currentRound.mu.RLock()
-	defer currentRound.mu.RUnlock()
-	return currentRound.EndTime, !currentRound.Spinning
+
+	round.mu.RLock()
+	defer round.mu.RUnlock()
+
+	totalBets := len(round.Bets)
+	totalAmount := 0
+	for _, bet := range round.Bets {
+		totalAmount += bet.Amount
+	}
+
+	return round.EndTime, !round.Spinning, totalBets, totalAmount
 }
 
+// CmdRoulette processes text commands (!wheel and !roleta-cassino)
 func CmdRoulette(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
+	if len(args) == 0 {
+		sendRouletteHelp(s, m.ChannelID)
+		return
+	}
+
+	subCmd := strings.ToLower(args[0])
+
+	// Status / Time check (!wheel time, !wheel status, !wheel tempo)
+	if subCmd == "time" || subCmd == "status" || subCmd == "tempo" {
+		endTime, active, betsCount, totalAmount := GetCurrentRoundInfo()
+		if !active {
+			s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("Casino Roulette", "The wheel is currently spinning! Please wait for the next round."))
+			return
+		}
+
+		timeLeft := time.Until(endTime)
+		if timeLeft < 0 {
+			timeLeft = 0
+		}
+
+		embed := &discordgo.MessageEmbed{
+			Title: "🎰 Casino Roulette - Status",
+			Description: fmt.Sprintf("Next spin <t:%d:R> (<t:%d:T>).\n\n"+
+				"**Bets Placed:** %d\n"+
+				"**Total Wagered:** %d %s\n\n"+
+				"**Recent History:** %s",
+				endTime.Unix(), endTime.Unix(), betsCount, totalAmount, config.Bot.CurrencySymbol, formatRecentHistory()),
+			Color: utils.ColorGold,
+			Footer: &discordgo.MessageEmbedFooter{
+				Text: "Place your bets with !wheel <type> <amount>",
+			},
+		}
+		s.ChannelMessageSendEmbed(m.ChannelID, embed)
+		return
+	}
+
 	if len(args) < 2 {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("Roulette",
-			"Usage:\n"+
-				"`!wheel number <0-36> <amount>` - Bet on a specific number (35:1)\n"+
-				"`!wheel red <amount>` - Bet on red (1:1)\n"+
-				"`!wheel black <amount>` - Bet on black (1:1)\n"+
-				"`!wheel even <amount>` - Bet on even (1:1)\n"+
-				"`!wheel odd <amount>` - Bet on odd (1:1)\n"+
-				"`!wheel low <amount>` - Bet on 1-18 (1:1)\n"+
-				"`!wheel high <amount>` - Bet on 19-36 (1:1)\n"+
-				"`!wheel dozen <1st/2nd/3rd> <amount>` - Bet on dozen (2:1)\n\n"+
-				"Use `!wheel time` to see when the next spin is."))
+		sendRouletteHelp(s, m.ChannelID)
 		return
 	}
 
-	// Check if there's time left
-	endTime, active := GetCurrentRoundInfo()
-	if !active {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Betting is closed! The wheel is spinning."))
-		return
-	}
-
-	timeLeft := endTime.Sub(time.Now())
-	if timeLeft <= 0 {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Too late! Betting is closed for this round."))
-		return
-	}
-
-	betTypeStr := strings.ToLower(args[0])
-
-	// Special case: time command
-	if betTypeStr == "time" {
-		minutes := int(timeLeft.Minutes())
-		seconds := int(timeLeft.Seconds()) % 60
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("Roulette",
-			fmt.Sprintf("Next spin in **%d minutes and %d seconds**.", minutes, seconds)))
+	endTime, active, _, _ := GetCurrentRoundInfo()
+	if !active || time.Now().After(endTime) {
+		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Betting is currently closed! The wheel is spinning or resolving."))
 		return
 	}
 
@@ -489,41 +597,56 @@ func CmdRoulette(s *discordgo.Session, m *discordgo.MessageCreate, args []string
 	var amount int
 	var err error
 
-	switch betTypeStr {
-	case "number":
+	switch subCmd {
+	case "number", "numero":
 		if len(args) < 3 {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Usage: `!roulette number <0-36> <amount>`"))
+			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Usage: `!wheel number <0-36> <amount>`"))
 			return
 		}
 		betType = BetNumber
 		value = args[1]
 		amount, err = parseAmount(args[2])
-	case "red", "black":
+	case "red", "vermelho":
 		betType = BetColor
-		value = betTypeStr
+		value = "red"
 		amount, err = parseAmount(args[1])
-	case "even", "odd":
+	case "black", "preto":
+		betType = BetColor
+		value = "black"
+		amount, err = parseAmount(args[1])
+	case "even", "par":
 		betType = BetEvenOdd
-		value = betTypeStr
+		value = "even"
 		amount, err = parseAmount(args[1])
-	case "low":
+	case "odd", "impar", "ímpar":
+		betType = BetEvenOdd
+		value = "odd"
+		amount, err = parseAmount(args[1])
+	case "low", "baixo":
 		betType = BetHalf
 		value = "1-18"
 		amount, err = parseAmount(args[1])
-	case "high":
+	case "high", "alto":
 		betType = BetHalf
 		value = "19-36"
 		amount, err = parseAmount(args[1])
-	case "dozen":
+	case "dozen", "duzia", "dúzia":
 		if len(args) < 3 {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Usage: `!roulette dozen <1st/2nd/3rd> <amount>`"))
+			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Usage: `!wheel dozen <1st/2nd/3rd> <amount>`"))
 			return
 		}
 		betType = BetDozen
-		value = args[1]
+		value = strings.ToLower(args[1])
+		if value == "1" || value == "1a" {
+			value = "1st"
+		} else if value == "2" || value == "2a" {
+			value = "2nd"
+		} else if value == "3" || value == "3a" {
+			value = "3rd"
+		}
 		amount, err = parseAmount(args[2])
 	default:
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Invalid bet type. Use `!roulette` for help."))
+		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Invalid bet type. Use `!wheel` for available options."))
 		return
 	}
 
@@ -532,10 +655,6 @@ func CmdRoulette(s *discordgo.Session, m *discordgo.MessageCreate, args []string
 		return
 	}
 
-	// Debug log
-	balance := database.GetBalance(m.Author.ID)
-	log.Printf("[ROULETTE] User: %s (ID: %s), Balance: %d, Bet: %d", m.Author.Username, m.Author.ID, balance, amount)
-	
 	success, msg := PlaceRouletteBet(m.Author.ID, m.Author.Username, betType, value, amount)
 	if !success {
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(msg))
@@ -543,7 +662,18 @@ func CmdRoulette(s *discordgo.Session, m *discordgo.MessageCreate, args []string
 	}
 
 	s.ChannelMessageSendEmbed(m.ChannelID, utils.SuccessEmbed("Bet Placed!",
-		fmt.Sprintf("You bet **%d %s** on **%s**.", amount, config.Bot.CurrencySymbol, formatBet(betType, value))))
+		fmt.Sprintf("You bet **%d %s** on **%s**.\nNext spin: <t:%d:R>", amount, config.Bot.CurrencySymbol, formatBet(betType, value), endTime.Unix())))
+}
+
+func sendRouletteHelp(s *discordgo.Session, channelID string) {
+	s.ChannelMessageSendEmbed(channelID, utils.InfoEmbed("Casino Roulette (!wheel)",
+		"**Available Bets:**\n"+
+			"• `!wheel number <0-36> <amount>` - Straight up (**35:1**)\n"+
+			"• `!wheel red <amount>` / `!wheel black <amount>` - Colors (**1:1**)\n"+
+			"• `!wheel even <amount>` / `!wheel odd <amount>` - Even or Odd (**1:1**)\n"+
+			"• `!wheel low <amount>` (1-18) / `!wheel high <amount>` (19-36) - Halves (**1:1**)\n"+
+			"• `!wheel dozen <1st|2nd|3rd> <amount>` - Dozens (**2:1**)\n\n"+
+			"**Status:** Use `!wheel time` to check countdown and round stats."))
 }
 
 func parseAmount(s string) (int, error) {
@@ -557,14 +687,20 @@ func formatBet(betType BetType, value string) string {
 	case BetNumber:
 		return "number " + value
 	case BetColor:
-		return value
+		if value == "red" {
+			return "🔴 Red"
+		}
+		return "⚫ Black"
 	case BetEvenOdd:
-		return value
+		if value == "even" {
+			return "Even (Par)"
+		}
+		return "Odd (Ímpar)"
 	case BetHalf:
 		if value == "1-18" {
-			return "low (1-18)"
+			return "Low (1-18)"
 		}
-		return "high (19-36)"
+		return "High (19-36)"
 	case BetDozen:
 		return value + " dozen"
 	}

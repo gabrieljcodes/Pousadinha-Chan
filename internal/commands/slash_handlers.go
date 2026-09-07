@@ -60,10 +60,123 @@ func SlashHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		HandleSlashWebhook(s, i)
 	case "bet":
 		handleSlashBet(s, i)
+	case "slots":
+		handleSlashSlots(s, i)
+	case "wheel":
+		handleSlashWheel(s, i)
+	case "roulette":
+		handleSlashRoulette(s, i)
 	case "blackjack":
 		handleSlashBlackjack(s, i)
 	case "loan":
 		handleSlashLoan(s, i)
+	}
+}
+
+func handleSlashRoulette(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	options := i.ApplicationCommandData().Options
+	if len(options) == 0 {
+		return
+	}
+
+	subCmd := options[0].Name
+	if subCmd == "challenge" {
+		targetUser := options[0].Options[0].UserValue(s)
+		amount := int(options[0].Options[1].IntValue())
+		games.StartRussianRouletteInteraction(s, i, targetUser, amount)
+	}
+}
+
+func handleSlashWheel(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	options := i.ApplicationCommandData().Options
+	if len(options) == 0 {
+		return
+	}
+
+	subCmd := options[0].Name
+	if subCmd == "status" {
+		endTime, active, betsCount, totalAmount := games.GetCurrentRoundInfo()
+		if !active {
+			respondEmbed(s, i, utils.InfoEmbed("Casino Roulette", "The wheel is currently spinning! Please wait for the next round."))
+			return
+		}
+
+		embed := &discordgo.MessageEmbed{
+			Title: "🎰 Casino Roulette - Status",
+			Description: fmt.Sprintf("Next spin <t:%d:R> (<t:%d:T>).\n\n"+
+				"**Bets Placed:** %d\n"+
+				"**Total Wagered:** %d %s",
+				endTime.Unix(), endTime.Unix(), betsCount, totalAmount, config.Bot.CurrencySymbol),
+			Color: utils.ColorGold,
+			Footer: &discordgo.MessageEmbedFooter{
+				Text: "Place your bets with /wheel bet or !wheel <type> <amount>",
+			},
+		}
+		respondEmbed(s, i, embed)
+		return
+	}
+
+	if subCmd == "bet" {
+		betOptions := options[0].Options
+		betTypeChoice := ""
+		amount := 0
+		specificNumber := -1
+
+		for _, opt := range betOptions {
+			switch opt.Name {
+			case "type":
+				betTypeChoice = opt.StringValue()
+			case "amount":
+				amount = int(opt.IntValue())
+			case "number":
+				specificNumber = int(opt.IntValue())
+			}
+		}
+
+		var betType games.BetType
+		var value string
+
+		switch betTypeChoice {
+		case "number":
+			if specificNumber < 0 || specificNumber > 36 {
+				respondEmbed(s, i, utils.ErrorEmbed("Please provide a valid number between 0 and 36 for number bets!"))
+				return
+			}
+			betType = games.BetNumber
+			value = fmt.Sprintf("%d", specificNumber)
+		case "red", "black":
+			betType = games.BetColor
+			value = betTypeChoice
+		case "even", "odd":
+			betType = games.BetEvenOdd
+			value = betTypeChoice
+		case "low":
+			betType = games.BetHalf
+			value = "1-18"
+		case "high":
+			betType = games.BetHalf
+			value = "19-36"
+		case "1st", "2nd", "3rd":
+			betType = games.BetDozen
+			value = betTypeChoice
+		default:
+			respondEmbed(s, i, utils.ErrorEmbed("Invalid bet type."))
+			return
+		}
+
+		userID := i.Member.User.ID
+		username := i.Member.User.Username
+
+		success, msg := games.PlaceRouletteBet(userID, username, betType, value, amount)
+		if !success {
+			respondEmbed(s, i, utils.ErrorEmbed(msg))
+			return
+		}
+
+		endTime, _, _, _ := games.GetCurrentRoundInfo()
+		respondEmbed(s, i, utils.SuccessEmbed("Bet Placed!",
+			fmt.Sprintf("You bet **%d %s** on **%s**.\nNext spin: <t:%d:R>",
+				amount, config.Bot.CurrencySymbol, value, endTime.Unix())))
 	}
 }
 
@@ -74,11 +187,25 @@ func handleSlashBet(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	switch subCommand {
 	case "aviator":
 		amount := int(options[0].Options[0].IntValue())
-		games.StartAviatorInteraction(s, i, amount)
+		var autoCashout float64
+		if len(options[0].Options) > 1 {
+			autoCashout = options[0].Options[1].FloatValue()
+		}
+		games.StartAviatorInteraction(s, i, amount, autoCashout)
 	case "cups":
 		amount := int(options[0].Options[0].IntValue())
 		games.StartCupGameInteraction(s, i, amount)
+	case "slots":
+		amount := int(options[0].Options[0].IntValue())
+		games.StartSlotsInteraction(s, i, amount)
 	}
+}
+
+func handleSlashSlots(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	options := i.ApplicationCommandData().Options
+	bet := int(options[0].IntValue())
+
+	games.StartSlotsInteraction(s, i, bet)
 }
 
 func handleSlashBlackjack(s *discordgo.Session, i *discordgo.InteractionCreate) {

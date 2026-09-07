@@ -47,9 +47,9 @@ func getHelpSections() []HelpSection {
 			ID:    "gambling",
 			Name:  "Gambling",
 			Emoji: "🎲",
-			Value: "`!bet aviator <amount>` / `/bet aviator`\nPlay the Aviator crash game.\n*Watch out for turbulence!*\n\n" +
-				"`!bet cups <amount>` / `/bet cups`\nFind the hidden coin under 6 cups.\n*Win 5x, then 10x, 20x, 40x... or Cash Out!*\n\n" +
-				"`!bet blackjack <amount>` / `/blackjack`\nClassic Blackjack vs dealer.\n*Hit, Stand, Double, Insurance.*\n\n" +
+			Value: "`!bet aviator <amount> [auto]` / `/bet aviator`\nPlay the Aviator crash game.\n*Watch out for turbulence! Supports auto cash-out (e.g. 2.0x)*\n\n" +
+				"`!bet cups <amount>` / `/bet cups`\nFind the coin (6 cups in Round 1 for 5x, then 2 cups for Double or Nothing).\n*Cash out anytime!*\n\n" +
+				"`!bj <amount>` / `!bet bj <amount>` / `/blackjack`\nClassic Blackjack vs dealer (4-deck shoe).\n*Hit, Stand, Double, Insurance, Surrender.*\n\n" +
 				"`!bet slots <amount>` / `/slots`\nSpin the slot machine!\n*3 = Jackpot | 2 = Win | Up to 25x!*\n\n" +
 				"`!roulette @user <amount>`\nRussian Roulette PvP.\n*Survivor takes all!*",
 		},
@@ -69,12 +69,13 @@ func getHelpSections() []HelpSection {
 			ID:    "events",
 			Name:  "Event Betting",
 			Emoji: "🎯",
-			Value: "`!createevent <q> | <opt1> | <opt2> | <min>`\n*Admin only.* Create betting event.\n\n" +
-				"`!betevent <id> <opt_num> <amount>`\nPlace bet on event.\n\n" +
+			Value: "`!createevent <q> | <opt1> | <opt2> [| min]`\n*Admin only.* Create betting event.\n\n" +
+				"`!betevent <id> <opt_num> <amount>`\nPlace bet on event option.\n\n" +
 				"`!events` - List active events\n" +
 				"`!event <id>` - View event details\n" +
-				"`!closeevent <id>` - Close early\n" +
-				"`!result <id> <opt>` - Set winner\n\n" +
+				"`!closeevent <id>` - Close betting early\n" +
+				"`!result <id> <opt_num>` - Declare winner & payout\n" +
+				"`!cancelevent <id>` - Cancel event & refund all bets\n\n" +
 				"*Dynamic odds: less popular = higher payout!*",
 		},
 		{

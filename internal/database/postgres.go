@@ -204,6 +204,30 @@ func (p *PostgresDatabase) CreateTables() error {
 			channel_id TEXT,
 			guild_id TEXT
 		);`,
+		`CREATE TABLE IF NOT EXISTS betting_events (
+			id TEXT PRIMARY KEY,
+			guild_id TEXT NOT NULL,
+			channel_id TEXT NOT NULL,
+			message_id TEXT,
+			creator_id TEXT NOT NULL,
+			question TEXT NOT NULL,
+			options JSONB NOT NULL,
+			total_pool BIGINT DEFAULT 0,
+			status TEXT DEFAULT 'open',
+			winner_id TEXT,
+			end_time TIMESTAMPTZ NOT NULL,
+			created_at TIMESTAMPTZ DEFAULT NOW(),
+			resolved_at TIMESTAMPTZ
+		);`,
+		`CREATE TABLE IF NOT EXISTS event_bets (
+			id BIGSERIAL PRIMARY KEY,
+			event_id TEXT NOT NULL,
+			user_id TEXT NOT NULL,
+			username TEXT NOT NULL,
+			option_id TEXT NOT NULL,
+			amount BIGINT NOT NULL,
+			created_at TIMESTAMPTZ DEFAULT NOW()
+		);`,
 	}
 
 	for _, query := range createTableQueries {
@@ -248,6 +272,8 @@ func (p *PostgresDatabase) CreateTables() error {
 		`INSERT INTO users (id, balance) SELECT DISTINCT user_id, 0 FROM crypto_investments WHERE user_id NOT IN (SELECT id FROM users) ON CONFLICT (id) DO NOTHING;`,
 		`INSERT INTO users (id, balance) SELECT DISTINCT lender_id, 0 FROM loans WHERE lender_id NOT IN (SELECT id FROM users) ON CONFLICT (id) DO NOTHING;`,
 		`INSERT INTO users (id, balance) SELECT DISTINCT borrower_id, 0 FROM loans WHERE borrower_id NOT IN (SELECT id FROM users) ON CONFLICT (id) DO NOTHING;`,
+		`INSERT INTO users (id, balance) SELECT DISTINCT creator_id, 0 FROM betting_events WHERE creator_id NOT IN (SELECT id FROM users) ON CONFLICT (id) DO NOTHING;`,
+		`INSERT INTO users (id, balance) SELECT DISTINCT user_id, 0 FROM event_bets WHERE user_id NOT IN (SELECT id FROM users) ON CONFLICT (id) DO NOTHING;`,
 	}
 	for _, query := range healQueries {
 		_, _ = p.db.Exec(query)
@@ -271,6 +297,15 @@ func (p *PostgresDatabase) CreateTables() error {
 		END IF;
 		IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_loans_borrower') THEN
 			ALTER TABLE loans ADD CONSTRAINT fk_loans_borrower FOREIGN KEY (borrower_id) REFERENCES users(id) ON DELETE CASCADE;
+		END IF;
+		IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_betting_events_creator') THEN
+			ALTER TABLE betting_events ADD CONSTRAINT fk_betting_events_creator FOREIGN KEY (creator_id) REFERENCES users(id) ON DELETE CASCADE;
+		END IF;
+		IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_event_bets_event') THEN
+			ALTER TABLE event_bets ADD CONSTRAINT fk_event_bets_event FOREIGN KEY (event_id) REFERENCES betting_events(id) ON DELETE CASCADE;
+		END IF;
+		IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_event_bets_user') THEN
+			ALTER TABLE event_bets ADD CONSTRAINT fk_event_bets_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
 		END IF;
 	END $$;`
 	if _, err := p.db.Exec(fkBlock); err != nil {
@@ -296,6 +331,18 @@ func (p *PostgresDatabase) CreateTables() error {
 		IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_loans_total_owed') THEN
 			ALTER TABLE loans ADD CONSTRAINT chk_loans_total_owed CHECK (total_owed >= 0);
 		END IF;
+		IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_betting_events_total_pool') THEN
+			ALTER TABLE betting_events ADD CONSTRAINT chk_betting_events_total_pool CHECK (total_pool >= 0);
+		END IF;
+		IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_betting_events_status') THEN
+			ALTER TABLE betting_events ADD CONSTRAINT chk_betting_events_status CHECK (status IN ('open', 'closed', 'resolved', 'cancelled'));
+		END IF;
+		IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_event_bets_amount') THEN
+			ALTER TABLE event_bets ADD CONSTRAINT chk_event_bets_amount CHECK (amount > 0);
+		END IF;
+		IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uq_event_bets_user') THEN
+			ALTER TABLE event_bets ADD CONSTRAINT uq_event_bets_user UNIQUE (event_id, user_id);
+		END IF;
 	END $$;`
 	if _, err := p.db.Exec(chkBlock); err != nil {
 		log.Printf("Notice: check constraint configuration: %v", err)
@@ -309,6 +356,10 @@ func (p *PostgresDatabase) CreateTables() error {
 		`CREATE INDEX IF NOT EXISTS idx_loans_due_date_unpaid ON loans (due_date) WHERE paid = FALSE;`,
 		`CREATE INDEX IF NOT EXISTS idx_loans_borrower_unpaid ON loans (borrower_id) WHERE paid = FALSE;`,
 		`CREATE INDEX IF NOT EXISTS idx_loans_lender_id ON loans (lender_id);`,
+		`CREATE INDEX IF NOT EXISTS idx_betting_events_active ON betting_events (end_time) WHERE status IN ('open', 'closed');`,
+		`CREATE INDEX IF NOT EXISTS idx_betting_events_guild ON betting_events (guild_id);`,
+		`CREATE INDEX IF NOT EXISTS idx_event_bets_event_id ON event_bets (event_id);`,
+		`CREATE INDEX IF NOT EXISTS idx_event_bets_user_id ON event_bets (user_id);`,
 	}
 	for _, query := range indexQueries {
 		if _, err := p.db.Exec(query); err != nil {
@@ -324,6 +375,8 @@ func (p *PostgresDatabase) CreateTables() error {
 		`ALTER TABLE stock_investments ENABLE ROW LEVEL SECURITY;`,
 		`ALTER TABLE crypto_investments ENABLE ROW LEVEL SECURITY;`,
 		`ALTER TABLE loans ENABLE ROW LEVEL SECURITY;`,
+		`ALTER TABLE betting_events ENABLE ROW LEVEL SECURITY;`,
+		`ALTER TABLE event_bets ENABLE ROW LEVEL SECURITY;`,
 	}
 	for _, query := range rlsQueries {
 		if _, err := p.db.Exec(query); err != nil {
@@ -336,6 +389,12 @@ func (p *PostgresDatabase) CreateTables() error {
 	BEGIN
 		IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'stock_prices' AND policyname = 'allow_public_read_stock_prices') THEN
 			CREATE POLICY allow_public_read_stock_prices ON stock_prices FOR SELECT TO anon, authenticated USING (true);
+		END IF;
+		IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'betting_events' AND policyname = 'allow_public_read_betting_events') THEN
+			CREATE POLICY allow_public_read_betting_events ON betting_events FOR SELECT TO anon, authenticated USING (true);
+		END IF;
+		IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'event_bets' AND policyname = 'allow_public_read_event_bets') THEN
+			CREATE POLICY allow_public_read_event_bets ON event_bets FOR SELECT TO anon, authenticated USING (true);
 		END IF;
 		IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'users' AND policyname = 'service_role_all_users') THEN
 			CREATE POLICY service_role_all_users ON users FOR ALL TO service_role USING (true) WITH CHECK (true);
@@ -354,6 +413,12 @@ func (p *PostgresDatabase) CreateTables() error {
 		END IF;
 		IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'loans' AND policyname = 'service_role_all_loans') THEN
 			CREATE POLICY service_role_all_loans ON loans FOR ALL TO service_role USING (true) WITH CHECK (true);
+		END IF;
+		IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'betting_events' AND policyname = 'service_role_all_betting_events') THEN
+			CREATE POLICY service_role_all_betting_events ON betting_events FOR ALL TO service_role USING (true) WITH CHECK (true);
+		END IF;
+		IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'event_bets' AND policyname = 'service_role_all_event_bets') THEN
+			CREATE POLICY service_role_all_event_bets ON event_bets FOR ALL TO service_role USING (true) WITH CHECK (true);
 		END IF;
 	END $$;`
 	if _, err := p.db.Exec(rlsPolicyBlock); err != nil {

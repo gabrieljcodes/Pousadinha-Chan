@@ -196,6 +196,12 @@ var SlashCommands = []*discordgo.ApplicationCommand{
 						Required:    true,
 						MinValue:    &minAmount,
 					},
+					{
+						Type:        discordgo.ApplicationCommandOptionNumber,
+						Name:        "auto_cashout",
+						Description: "Optional target multiplier to automatically cash out (e.g. 2.0)",
+						Required:    false,
+					},
 				},
 			},
 			{
@@ -212,6 +218,33 @@ var SlashCommands = []*discordgo.ApplicationCommand{
 					},
 				},
 			},
+			{
+				Name:        "slots",
+				Description: "Play the Slot Machine",
+				Type:        discordgo.ApplicationCommandOptionSubCommand,
+				Options: []*discordgo.ApplicationCommandOption{
+					{
+						Type:        discordgo.ApplicationCommandOptionInteger,
+						Name:        "amount",
+						Description: "Amount to bet (Min 10)",
+						Required:    true,
+						MinValue:    ptr(float64(10)),
+					},
+				},
+			},
+		},
+	},
+	{
+		Name:        "slots",
+		Description: "Play the Slot Machine",
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Type:        discordgo.ApplicationCommandOptionInteger,
+				Name:        "amount",
+				Description: "Amount to bet (Min 10)",
+				Required:    true,
+				MinValue:    ptr(float64(10)),
+			},
 		},
 	},
 	{
@@ -224,6 +257,83 @@ var SlashCommands = []*discordgo.ApplicationCommand{
 				Description: "Amount to bet (Min 10)",
 				Required:    true,
 				MinValue:    ptr(float64(10)),
+			},
+		},
+	},
+	{
+		Name:        "wheel",
+		Description: "Casino European Roulette",
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Name:        "status",
+				Description: "Check time until next spin and active round stats",
+				Type:        discordgo.ApplicationCommandOptionSubCommand,
+			},
+			{
+				Name:        "bet",
+				Description: "Place a bet on the upcoming roulette spin",
+				Type:        discordgo.ApplicationCommandOptionSubCommand,
+				Options: []*discordgo.ApplicationCommandOption{
+					{
+						Type:        discordgo.ApplicationCommandOptionString,
+						Name:        "type",
+						Description: "Bet type (number, red, black, even, odd, low, high, dozen)",
+						Required:    true,
+						Choices: []*discordgo.ApplicationCommandOptionChoice{
+							{Name: "🔴 Red (1:1)", Value: "red"},
+							{Name: "⚫ Black (1:1)", Value: "black"},
+							{Name: "Even / Par (1:1)", Value: "even"},
+							{Name: "Odd / Ímpar (1:1)", Value: "odd"},
+							{Name: "Low 1-18 (1:1)", Value: "low"},
+							{Name: "High 19-36 (1:1)", Value: "high"},
+							{Name: "1st Dozen 1-12 (2:1)", Value: "1st"},
+							{Name: "2nd Dozen 13-24 (2:1)", Value: "2nd"},
+							{Name: "3rd Dozen 25-36 (2:1)", Value: "3rd"},
+							{Name: "Specific Number 0-36 (35:1)", Value: "number"},
+						},
+					},
+					{
+						Type:        discordgo.ApplicationCommandOptionInteger,
+						Name:        "amount",
+						Description: "Amount to bet (Min 50)",
+						Required:    true,
+						MinValue:    ptr(float64(50)),
+					},
+					{
+						Type:        discordgo.ApplicationCommandOptionInteger,
+						Name:        "number",
+						Description: "Number to bet on (0-36, only required if type is number)",
+						Required:    false,
+						MinValue:    ptr(float64(0)),
+						MaxValue:    36,
+					},
+				},
+			},
+		},
+	},
+	{
+		Name:        "roulette",
+		Description: "Russian Roulette PvP duel",
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Name:        "challenge",
+				Description: "Challenge another user to Russian Roulette (Winner takes all)",
+				Type:        discordgo.ApplicationCommandOptionSubCommand,
+				Options: []*discordgo.ApplicationCommandOption{
+					{
+						Type:        discordgo.ApplicationCommandOptionUser,
+						Name:        "user",
+						Description: "User to challenge",
+						Required:    true,
+					},
+					{
+						Type:        discordgo.ApplicationCommandOptionInteger,
+						Name:        "amount",
+						Description: "Amount to bet (Min 50)",
+						Required:    true,
+						MinValue:    ptr(float64(50)),
+					},
+				},
 			},
 		},
 	},

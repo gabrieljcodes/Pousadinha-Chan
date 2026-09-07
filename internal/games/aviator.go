@@ -1,94 +1,111 @@
 package games
 
 import (
+	"crypto/rand"
+	"encoding/binary"
 	"estudocoin/internal/database"
 	"estudocoin/pkg/config"
 	"estudocoin/pkg/utils"
 	"fmt"
 	"log"
-	"math/rand"
+	"math"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
 
-// Active games map: UserID -> Control Channel
+// Active games map: UserID -> AviatorSession
 var (
-	activeGames = make(map[string]chan bool)
-	mutex       sync.Mutex
+	activeAviatorGames = make(map[string]*AviatorSession)
+	aviatorMutex       sync.Mutex
 )
 
 // Constants
 const (
 	MinBet          = 100
-	MultiplierSpeed = 1000 * time.Millisecond
-	Increment       = 0.1
+	MultiplierSpeed = 1500 * time.Millisecond // Safe update interval preventing Discord 429 rate limits
 )
+
+type AviatorSession struct {
+	UserID      string
+	Bet         int
+	AutoCashout float64
+	StartTime   time.Time
+	CrashPoint  float64
+	ControlChan chan bool
+	DoneChan    chan struct{}
+	CashedOut   bool
+}
 
 type MessageUpdater func(embed *discordgo.MessageEmbed, finished bool)
 
 // --- INTERACTION (SLASH) START ---
 
-func StartAviatorInteraction(s *discordgo.Session, i *discordgo.InteractionCreate, bet int) {
+func StartAviatorInteraction(s *discordgo.Session, i *discordgo.InteractionCreate, bet int, autoCashout float64) {
 	userID := i.Member.User.ID
 
-	if !validatePreQueue(userID, bet) {
-		respondPrivate(s, i, utils.ErrorEmbed(fmt.Sprintf("Cannot queue game (Min bet: %d, Check balance/active games).", MinBet)))
+	if !validatePreGame(userID, bet) {
+		respondPrivate(s, i, utils.ErrorEmbed(fmt.Sprintf("Cannot start game. Min bet: **%d %s**, check your balance or finish your active game.", MinBet, config.Bot.CurrencySymbol)))
 		return
 	}
 
-	// Define the Job
+	if autoCashout > 0 && autoCashout < 1.05 {
+		respondPrivate(s, i, utils.ErrorEmbed("Auto cash-out multiplier must be at least **1.05x**."))
+		return
+	}
+
 	job := GameJob{
 		UserID: userID,
 		OnQueue: func(pos int) {
-			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{
-					Embeds: []*discordgo.MessageEmbed{utils.InfoEmbed("⏳ Queued", fmt.Sprintf("You are position **#%d** in the queue.", pos))},
-					Flags:  discordgo.MessageFlagsEphemeral,
-				},
-			})
+			if pos == -1 {
+				respondPrivate(s, i, utils.ErrorEmbed("You already have an active game in progress! Finish it first."))
+			}
 		},
 		Run: func(finishChan chan struct{}) {
-			// This runs when it's the user's turn
-			defer close(finishChan) // Signal manager when done
+			defer close(finishChan)
 
-			// Re-validate balance (user might have spent coins while waiting)
+			// Validate balance
 			if database.GetBalance(userID) < bet {
-				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-					Type: discordgo.InteractionResponseChannelMessageWithSource,
-					Data: &discordgo.InteractionResponseData{
-						Content: "You ran out of money while waiting in queue!",
-						Flags:   discordgo.MessageFlagsEphemeral,
-					},
-				})
+				respondPrivate(s, i, utils.ErrorEmbed("You ran out of coins before takeoff!"))
 				return
 			}
 
-			// Setup Game State
-			controlChan := setupGame(userID, bet)
-			embed, btn := getInitialState(bet, userID)
+			// Deduct bet atomically
+			if err := database.CollectLostBet(userID, bet); err != nil {
+				respondPrivate(s, i, utils.ErrorEmbed("Failed to deduct bet."))
+				return
+			}
 
-			// Try to Edit original response (if token valid) or Send New
-			// Interaction tokens last 15 mins. Queue might take longer? Unlikely for small bots.
-			// Ideally we send a NEW message for the game to be safe and visible.
-			
-			// Let's try sending a NEW message to the channel
+			session := setupGame(userID, bet, autoCashout)
+			embed, btn := getInitialState(bet, autoCashout, userID)
+
+			// Send game board message
 			msg, err := s.ChannelMessageSendComplex(i.ChannelID, &discordgo.MessageSend{
-				Content: fmt.Sprintf("<@%s> Your Aviator game is starting!", userID),
-				Embeds: []*discordgo.MessageEmbed{embed},
+				Content: fmt.Sprintf("<@%s> ✈️ Your Aviator flight is taking off!", userID),
+				Embeds:  []*discordgo.MessageEmbed{embed},
 				Components: []discordgo.MessageComponent{
 					discordgo.ActionsRow{Components: []discordgo.MessageComponent{btn}},
 				},
 			})
 
 			if err != nil {
+				// Refund immediately if message delivery failed
+				_ = database.AddCoins(userID, bet)
 				cleanup(userID)
 				return
 			}
 
-			// Updater for Slash Flow (updates the new message)
+			// Acknowledge the slash interaction so it doesn't time out
+			_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Content: fmt.Sprintf("Flight started in <#%s>!", i.ChannelID),
+					Flags:   discordgo.MessageFlagsEphemeral,
+				},
+			})
+
 			updater := func(embed *discordgo.MessageEmbed, finished bool) {
 				comps := []discordgo.MessageComponent{}
 				if !finished {
@@ -96,7 +113,7 @@ func StartAviatorInteraction(s *discordgo.Session, i *discordgo.InteractionCreat
 						discordgo.ActionsRow{Components: []discordgo.MessageComponent{btn}},
 					}
 				} else {
-					btn.Label = "GAME OVER"
+					btn.Label = "FLIGHT ENDED"
 					btn.Style = discordgo.SecondaryButton
 					btn.Disabled = true
 					comps = []discordgo.MessageComponent{
@@ -105,15 +122,15 @@ func StartAviatorInteraction(s *discordgo.Session, i *discordgo.InteractionCreat
 				}
 
 				embeds := []*discordgo.MessageEmbed{embed}
-				s.ChannelMessageEditComplex(&discordgo.MessageEdit{
-					ID: msg.ID,
-					Channel: i.ChannelID,
-					Embeds: &embeds,
+				_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
+					ID:         msg.ID,
+					Channel:    i.ChannelID,
+					Embeds:     &embeds,
 					Components: &comps,
 				})
 			}
 
-			runGameLoop(userID, bet, controlChan, updater)
+			runGameLoop(session, updater)
 		},
 	}
 
@@ -122,39 +139,54 @@ func StartAviatorInteraction(s *discordgo.Session, i *discordgo.InteractionCreat
 
 // --- TEXT COMMAND START ---
 
-func StartAviatorText(s *discordgo.Session, m *discordgo.MessageCreate, bet int) {
+func StartAviatorText(s *discordgo.Session, m *discordgo.MessageCreate, bet int, autoCashout float64) {
 	userID := m.Author.ID
 
-	if !validatePreQueue(userID, bet) {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(fmt.Sprintf("Cannot queue game (Min bet: %d, Check balance/active games).", MinBet)))
+	if !validatePreGame(userID, bet) {
+		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(fmt.Sprintf("Cannot start game. Min bet: **%d %s**, check your balance or finish your active game.", MinBet, config.Bot.CurrencySymbol)))
+		return
+	}
+
+	if autoCashout > 0 && autoCashout < 1.05 {
+		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Auto cash-out multiplier must be at least **1.05x**."))
 		return
 	}
 
 	job := GameJob{
 		UserID: userID,
 		OnQueue: func(pos int) {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("⏳ Queued", fmt.Sprintf("You are position **#%d** in the queue.", pos)))
+			if pos == -1 {
+				s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(fmt.Sprintf("<@%s> You already have an active game in progress!", userID)))
+			}
 		},
 		Run: func(finishChan chan struct{}) {
 			defer close(finishChan)
 
 			if database.GetBalance(userID) < bet {
-				s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(fmt.Sprintf("<@%s> You ran out of money while waiting.", userID)))
+				s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(fmt.Sprintf("<@%s> You don't have enough coins.", userID)))
 				return
 			}
 
-			controlChan := setupGame(userID, bet)
-			embed, btn := getInitialState(bet, userID)
+			// Deduct bet atomically
+			if err := database.CollectLostBet(userID, bet); err != nil {
+				s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Error deducting bet."))
+				return
+			}
+
+			session := setupGame(userID, bet, autoCashout)
+			embed, btn := getInitialState(bet, autoCashout, userID)
 
 			msg, err := s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
-				Content: fmt.Sprintf("<@%s> Your Aviator game is starting!", userID),
-				Embeds: []*discordgo.MessageEmbed{embed},
+				Content: fmt.Sprintf("<@%s> ✈️ Your Aviator flight is taking off!", userID),
+				Embeds:  []*discordgo.MessageEmbed{embed},
 				Components: []discordgo.MessageComponent{
 					discordgo.ActionsRow{Components: []discordgo.MessageComponent{btn}},
 				},
 			})
 
 			if err != nil {
+				// Refund immediately if message delivery failed
+				_ = database.AddCoins(userID, bet)
 				cleanup(userID)
 				return
 			}
@@ -166,52 +198,99 @@ func StartAviatorText(s *discordgo.Session, m *discordgo.MessageCreate, bet int)
 						discordgo.ActionsRow{Components: []discordgo.MessageComponent{btn}},
 					}
 				} else {
-					btn.Label = "GAME OVER"
+					btn.Label = "FLIGHT ENDED"
 					btn.Style = discordgo.SecondaryButton
 					btn.Disabled = true
 					comps = []discordgo.MessageComponent{
 						discordgo.ActionsRow{Components: []discordgo.MessageComponent{btn}},
 					}
 				}
-				
+
 				embeds := []*discordgo.MessageEmbed{embed}
-				s.ChannelMessageEditComplex(&discordgo.MessageEdit{
-					ID: msg.ID,
-					Channel: m.ChannelID,
-					Embeds: &embeds,
+				_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
+					ID:         msg.ID,
+					Channel:    m.ChannelID,
+					Embeds:     &embeds,
 					Components: &comps,
 				})
 			}
 
-			runGameLoop(userID, bet, controlChan, updater)
+			runGameLoop(session, updater)
 		},
 	}
 
 	Enqueue(job)
 }
 
-// --- HELPERS ---
+// --- CORE GAME HELPERS ---
 
-func validatePreQueue(userID string, bet int) bool {
-	// Simple checks before queuing
-	if bet < MinBet { return false }
-	if database.GetBalance(userID) < bet { return false }
+func validatePreGame(userID string, bet int) bool {
+	if bet < MinBet {
+		return false
+	}
+	if database.GetBalance(userID) < bet {
+		return false
+	}
+	if IsUserInGame(userID) {
+		return false
+	}
 	return true
 }
 
-func setupGame(userID string, bet int) chan bool {
-	mutex.Lock()
-	controlChan := make(chan bool, 1)
-	activeGames[userID] = controlChan
-	mutex.Unlock()
-	database.CollectLostBet(userID, bet)
-	return controlChan
+func setupGame(userID string, bet int, autoCashout float64) *AviatorSession {
+	session := &AviatorSession{
+		UserID:      userID,
+		Bet:         bet,
+		AutoCashout: autoCashout,
+		CrashPoint:  GenerateCrashPoint(),
+		ControlChan: make(chan bool, 1),
+		DoneChan:    make(chan struct{}),
+	}
+
+	aviatorMutex.Lock()
+	activeAviatorGames[userID] = session
+	aviatorMutex.Unlock()
+
+	return session
 }
 
-func getInitialState(bet int, userID string) (*discordgo.MessageEmbed, discordgo.Button) {
+// GenerateCrashPoint produces a fair crash point with standard 96% RTP / 4% house edge
+func GenerateCrashPoint() float64 {
+	var b [8]byte
+	_, _ = rand.Read(b[:])
+	r := float64(binary.LittleEndian.Uint64(b[:])%1000000) / 1000000.0
+
+	// 4% instant crash house edge
+	if r < 0.04 {
+		return 1.00
+	}
+
+	// Classic crash game probability curve
+	crash := 0.96 / (1.0 - r)
+	if crash < 1.00 {
+		crash = 1.00
+	}
+	if crash > 100.00 {
+		crash = 100.00
+	}
+	return math.Floor(crash*100) / 100
+}
+
+// CalculateMultiplier uses an exponential curve so multipliers climb smoothly without taking minutes
+func CalculateMultiplier(elapsedSeconds float64) float64 {
+	mult := math.Exp(0.06 * elapsedSeconds)
+	return math.Floor(mult*100) / 100
+}
+
+func getInitialState(bet int, autoCashout float64, userID string) (*discordgo.MessageEmbed, discordgo.Button) {
 	embed := utils.NewEmbed()
 	embed.Title = "✈️ Aviator Starting..."
-	embed.Description = fmt.Sprintf("Bet: **%d**\nPreparing for takeoff...", bet)
+
+	desc := fmt.Sprintf("Bet: **%d %s**\nPreparing for takeoff...", bet, config.Bot.CurrencySymbol)
+	if autoCashout > 1.0 {
+		desc += fmt.Sprintf("\nTarget Auto Cash-Out: **x%.2f**", autoCashout)
+	}
+	embed.Description = desc
 	embed.Color = utils.ColorBlue
 
 	btn := discordgo.Button{
@@ -222,108 +301,156 @@ func getInitialState(bet int, userID string) (*discordgo.MessageEmbed, discordgo
 	return embed, btn
 }
 
-func runGameLoop(userID string, bet int, controlChan chan bool, update MessageUpdater) {
-	defer cleanup(userID)
-
-	var crashPoint float64
-	if rand.Float64() < 0.40 {
-		crashPoint = 1.0 + (rand.Float64() * 0.5) 
-	} else {
-		r := rand.Float64()
-		crashPoint = 0.96 / (1.0 - r)
+func buildAltitudeGraph(multiplier float64) string {
+	dots := int((multiplier - 1.0) * 3)
+	if dots > 15 {
+		dots = 15
 	}
-	if crashPoint < 1.0 { crashPoint = 1.0 }
-	if crashPoint > 100.0 { crashPoint = 100.0 }
+	if dots < 1 {
+		dots = 1
+	}
+	return "🛫" + strings.Repeat("·", dots) + "✈️"
+}
 
-	startTime := time.Now()
-	ticker := time.NewTicker(1000 * time.Millisecond)
+func runGameLoop(session *AviatorSession, update MessageUpdater) {
+	defer cleanup(session.UserID)
+	defer close(session.DoneChan)
+
+	time.Sleep(800 * time.Millisecond)
+	session.StartTime = time.Now()
+
+	ticker := time.NewTicker(MultiplierSpeed)
 	defer ticker.Stop()
-
-	time.Sleep(1 * time.Second)
-	startTime = time.Now()
 
 	for {
 		select {
-		case <-controlChan:
-			elapsed := time.Since(startTime).Seconds()
-			multiplier := 1.0 + (elapsed * 0.1)
-			
-			if multiplier >= crashPoint {
-				update(utils.ErrorEmbed(fmt.Sprintf("💥 CRASHED at x%.2f", crashPoint)), true)
+		case <-session.ControlChan:
+			// Manual Cash Out
+			session.CashedOut = true
+			elapsed := time.Since(session.StartTime).Seconds()
+			multiplier := CalculateMultiplier(elapsed)
+
+			if multiplier >= session.CrashPoint {
+				update(utils.ErrorEmbed(fmt.Sprintf("💥 **CRASHED at x%.2f!**\nYou didn't jump in time and lost **%d %s**.", session.CrashPoint, session.Bet, config.Bot.CurrencySymbol)), true)
 				return
 			}
 
-			winAmount := int(float64(bet) * multiplier)
-			err := database.AddCoins(userID, winAmount)
-			if err != nil {
-				log.Printf("[AVIATOR ERROR] Failed to add coins for user %s: %v", userID, err)
-			}
-			log.Printf("[AVIATOR WIN] User %s won %d %s (bet: %d, multiplier: %.2f)", userID, winAmount, config.Bot.CurrencySymbol, bet, multiplier)
-			update(utils.SuccessEmbed("✅ CASHED OUT!", fmt.Sprintf("You jumped at **x%.2f**\nProfit: **+%d %s**", multiplier, winAmount, config.Bot.CurrencySymbol)), true)
+			totalPayout := int(float64(session.Bet) * multiplier)
+			netProfit := totalPayout - session.Bet
+			_ = database.AddCoins(session.UserID, totalPayout)
+
+			log.Printf("[AVIATOR WIN] User %s cashed out at x%.2f (bet: %d, payout: %d, profit: %d)",
+				session.UserID, multiplier, session.Bet, totalPayout, netProfit)
+
+			successDesc := fmt.Sprintf("You jumped at **x%.2f**!\n\n💰 **Total Payout:** %d %s\n📈 **Net Profit:** +%d %s",
+				multiplier, totalPayout, config.Bot.CurrencySymbol, netProfit, config.Bot.CurrencySymbol)
+			update(utils.SuccessEmbed("CASHED OUT!", successDesc), true)
 			return
 
 		case <-ticker.C:
-			elapsed := time.Since(startTime).Seconds()
-			multiplier := 1.0 + (elapsed * 0.1)
+			elapsed := time.Since(session.StartTime).Seconds()
+			multiplier := CalculateMultiplier(elapsed)
 
-			if multiplier >= crashPoint {
-				update(utils.ErrorEmbed(fmt.Sprintf("💥 CRASHED at x%.2f", crashPoint)), true)
+			// Check Auto Cash-Out
+			if session.AutoCashout > 1.0 && multiplier >= session.AutoCashout {
+				if session.AutoCashout <= session.CrashPoint {
+					session.CashedOut = true
+					multiplier = session.AutoCashout
+					totalPayout := int(float64(session.Bet) * multiplier)
+					netProfit := totalPayout - session.Bet
+					_ = database.AddCoins(session.UserID, totalPayout)
+
+					log.Printf("[AVIATOR AUTO-WIN] User %s auto-cashed out at x%.2f (bet: %d, payout: %d)",
+						session.UserID, multiplier, session.Bet, totalPayout)
+
+					successDesc := fmt.Sprintf("Auto Cash-Out triggered at **x%.2f**!\n\n💰 **Total Payout:** %d %s\n📈 **Net Profit:** +%d %s",
+						multiplier, totalPayout, config.Bot.CurrencySymbol, netProfit, config.Bot.CurrencySymbol)
+					update(utils.SuccessEmbed("AUTO CASH-OUT SUCCESS!", successDesc), true)
+					return
+				}
+			}
+
+			// Check Crash
+			if multiplier >= session.CrashPoint {
+				update(utils.ErrorEmbed(fmt.Sprintf("💥 **CRASHED at x%.2f!**\nYou lost **%d %s**.", session.CrashPoint, session.Bet, config.Bot.CurrencySymbol)), true)
 				return
 			}
-			
+
 			embed := utils.NewEmbed()
 			embed.Title = "✈️ Aviator Flying..."
-			embed.Description = fmt.Sprintf("Multiplier: **x%.2f**\nPotential Win: **%d**", multiplier, int(float64(bet)*multiplier))
+			potentialWin := int(float64(session.Bet) * multiplier)
+			potentialProfit := potentialWin - session.Bet
+
+			desc := fmt.Sprintf("Multiplier: **x%.2f**\nPotential Win: **%d %s** *(+%d profit)*",
+				multiplier, potentialWin, config.Bot.CurrencySymbol, potentialProfit)
+			if session.AutoCashout > 1.0 {
+				desc += fmt.Sprintf("\nAuto Cash-Out: **x%.2f**", session.AutoCashout)
+			}
+			embed.Description = desc
 			embed.Color = utils.ColorBlue
-			
-			dots := int(elapsed)
-			if dots > 15 { dots = 15 }
-			graph := "🛫" + string(repeatRune('.', dots)) + "✈️"
-			embed.Fields = []*discordgo.MessageEmbedField{{Name: "Altitude", Value: graph}}
-			
+
+			embed.Fields = []*discordgo.MessageEmbedField{
+				{Name: "Altitude", Value: buildAltitudeGraph(multiplier)},
+			}
+
 			update(embed, false)
 		}
 	}
 }
 
+// HandleButton handles clicking the Cash Out button
 func HandleButton(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	userID := i.Member.User.ID
-	mutex.Lock()
-	ch, exists := activeGames[userID]
-	mutex.Unlock()
+	customID := i.MessageComponentData().CustomID
+	expectedUserID := strings.TrimPrefix(customID, "aviator_stop_")
 
-	if !exists {
+	if i.Member.User.ID != expectedUserID {
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{Content: "⚠️ Inactive game.", Flags: discordgo.MessageFlagsEphemeral},
+			Data: &discordgo.InteractionResponseData{
+				Content: fmt.Sprintf("❌ This is not your flight! Only <@%s> can cash out.", expectedUserID),
+				Flags:   discordgo.MessageFlagsEphemeral,
+			},
 		})
 		return
 	}
 
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredMessageUpdate})
+	aviatorMutex.Lock()
+	session, exists := activeAviatorGames[expectedUserID]
+	aviatorMutex.Unlock()
+
+	if !exists || session.CashedOut {
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "⚠️ Flight already ended or not active.",
+				Flags:   discordgo.MessageFlagsEphemeral,
+			},
+		})
+		return
+	}
+
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredMessageUpdate,
+	})
 
 	select {
-	case ch <- true:
+	case session.ControlChan <- true:
 	default:
 	}
 }
 
 func cleanup(userID string) {
-	mutex.Lock()
-	delete(activeGames, userID)
-	mutex.Unlock()
+	aviatorMutex.Lock()
+	delete(activeAviatorGames, userID)
+	aviatorMutex.Unlock()
 }
 
 func respondPrivate(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) {
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{embed}, Flags: discordgo.MessageFlagsEphemeral},
+		Data: &discordgo.InteractionResponseData{
+			Embeds: []*discordgo.MessageEmbed{embed},
+			Flags:  discordgo.MessageFlagsEphemeral,
+		},
 	})
-}
-
-func repeatRune(r rune, n int) []rune {
-	if n > 15 { n = 15 }
-	b := make([]rune, n)
-	for i := range b { b[i] = r }
-	return b
 }

@@ -1,11 +1,12 @@
 package games
 
 import (
+	"crypto/rand"
+	"encoding/binary"
 	"estudocoin/internal/database"
 	"estudocoin/pkg/config"
 	"estudocoin/pkg/utils"
 	"fmt"
-	"math/rand"
 	"strconv"
 	"strings"
 	"sync"
@@ -22,249 +23,368 @@ var (
 	cupMutex       sync.Mutex
 )
 
+// pickWinningCup picks a winning cup with uniform cryptographically secure randomness
+func pickWinningCup(totalCups int) int {
+	var b [4]byte
+	_, _ = rand.Read(b[:])
+	return int(binary.LittleEndian.Uint32(b[:])%uint32(totalCups)) + 1
+}
+
 // --- ENTRY POINTS ---
 
 func StartCupGameInteraction(s *discordgo.Session, i *discordgo.InteractionCreate, bet int) {
-	startCupGame(s, i.Member.User.ID, bet, i.ChannelID, func(msg *discordgo.MessageSend) {
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Content:    msg.Content,
-				Embeds:     msg.Embeds,
-				Components: msg.Components,
-			},
-		})
-	})
-}
+	userID := i.Member.User.ID
 
-func StartCupGameText(s *discordgo.Session, m *discordgo.MessageCreate, bet int) {
-	startCupGame(s, m.Author.ID, bet, m.ChannelID, func(msg *discordgo.MessageSend) {
-		s.ChannelMessageSendComplex(m.ChannelID, msg)
-	})
-}
-
-// --- CORE LOGIC ---
-
-func startCupGame(s *discordgo.Session, userID string, bet int, channelID string, initialResponder func(*discordgo.MessageSend)) {
-	// Validation
 	if bet < MinCupBet {
-		// Use a simpler direct response for errors pre-queue
-		s.ChannelMessageSend(channelID, fmt.Sprintf("❌ Minimum bet is %d %s", MinCupBet, config.Bot.CurrencySymbol))
+		respondPrivate(s, i, utils.ErrorEmbed(fmt.Sprintf("Minimum bet is %d %s", MinCupBet, config.Bot.CurrencySymbol)))
 		return
 	}
 	if database.GetBalance(userID) < bet {
-		s.ChannelMessageSend(channelID, "❌ Insufficient funds.")
+		respondPrivate(s, i, utils.ErrorEmbed("Insufficient funds."))
+		return
+	}
+	if IsUserInGame(userID) {
+		respondPrivate(s, i, utils.ErrorEmbed("You already have an active game in progress! Finish it first."))
 		return
 	}
 
-	// Queue Job
 	job := GameJob{
 		UserID: userID,
 		OnQueue: func(pos int) {
-			s.ChannelMessageSend(channelID, fmt.Sprintf("⏳ <@%s> Queued for Cup Game (Pos: #%d)", userID, pos))
+			if pos == -1 {
+				respondPrivate(s, i, utils.ErrorEmbed("You already have an active game in progress! Finish it first."))
+			}
 		},
 		Run: func(finishChan chan struct{}) {
 			defer close(finishChan)
 			defer cleanupCup(userID)
 
-			// Re-check funds
 			if database.GetBalance(userID) < bet {
-				s.ChannelMessageSend(channelID, fmt.Sprintf("❌ <@%s> You ran out of funds while waiting.", userID))
+				respondPrivate(s, i, utils.ErrorEmbed("You ran out of funds before starting."))
 				return
 			}
 
-			// Deduct initial bet (goes to bot)
-			database.CollectLostBet(userID, bet)
+			// Deduct initial bet atomically
+			if err := database.CollectLostBet(userID, bet); err != nil {
+				respondPrivate(s, i, utils.ErrorEmbed("Error processing bet."))
+				return
+			}
 
-			// Setup Input Channel
-			gameChan := make(chan *discordgo.InteractionCreate) // Unbuffered block
-			cupMutex.Lock()
-			activeCupGames[userID] = gameChan
-			cupMutex.Unlock()
-
-			// Game State
-			currentPot := bet
-			round := 1
-			gameMsgID := ""
-
-			// --- ROUND LOOP ---
-			for {
-				winningCup := rand.Intn(6) + 1 // 1 to 6
-
-				// Prepare UI
-				embed := utils.NewEmbed()
-				embed.Title = fmt.Sprintf("🥤 Cup Game - Round %d", round)
-				embed.Description = fmt.Sprintf("Current Pot: **%d %s**\n\n**Guess where the coin is!**", currentPot, config.Bot.CurrencySymbol)
-			embed.Color = utils.ColorGold
-				
-				// Buttons 1-6
-			
-rows := []discordgo.MessageComponent{
-					discordgo.ActionsRow{Components: makeCupButtons(userID, 1, 3)},
-					discordgo.ActionsRow{Components: makeCupButtons(userID, 4, 6)},
-				}
-
-				// Send or Edit
-				msgSend := &discordgo.MessageSend{
+			embed, rows := buildCupRoundUI(1, bet, 6, userID)
+			err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
 					Content:    fmt.Sprintf("<@%s> It's your turn!", userID),
 					Embeds:     []*discordgo.MessageEmbed{embed},
 					Components: rows,
-				}
+				},
+			})
 
-				if round == 1 {
-					// Using the callback for the very first message might act differently depending on slash/text
-					// but for simplicity in the loop, we might want to just store the ID after the first send.
-					// However, the 'initialResponder' is abstract. 
-					// Let's just use ChannelMessageSendComplex for the loop updates, 
-					// and use initialResponder ONLY if we haven't sent a message yet?
-					// Actually, for Slash commands, we MUST use InteractionEdit after the first response.
-					// To simplify: The queue system already sends a "Starting" message. 
-					// Let's just send a NEW message for the game board to avoid complexity with ephemeral/slash tokens expiring.
-					
-					m, err := s.ChannelMessageSendComplex(channelID, msgSend)
-					if err != nil { return }
-					gameMsgID = m.ID
-				} else {
-					// Edit existing
-					embeds := msgSend.Embeds
-					s.ChannelMessageEditComplex(&discordgo.MessageEdit{
-						ID: gameMsgID,
-						Channel: channelID,
-						Embeds: &embeds,
-						Components: &msgSend.Components,
-					})
-				}
-
-				// Wait for Input
-				var choice int
-				select {
-				case interaction := <-gameChan:
-					// Parse choice from CustomID: cup_pick_X_USERID
-					parts := strings.Split(interaction.MessageComponentData().CustomID, "_")
-					if len(parts) >= 3 {
-						choice, _ = strconv.Atoi(parts[2])
-					}
-					// Acknowledge click
-					s.InteractionRespond(interaction.Interaction, &discordgo.InteractionResponse{
-						Type: discordgo.InteractionResponseDeferredMessageUpdate,
-					})
-				case <-time.After(2 * time.Minute):
-					// Timeout
-					s.ChannelMessageEdit(channelID, gameMsgID, "⏰ Game timed out. You lost your bet.")
-					return
-				}
-
-				// Check Result
-				if choice == winningCup {
-					// WIN - First round 5x, subsequent rounds 2x (5x, 10x, 20x, 40x...)
-					if round == 1 {
-						currentPot *= 5
-					} else {
-						currentPot *= 2
-					}
-					
-					// Ask to Continue
-					embed.Title = "✅ CORRECT!"
-					nextMultiplier := 2
-					if round == 1 {
-						nextMultiplier = 10
-					}
-					embed.Description = fmt.Sprintf("The coin was in **Cup %d**.\n\nYou have **%d %s**.\n\nDo you want to **Cash Out** or continue for **%dx**?", winningCup, currentPot, config.Bot.CurrencySymbol, nextMultiplier)
-					embed.Color = utils.ColorGreen
-
-					actionRow := discordgo.ActionsRow{
-						Components: []discordgo.MessageComponent{
-							discordgo.Button{
-								Label: "💰 Cash Out",
-								Style: discordgo.SuccessButton,
-								CustomID: fmt.Sprintf("cup_cashout_%s", userID),
-							},
-							discordgo.Button{
-								Label: func() string {
-								if round == 1 {
-									return "🎲 Continue (10x or Nothing)"
-								}
-								return "🎲 Continue (Double or Nothing)"
-							}(),
-								Style: discordgo.PrimaryButton,
-								CustomID: fmt.Sprintf("cup_continue_%s", userID),
-							},
-						},
-					}
-
-					embeds := []*discordgo.MessageEmbed{embed}
-					s.ChannelMessageEditComplex(&discordgo.MessageEdit{
-						ID: gameMsgID,
-						Channel: channelID,
-						Embeds: &embeds,
-						Components: &[]discordgo.MessageComponent{actionRow},
-					})
-
-					// Wait for Decision
-					select {
-					case interaction := <-gameChan:
-						id := interaction.MessageComponentData().CustomID
-						s.InteractionRespond(interaction.Interaction, &discordgo.InteractionResponse{
-							Type: discordgo.InteractionResponseDeferredMessageUpdate,
-						})
-
-						if strings.Contains(id, "cashout") {
-							// Cash Out
-							database.AddCoins(userID, currentPot)
-							s.ChannelMessageEdit(channelID, gameMsgID, fmt.Sprintf("🎉 **Congratulatios!**\n<@%s> walked away with **%d %s**!", userID, currentPot, config.Bot.CurrencySymbol))
-							return
-						}
-						// Continue -> Loop repeats with new round
-						round++
-
-					case <-time.After(1 * time.Minute):
-						// Auto Cashout on timeout
-						database.AddCoins(userID, currentPot)
-						s.ChannelMessageSend(channelID, fmt.Sprintf("⏰ Timeout. Auto-cashing out **%d %s**.", currentPot, config.Bot.CurrencySymbol))
-						return
-					}
-
-				} else {
-					// LOSE
-					embed.Title = "❌ WRONG!"
-					embed.Description = fmt.Sprintf("You picked Cup %d, but the coin was in **Cup %d**.\n\n📉 You lost **%d %s**.", choice, winningCup, bet, config.Bot.CurrencySymbol)
-					embed.Color = utils.ColorRed
-					
-					// Disable everything
-					embeds := []*discordgo.MessageEmbed{embed}
-					s.ChannelMessageEditComplex(&discordgo.MessageEdit{
-						ID: gameMsgID,
-						Channel: channelID,
-						Embeds: &embeds,
-						Components: &[]discordgo.MessageComponent{}, // No buttons
-					})
-					return
-				}
+			if err != nil {
+				// Refund immediately on failure
+				_ = database.AddCoins(userID, bet)
+				return
 			}
+
+			msg, err := s.InteractionResponse(i.Interaction)
+			if err != nil || msg == nil {
+				_ = database.AddCoins(userID, bet)
+				return
+			}
+
+			runCupGameLoop(s, userID, bet, i.ChannelID, msg.ID)
 		},
 	}
 
 	Enqueue(job)
 }
 
-// --- HELPERS ---
+func StartCupGameText(s *discordgo.Session, m *discordgo.MessageCreate, bet int) {
+	userID := m.Author.ID
 
-func HandleCupInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	userID := i.Member.User.ID
+	if bet < MinCupBet {
+		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(fmt.Sprintf("Minimum bet is %d %s", MinCupBet, config.Bot.CurrencySymbol)))
+		return
+	}
+	if database.GetBalance(userID) < bet {
+		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Insufficient funds."))
+		return
+	}
+	if IsUserInGame(userID) {
+		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("You already have an active game in progress! Finish it first."))
+		return
+	}
+
+	job := GameJob{
+		UserID: userID,
+		OnQueue: func(pos int) {
+			if pos == -1 {
+				s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("You already have an active game in progress! Finish it first."))
+			}
+		},
+		Run: func(finishChan chan struct{}) {
+			defer close(finishChan)
+			defer cleanupCup(userID)
+
+			if database.GetBalance(userID) < bet {
+				s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(fmt.Sprintf("<@%s> You ran out of funds.", userID)))
+				return
+			}
+
+			// Deduct initial bet atomically
+			if err := database.CollectLostBet(userID, bet); err != nil {
+				s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Error processing bet."))
+				return
+			}
+
+			embed, rows := buildCupRoundUI(1, bet, 6, userID)
+			msg, err := s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
+				Content:    fmt.Sprintf("<@%s> It's your turn!", userID),
+				Embeds:     []*discordgo.MessageEmbed{embed},
+				Components: rows,
+			})
+
+			if err != nil {
+				_ = database.AddCoins(userID, bet)
+				return
+			}
+
+			runCupGameLoop(s, userID, bet, m.ChannelID, msg.ID)
+		},
+	}
+
+	Enqueue(job)
+}
+
+// --- CORE GAME LOOP ---
+
+func buildCupRoundUI(round int, currentPot int, numCups int, userID string) (*discordgo.MessageEmbed, []discordgo.MessageComponent) {
+	embed := utils.NewEmbed()
+	embed.Title = fmt.Sprintf("🥤 Cup Game — Round %d", round)
+
+	multiplierText := "5x"
+	if round > 1 {
+		multiplierText = "2x (Double or Nothing)"
+	}
+
+	embed.Description = fmt.Sprintf(
+		"Current Pot: **%d %s**\nRound Multiplier: **%s**\n\n**Guess which cup contains the coin!** (1 to %d)",
+		currentPot, config.Bot.CurrencySymbol, multiplierText, numCups,
+	)
+	embed.Color = utils.ColorGold
+
+	var rows []discordgo.MessageComponent
+	if numCups == 6 {
+		rows = []discordgo.MessageComponent{
+			discordgo.ActionsRow{Components: makeCupButtons(userID, 1, 3)},
+			discordgo.ActionsRow{Components: makeCupButtons(userID, 4, 6)},
+		}
+	} else {
+		// 2 cups for authentic Double or Nothing rounds
+		rows = []discordgo.MessageComponent{
+			discordgo.ActionsRow{Components: makeCupButtons(userID, 1, 2)},
+		}
+	}
+
+	return embed, rows
+}
+
+func runCupGameLoop(s *discordgo.Session, userID string, bet int, channelID string, gameMsgID string) {
+	// Buffered channel to prevent dropped button clicks
+	gameChan := make(chan *discordgo.InteractionCreate, 2)
 	cupMutex.Lock()
-	ch, exists := activeCupGames[userID]
+	activeCupGames[userID] = gameChan
 	cupMutex.Unlock()
 
-	if !exists {
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+	currentPot := bet
+	round := 1
+
+	for {
+		// Round 1 has 6 cups (pays 5x); Round 2+ has 2 cups (true 50/50 Double or Nothing)
+		numCups := 6
+		if round > 1 {
+			numCups = 2
+		}
+
+		winningCup := pickWinningCup(numCups)
+
+		// Wait for player to pick a cup
+		var choice int
+		select {
+		case interaction := <-gameChan:
+			parts := strings.Split(interaction.MessageComponentData().CustomID, "_")
+			if len(parts) >= 3 {
+				choice, _ = strconv.Atoi(parts[2])
+			}
+			_ = s.InteractionRespond(interaction.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseDeferredMessageUpdate,
+			})
+
+		case <-time.After(2 * time.Minute):
+			// Timeout while guessing
+			timeoutEmbed := utils.ErrorEmbed(fmt.Sprintf("⏰ **Game Timed Out!**\n<@%s> took too long to pick a cup. Bet lost.", userID))
+			_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
+				ID:         gameMsgID,
+				Channel:    channelID,
+				Embeds:     &[]*discordgo.MessageEmbed{timeoutEmbed},
+				Components: &[]discordgo.MessageComponent{},
+			})
+			return
+		}
+
+		// Check if player picked the correct cup
+		if choice == winningCup {
+			// WIN: Round 1 pays 5x; subsequent Double or Nothing rounds double the pot (2x)
+			if round == 1 {
+				currentPot *= 5
+			} else {
+				currentPot *= 2
+			}
+
+			netProfit := currentPot - bet
+
+			// Ask to Cash Out or Continue
+			embed := utils.NewEmbed()
+			embed.Title = "✅ CORRECT!"
+			embed.Color = utils.ColorGreen
+
+			embed.Description = fmt.Sprintf(
+				"The coin was in **Cup %d**!\n\n"+
+					"💰 **Current Pot:** %d %s *(+%d profit)*\n\n"+
+					"Do you want to **Cash Out** now or **Continue** for Double or Nothing (50%% chance on 2 cups)?",
+				winningCup, currentPot, config.Bot.CurrencySymbol, netProfit,
+			)
+
+			actionRow := discordgo.ActionsRow{
+				Components: []discordgo.MessageComponent{
+					discordgo.Button{
+						Label:    "💰 Cash Out",
+						Style:    discordgo.SuccessButton,
+						CustomID: fmt.Sprintf("cup_cashout_%s", userID),
+					},
+					discordgo.Button{
+						Label:    "🎲 Continue (Double or Nothing)",
+						Style:    discordgo.PrimaryButton,
+						CustomID: fmt.Sprintf("cup_continue_%s", userID),
+					},
+				},
+			}
+
+			_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
+				ID:         gameMsgID,
+				Channel:    channelID,
+				Embeds:     &[]*discordgo.MessageEmbed{embed},
+				Components: &[]discordgo.MessageComponent{actionRow},
+			})
+
+			// Wait for Cash Out or Continue decision
+			select {
+			case interaction := <-gameChan:
+				id := interaction.MessageComponentData().CustomID
+				_ = s.InteractionRespond(interaction.Interaction, &discordgo.InteractionResponse{
+					Type: discordgo.InteractionResponseDeferredMessageUpdate,
+				})
+
+				if strings.Contains(id, "cashout") {
+					// Cash Out
+					_ = database.AddCoins(userID, currentPot)
+					winEmbed := utils.SuccessEmbed("CASHED OUT!",
+						fmt.Sprintf("🎉 **Congratulations!**\n<@%s> walked away with **%d %s**! *(Net Profit: +%d %s)*",
+							userID, currentPot, config.Bot.CurrencySymbol, netProfit, config.Bot.CurrencySymbol))
+
+					_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
+						ID:         gameMsgID,
+						Channel:    channelID,
+						Embeds:     &[]*discordgo.MessageEmbed{winEmbed},
+						Components: &[]discordgo.MessageComponent{},
+					})
+					return
+				}
+
+				// Continue to next round
+				round++
+				nextRoundEmbed, nextRows := buildCupRoundUI(round, currentPot, 2, userID)
+				_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
+					ID:         gameMsgID,
+					Channel:    channelID,
+					Embeds:     &[]*discordgo.MessageEmbed{nextRoundEmbed},
+					Components: &nextRows,
+				})
+
+			case <-time.After(1 * time.Minute):
+				// Auto Cashout on timeout
+				_ = database.AddCoins(userID, currentPot)
+				autoEmbed := utils.SuccessEmbed("AUTO CASH-OUT",
+					fmt.Sprintf("⏰ Time expired! Automatically cashed out **%d %s** for <@%s>.",
+						currentPot, config.Bot.CurrencySymbol, userID))
+
+				_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
+					ID:         gameMsgID,
+					Channel:    channelID,
+					Embeds:     &[]*discordgo.MessageEmbed{autoEmbed},
+					Components: &[]discordgo.MessageComponent{},
+				})
+				return
+			}
+
+		} else {
+			// LOSE
+			embed := utils.NewEmbed()
+			embed.Title = "❌ WRONG CUP!"
+			embed.Color = utils.ColorRed
+			embed.Description = fmt.Sprintf(
+				"You picked Cup %d, but the coin was hiding in **Cup %d**!\n\n📉 You lost your initial bet of **%d %s**.",
+				choice, winningCup, bet, config.Bot.CurrencySymbol,
+			)
+
+			_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
+				ID:         gameMsgID,
+				Channel:    channelID,
+				Embeds:     &[]*discordgo.MessageEmbed{embed},
+				Components: &[]discordgo.MessageComponent{},
+			})
+			return
+		}
+	}
+}
+
+// --- HELPERS ---
+
+// HandleCupInteraction validates that the user clicking is the owner of this game
+func HandleCupInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	customID := i.MessageComponentData().CustomID
+	parts := strings.Split(customID, "_")
+	if len(parts) < 3 {
+		return
+	}
+	expectedUserID := parts[len(parts)-1]
+
+	if i.Member.User.ID != expectedUserID {
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{Content: "⚠️ This is not your game.", Flags: discordgo.MessageFlagsEphemeral},
+			Data: &discordgo.InteractionResponseData{
+				Content: fmt.Sprintf("❌ This is not your game! Only <@%s> can make choices here.", expectedUserID),
+				Flags:   discordgo.MessageFlagsEphemeral,
+			},
 		})
 		return
 	}
 
-	// Send interaction to game loop
-	// Non-blocking try
+	cupMutex.Lock()
+	ch, exists := activeCupGames[expectedUserID]
+	cupMutex.Unlock()
+
+	if !exists {
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "⚠️ This game has already ended.",
+				Flags:   discordgo.MessageFlagsEphemeral,
+			},
+		})
+		return
+	}
+
 	select {
 	case ch <- i:
 	default:
@@ -281,7 +401,7 @@ func makeCupButtons(userID string, start, end int) []discordgo.MessageComponent 
 	btns := []discordgo.MessageComponent{}
 	for i := start; i <= end; i++ {
 		btns = append(btns, discordgo.Button{
-			Label:    fmt.Sprintf("%d", i),
+			Label:    fmt.Sprintf("Cup %d", i),
 			Style:    discordgo.SecondaryButton,
 			Emoji:    &discordgo.ComponentEmoji{Name: "🥤"},
 			CustomID: fmt.Sprintf("cup_pick_%d_%s", i, userID),

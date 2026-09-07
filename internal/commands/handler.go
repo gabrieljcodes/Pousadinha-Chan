@@ -48,6 +48,37 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		CmdBuy(s, m, args)
 	case "!bet", "!apostar":
 		CmdBet(s, m, args)
+	case "!bj", "!blackjack":
+		if len(args) == 0 {
+			s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("Blackjack",
+				"**Commands:**\n"+
+					"`!bj <amount>` - Start a new game\n"+
+					"`!bj hit` - Draw another card\n"+
+					"`!bj stand` - Keep your hand\n"+
+					"`!bj double` - Double bet, draw one card and stand\n"+
+					"`!bj insurance` - Buy insurance against dealer Ace\n"+
+					"`!bj surrender` - Surrender hand and recover 50% of bet"))
+			return
+		}
+		subCmd := strings.ToLower(args[0])
+		switch subCmd {
+		case "hit", "pedir":
+			games.HandleBlackjackTextAction(s, m, "hit")
+		case "stand", "parar", "ficar":
+			games.HandleBlackjackTextAction(s, m, "stand")
+		case "double", "dobrar":
+			games.HandleBlackjackTextAction(s, m, "double")
+		case "insurance", "seguro":
+			games.HandleBlackjackTextAction(s, m, "insurance")
+		case "surrender", "desistir":
+			games.HandleBlackjackTextAction(s, m, "surrender")
+		default:
+			if bet, err := strconv.Atoi(args[0]); err == nil && bet > 0 {
+				games.StartBlackjackText(s, m, bet)
+				return
+			}
+			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Invalid command. Use `!bj <amount>` or `!bj <hit|stand|double|insurance|surrender>`"))
+		}
 	case "!roulette", "!roleta":
 		games.CmdRussianRoulette(s, m, args)
 	case "!slots", "!slot":
@@ -80,6 +111,8 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		games.CmdViewEvent(s, m, args)
 	case "!closeevent":
 		games.CmdCloseEvent(s, m, args)
+	case "!cancelevent":
+		games.CmdCancelEvent(s, m, args)
 	case "!loan":
 		if len(args) < 1 {
 			s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("Loan System",
