@@ -69,6 +69,8 @@ func SlashHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		handleSlashRoulette(s, i)
 	case "blackjack":
 		handleSlashBlackjack(s, i)
+	case "mines":
+		handleSlashMines(s, i)
 	case "loan":
 		handleSlashLoan(s, i)
 	case "stock":
@@ -203,6 +205,13 @@ func handleSlashBet(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	case "slots":
 		amount := int(options[0].Options[0].IntValue())
 		games.StartSlotsInteraction(s, i, amount)
+	case "mines":
+		amount := int(options[0].Options[0].IntValue())
+		minesCount := games.MinesDefaultCount
+		if len(options[0].Options) > 1 {
+			minesCount = int(options[0].Options[1].IntValue())
+		}
+		games.StartMinesInteraction(s, i, amount, minesCount)
 	}
 }
 
@@ -218,6 +227,17 @@ func handleSlashBlackjack(s *discordgo.Session, i *discordgo.InteractionCreate) 
 	bet := int(options[0].IntValue())
 	
 	games.StartBlackjackGame(s, i, bet)
+}
+
+func handleSlashMines(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	options := i.ApplicationCommandData().Options
+	bet := int(options[0].IntValue())
+	minesCount := games.MinesDefaultCount
+	if len(options) > 1 {
+		minesCount = int(options[1].IntValue())
+	}
+
+	games.StartMinesInteraction(s, i, bet, minesCount)
 }
 
 func handleSlashDaily(s *discordgo.Session, i *discordgo.InteractionCreate) {

@@ -6,6 +6,7 @@ import (
 	"estudocoin/internal/stockmarket"
 	"estudocoin/pkg/config"
 	"estudocoin/pkg/utils"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -95,6 +96,27 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			return
 		}
 		games.StartSlotsText(s, m, amount)
+		return
+	case "!mines", "!mina", "!campo-minado":
+		if len(args) < 1 {
+			s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("💣 Mines (Campo Minado)", "Uso: `!mines <aposta> [minas]`\nExemplo: `!mines 100 3` (Padrão: 3 minas)"))
+			return
+		}
+		amount, err := strconv.Atoi(args[0])
+		if err != nil || amount <= 0 {
+			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Valor de aposta inválido."))
+			return
+		}
+		minesCount := games.MinesDefaultCount
+		if len(args) >= 2 {
+			if parsed, err := strconv.Atoi(args[1]); err == nil && parsed >= games.MinesMinCount && parsed <= games.MinesMaxCount {
+				minesCount = parsed
+			} else {
+				s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(fmt.Sprintf("Quantidade de minas inválida! Escolha entre %d e %d.", games.MinesMinCount, games.MinesMaxCount)))
+				return
+			}
+		}
+		games.StartMinesText(s, m, amount, minesCount)
 		return
 	case "!stock", "!mercado", "!market":
 		stockmarket.CmdStock(s, m, args)

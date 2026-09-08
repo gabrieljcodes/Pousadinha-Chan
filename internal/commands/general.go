@@ -49,7 +49,8 @@ func getHelpSections() []HelpSection {
 			Emoji: "🎲",
 			Value: "`!bet aviator <amount> [auto]` / `/bet aviator`\nPlay the Aviator crash game.\n*Watch out for turbulence! Supports auto cash-out (e.g. 2.0x)*\n\n" +
 				"`!bet cups <amount>` / `/bet cups`\nFind the coin (6 cups in Round 1 for 5x, then 2 cups for Double or Nothing).\n*Cash out anytime!*\n\n" +
-				"`!bj <amount>` / `!bet bj <amount>` / `/blackjack`\nClassic Blackjack vs dealer (4-deck shoe).\n*Hit, Stand, Double, Insurance, Surrender.*\n\n" +
+				"`!bj <amount>` / `!bet bj <amount>` / `/blackjack`\nClassic Blackjack vs dealer (4-deck shoe).\n*Hit, Stand, Double, Split, Insurance, Surrender.*\n\n" +
+				"`!mines <amount> [mines]` / `!bet mines <amount>` / `/mines`\n💣 Play Mines (Campo Minado)! Find diamonds, avoid bombs.\n*Cash out anytime!*\n\n" +
 				"`!bet slots <amount>` / `/slots`\nSpin the slot machine!\n*3 = Jackpot | 2 = Win | Up to 25x!*\n\n" +
 				"`!roulette @user <amount>`\nRussian Roulette PvP.\n*Survivor takes all!*",
 		},

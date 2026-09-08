@@ -276,6 +276,28 @@ var SlashCommands = []*discordgo.ApplicationCommand{
 					},
 				},
 			},
+			{
+				Name:        "mines",
+				Description: "Play the Mines casino game (Campo Minado)",
+				Type:        discordgo.ApplicationCommandOptionSubCommand,
+				Options: []*discordgo.ApplicationCommandOption{
+					{
+						Type:        discordgo.ApplicationCommandOptionInteger,
+						Name:        "amount",
+						Description: "Amount to bet (Min 10)",
+						Required:    true,
+						MinValue:    ptr(float64(10)),
+					},
+					{
+						Type:        discordgo.ApplicationCommandOptionInteger,
+						Name:        "mines",
+						Description: "Number of mines on the board (1 to 19, default 3)",
+						Required:    false,
+						MinValue:    ptr(float64(1)),
+						MaxValue:    float64(19),
+					},
+				},
+			},
 		},
 	},
 	{
@@ -301,6 +323,27 @@ var SlashCommands = []*discordgo.ApplicationCommand{
 				Description: "Amount to bet (Min 10)",
 				Required:    true,
 				MinValue:    ptr(float64(10)),
+			},
+		},
+	},
+	{
+		Name:        "mines",
+		Description: "Play the Mines casino game (Campo Minado)",
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Type:        discordgo.ApplicationCommandOptionInteger,
+				Name:        "bet",
+				Description: "Amount to bet (Min 10)",
+				Required:    true,
+				MinValue:    ptr(float64(10)),
+			},
+			{
+				Type:        discordgo.ApplicationCommandOptionInteger,
+				Name:        "mines",
+				Description: "Number of mines on the board (1 to 19, default 3)",
+				Required:    false,
+				MinValue:    ptr(float64(1)),
+				MaxValue:    float64(19),
 			},
 		},
 	},

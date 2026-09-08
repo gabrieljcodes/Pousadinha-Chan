@@ -11,7 +11,7 @@ import (
 
 func CmdBet(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
 	if len(args) < 2 {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("Gambling", "Usage: `!bet aviator <amount>`, `!bet cups <amount>`, `!bet blackjack <amount>`, `!bet slots <amount>`, or `!roulette @user <amount>`"))
+		s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("Gambling", "Usage: `!bet aviator <amount>`, `!bet cups <amount>`, `!bet blackjack <amount>`, `!bet slots <amount>`, `!bet mines <amount> [mines]`, or `!roulette @user <amount>`"))
 		return
 	}
 
@@ -41,7 +41,15 @@ func CmdBet(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
 		games.StartBlackjackText(s, m, amount)
 	case "slots", "slot":
 		games.StartSlotsText(s, m, amount)
+	case "mines", "mina", "minas":
+		minesCount := games.MinesDefaultCount
+		if len(args) >= 3 {
+			if parsed, err := strconv.Atoi(args[2]); err == nil && parsed >= games.MinesMinCount && parsed <= games.MinesMaxCount {
+				minesCount = parsed
+			}
+		}
+		games.StartMinesText(s, m, amount, minesCount)
 	default:
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Game not found. Try: `aviator`, `cups`, `blackjack`, `slots`, or use `!roulette @user <amount>`"))
+		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Game not found. Try: `aviator`, `cups`, `blackjack`, `slots`, `mines`, or use `!roulette @user <amount>`"))
 	}
 }
