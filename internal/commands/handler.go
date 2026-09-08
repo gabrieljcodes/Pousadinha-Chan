@@ -56,6 +56,7 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 					"`!bj hit` - Draw another card\n"+
 					"`!bj stand` - Keep your hand\n"+
 					"`!bj double` - Double bet, draw one card and stand\n"+
+					"`!bj split` - Split matching cards into two hands\n"+
 					"`!bj insurance` - Buy insurance against dealer Ace\n"+
 					"`!bj surrender` - Surrender hand and recover 50% of bet"))
 			return
@@ -68,6 +69,8 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			games.HandleBlackjackTextAction(s, m, "stand")
 		case "double", "dobrar":
 			games.HandleBlackjackTextAction(s, m, "double")
+		case "split", "dividir":
+			games.HandleBlackjackTextAction(s, m, "split")
 		case "insurance", "seguro":
 			games.HandleBlackjackTextAction(s, m, "insurance")
 		case "surrender", "desistir":
@@ -77,7 +80,7 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 				games.StartBlackjackText(s, m, bet)
 				return
 			}
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Invalid command. Use `!bj <amount>` or `!bj <hit|stand|double|insurance|surrender>`"))
+			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Invalid command. Use `!bj <amount>` or `!bj <hit|stand|double|split|insurance|surrender>`"))
 		}
 	case "!roulette", "!roleta":
 		games.CmdRussianRoulette(s, m, args)

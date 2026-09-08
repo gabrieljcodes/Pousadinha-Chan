@@ -27,19 +27,24 @@ type Hand struct {
 }
 
 type BlackjackGame struct {
-	UserID       string
-	Bet          int
-	PlayerHand   Hand
-	DealerHand   Hand
-	Deck         []Card
-	Status       string // "playing", "player_bust", "dealer_bust", "player_win", "dealer_win", "push", "blackjack", "surrender"
-	MessageID    string
-	ChannelID    string
-	Insurance    bool
-	InsuranceBet int
-	DoubledDown  bool
-	Timer        *time.Timer
-	mu           sync.Mutex
+	UserID           string
+	Bet              int
+	PlayerHand       Hand
+	SplitHand        Hand
+	IsSplit          bool
+	ActiveHand       int // 0 for PlayerHand, 1 for SplitHand
+	SplitBet         int
+	SplitDoubledDown bool
+	DealerHand       Hand
+	Deck             []Card
+	Status           string // "playing", "player_bust", "dealer_bust", "player_win", "dealer_win", "push", "blackjack", "surrender", "split_ended"
+	MessageID        string
+	ChannelID        string
+	Insurance        bool
+	InsuranceBet     int
+	DoubledDown      bool
+	Timer            *time.Timer
+	mu               sync.Mutex
 }
 
 var (
@@ -213,25 +218,27 @@ func StartBlackjackGame(s *discordgo.Session, i *discordgo.InteractionCreate, be
 	calculateScore(&game.DealerHand)
 
 	playerBJ := isBlackjack(game.PlayerHand)
-	dealerShowsAce := game.DealerHand.Cards[1].Value == "A"
 	dealerShowsTen := game.DealerHand.Cards[1].Score == 10
 	dealerBJ := isBlackjack(game.DealerHand)
 
-	// If dealer does not show an Ace, check for immediate resolution
-	if !dealerShowsAce {
-		if dealerShowsTen && dealerBJ {
-			if playerBJ {
-				game.Status = "push"
-			} else {
-				game.Status = "dealer_win"
-			}
-			game.settleInitialSlashEnd(s, i)
-			return
-		} else if playerBJ {
+	// Immediate resolution rules:
+	// 1. Natural Blackjack always resolves immediately:
+	//    - Push if dealer also has Blackjack
+	//    - 3:2 payout if dealer does not have Blackjack (never plays or pushes against non-BJ)
+	// 2. If dealer shows 10 and has Blackjack, dealer wins immediately.
+	// 3. If dealer shows Ace and player has no BJ, game continues to offer insurance.
+	if playerBJ {
+		if dealerBJ {
+			game.Status = "push"
+		} else {
 			game.Status = "blackjack"
-			game.settleInitialSlashEnd(s, i)
-			return
 		}
+		game.settleInitialSlashEnd(s, i)
+		return
+	} else if dealerShowsTen && dealerBJ {
+		game.Status = "dealer_win"
+		game.settleInitialSlashEnd(s, i)
+		return
 	}
 
 	// Store game and attach inactivity timer (2 minutes)
@@ -315,25 +322,27 @@ func StartBlackjackText(s *discordgo.Session, m *discordgo.MessageCreate, bet in
 	calculateScore(&game.DealerHand)
 
 	playerBJ := isBlackjack(game.PlayerHand)
-	dealerShowsAce := game.DealerHand.Cards[1].Value == "A"
 	dealerShowsTen := game.DealerHand.Cards[1].Score == 10
 	dealerBJ := isBlackjack(game.DealerHand)
 
-	// If dealer does not show an Ace, check for immediate resolution
-	if !dealerShowsAce {
-		if dealerShowsTen && dealerBJ {
-			if playerBJ {
-				game.Status = "push"
-			} else {
-				game.Status = "dealer_win"
-			}
-			game.endGameText(s, m.ChannelID)
-			return
-		} else if playerBJ {
+	// Immediate resolution rules:
+	// 1. Natural Blackjack always resolves immediately:
+	//    - Push if dealer also has Blackjack
+	//    - 3:2 payout if dealer does not have Blackjack (never plays or pushes against non-BJ)
+	// 2. If dealer shows 10 and has Blackjack, dealer wins immediately.
+	// 3. If dealer shows Ace and player has no BJ, game continues to offer insurance.
+	if playerBJ {
+		if dealerBJ {
+			game.Status = "push"
+		} else {
 			game.Status = "blackjack"
-			game.endGameText(s, m.ChannelID)
-			return
 		}
+		game.endGameText(s, m.ChannelID)
+		return
+	} else if dealerShowsTen && dealerBJ {
+		game.Status = "dealer_win"
+		game.endGameText(s, m.ChannelID)
+		return
 	}
 
 	// Store game and attach inactivity timer (2 minutes)
@@ -392,7 +401,15 @@ func (g *BlackjackGame) handleInactivityTimeout(s *discordgo.Session) {
 	}
 
 	// Auto-stand
-	g.playDealer()
+	if g.IsSplit {
+		if g.PlayerHand.Score > 21 && g.SplitHand.Score > 21 {
+			g.Status = "split_ended"
+		} else {
+			g.playDealer()
+		}
+	} else {
+		g.playDealer()
+	}
 	embed := g.buildGameOverEmbed()
 	channelID := g.ChannelID
 	messageID := g.MessageID
@@ -441,32 +458,79 @@ func (g *BlackjackGame) createGameEmbed(showDealer bool) *discordgo.MessageEmbed
 	}
 
 	totalBetStr := fmt.Sprintf("%d %s", g.Bet, config.Bot.CurrencySymbol)
+	if g.IsSplit {
+		totalBetStr = fmt.Sprintf("%d %s (%d + %d)", g.Bet+g.SplitBet, config.Bot.CurrencySymbol, g.Bet, g.SplitBet)
+	}
 	if g.Insurance {
 		totalBetStr += fmt.Sprintf(" *(+ %d %s insurance)*", g.InsuranceBet, config.Bot.CurrencySymbol)
 	}
 
+	var fields []*discordgo.MessageEmbedField
+	fields = append(fields, &discordgo.MessageEmbedField{
+		Name:   "💰 Bet",
+		Value:  totalBetStr,
+		Inline: true,
+	})
+	fields = append(fields, &discordgo.MessageEmbedField{
+		Name:   "🎰 Dealer's Hand",
+		Value:  fmt.Sprintf("%s\nScore: **%s**", formatHand(g.DealerHand, !showDealer), dealerScore),
+		Inline: false,
+	})
+
+	if g.IsSplit {
+		h1Tag := ""
+		h2Tag := ""
+		if g.ActiveHand == 0 {
+			h1Tag = " 🎯 **[ACTIVE]**"
+		} else {
+			h2Tag = " 🎯 **[ACTIVE]**"
+		}
+
+		h1Val := fmt.Sprintf("%s\nScore: **%d**", formatHand(g.PlayerHand, false), g.PlayerHand.Score)
+		if g.PlayerHand.Score > 21 {
+			h1Val += " *(Bust)*"
+		}
+		if g.DoubledDown {
+			h1Val += " *(Doubled)*"
+		}
+
+		h2Val := fmt.Sprintf("%s\nScore: **%d**", formatHand(g.SplitHand, false), g.SplitHand.Score)
+		if g.SplitHand.Score > 21 {
+			h2Val += " *(Bust)*"
+		}
+		if g.SplitDoubledDown {
+			h2Val += " *(Doubled)*"
+		}
+
+		fields = append(fields, &discordgo.MessageEmbedField{
+			Name:   fmt.Sprintf("🎴 Hand 1%s", h1Tag),
+			Value:  h1Val,
+			Inline: true,
+		})
+		fields = append(fields, &discordgo.MessageEmbedField{
+			Name:   fmt.Sprintf("🎴 Hand 2%s", h2Tag),
+			Value:  h2Val,
+			Inline: true,
+		})
+	} else {
+		fields = append(fields, &discordgo.MessageEmbedField{
+			Name:   "🎴 Your Hand",
+			Value:  fmt.Sprintf("%s\nScore: **%d**", formatHand(g.PlayerHand, false), g.PlayerHand.Score),
+			Inline: false,
+		})
+	}
+
+	footerText := "Choose your action • Timeout in 2 min"
+	if g.IsSplit {
+		footerText = fmt.Sprintf("Playing Hand %d • Timeout in 2 min", g.ActiveHand+1)
+	}
+
 	embed := &discordgo.MessageEmbed{
-		Title: "🃏 Blackjack",
-		Color: 0x2F3136,
-		Fields: []*discordgo.MessageEmbedField{
-			{
-				Name:   "💰 Bet",
-				Value:  totalBetStr,
-				Inline: true,
-			},
-			{
-				Name:   "🎰 Dealer's Hand",
-				Value:  fmt.Sprintf("%s\nScore: **%s**", formatHand(g.DealerHand, !showDealer), dealerScore),
-				Inline: false,
-			},
-			{
-				Name:   "🎴 Your Hand",
-				Value:  fmt.Sprintf("%s\nScore: **%d**", formatHand(g.PlayerHand, false), g.PlayerHand.Score),
-				Inline: false,
-			},
-		},
+		Title:  "🃏 Blackjack",
+		Color:  0x2F3136,
+		Fields: fields,
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: "Choose your action • Timeout in 2 min",
+			Text: footerText,
 		},
 	}
 
@@ -490,6 +554,38 @@ func (g *BlackjackGame) createActionButtons() []discordgo.MessageComponent {
 		},
 	}
 
+	if g.IsSplit {
+		var activeHand Hand
+		doubled := false
+		betAmount := g.Bet
+		if g.ActiveHand == 0 {
+			activeHand = g.PlayerHand
+			doubled = g.DoubledDown
+		} else {
+			activeHand = g.SplitHand
+			doubled = g.SplitDoubledDown
+			betAmount = g.SplitBet
+		}
+
+		if len(activeHand.Cards) == 2 && !doubled {
+			balance := database.GetBalance(g.UserID)
+			if balance >= betAmount {
+				buttons = append(buttons, discordgo.Button{
+					Label:    "Double Down",
+					Style:    discordgo.SecondaryButton,
+					CustomID: fmt.Sprintf("bj_double_%s", g.UserID),
+					Emoji:    &discordgo.ComponentEmoji{Name: "💎"},
+				})
+			}
+		}
+
+		return []discordgo.MessageComponent{
+			discordgo.ActionsRow{
+				Components: buttons,
+			},
+		}
+	}
+
 	// Only allow double down on first two cards
 	if len(g.PlayerHand.Cards) == 2 && !g.DoubledDown {
 		balance := database.GetBalance(g.UserID)
@@ -500,6 +596,23 @@ func (g *BlackjackGame) createActionButtons() []discordgo.MessageComponent {
 				CustomID: fmt.Sprintf("bj_double_%s", g.UserID),
 				Emoji:    &discordgo.ComponentEmoji{Name: "💎"},
 			})
+		}
+	}
+
+	// Offer split if opening two cards match in value or score
+	if len(g.PlayerHand.Cards) == 2 && !g.DoubledDown && !g.Insurance {
+		c0 := g.PlayerHand.Cards[0]
+		c1 := g.PlayerHand.Cards[1]
+		if c0.Value == c1.Value || c0.Score == c1.Score {
+			balance := database.GetBalance(g.UserID)
+			if balance >= g.Bet {
+				buttons = append(buttons, discordgo.Button{
+					Label:    "Split",
+					Style:    discordgo.SecondaryButton,
+					CustomID: fmt.Sprintf("bj_split_%s", g.UserID),
+					Emoji:    &discordgo.ComponentEmoji{Name: "🔀"},
+				})
+			}
 		}
 	}
 
@@ -573,7 +686,7 @@ func HandleBlackjackHit(s *discordgo.Session, i *discordgo.InteractionCreate, us
 	defer game.mu.Unlock()
 
 	// If player skips insurance when dealer shows Ace, peek dealer BJ first
-	if len(game.PlayerHand.Cards) == 2 && game.DealerHand.Cards[1].Value == "A" && !game.Insurance {
+	if len(game.PlayerHand.Cards) == 2 && game.DealerHand.Cards[1].Value == "A" && !game.Insurance && !game.IsSplit {
 		if game.checkDealerBlackjackOnAction() {
 			game.stopTimer()
 			game.endGameInteraction(s, i)
@@ -582,6 +695,44 @@ func HandleBlackjackHit(s *discordgo.Session, i *discordgo.InteractionCreate, us
 	}
 
 	game.resetTimer(s)
+
+	if game.IsSplit {
+		if game.ActiveHand == 0 {
+			card := game.dealCard()
+			game.PlayerHand.Cards = append(game.PlayerHand.Cards, card)
+			calculateScore(&game.PlayerHand)
+			if game.PlayerHand.Score >= 21 {
+				// Hand 1 done (bust or 21), switch to Hand 2
+				game.ActiveHand = 1
+			}
+		} else {
+			card := game.dealCard()
+			game.SplitHand.Cards = append(game.SplitHand.Cards, card)
+			calculateScore(&game.SplitHand)
+			if game.SplitHand.Score >= 21 {
+				// Hand 2 done! Both hands completed.
+				game.stopTimer()
+				if game.PlayerHand.Score > 21 && game.SplitHand.Score > 21 {
+					game.Status = "split_ended"
+				} else {
+					game.playDealer()
+				}
+				game.endGameInteraction(s, i)
+				return
+			}
+		}
+
+		embed := game.createGameEmbed(false)
+		components := game.createActionButtons()
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseUpdateMessage,
+			Data: &discordgo.InteractionResponseData{
+				Embeds:     []*discordgo.MessageEmbed{embed},
+				Components: components,
+			},
+		})
+		return
+	}
 
 	// Deal card to player
 	card := game.dealCard()
@@ -634,15 +785,44 @@ func HandleBlackjackStand(s *discordgo.Session, i *discordgo.InteractionCreate, 
 	game.mu.Lock()
 	defer game.mu.Unlock()
 
-	game.stopTimer()
-
 	// If dealer shows Ace and player skipped insurance, check dealer BJ
-	if len(game.PlayerHand.Cards) == 2 && game.DealerHand.Cards[1].Value == "A" && !game.Insurance {
+	if len(game.PlayerHand.Cards) == 2 && game.DealerHand.Cards[1].Value == "A" && !game.Insurance && !game.IsSplit {
 		if game.checkDealerBlackjackOnAction() {
+			game.stopTimer()
 			game.endGameInteraction(s, i)
 			return
 		}
 	}
+
+	if game.IsSplit {
+		if game.ActiveHand == 0 {
+			// Hand 1 stands, switch to Hand 2
+			game.ActiveHand = 1
+			game.resetTimer(s)
+			embed := game.createGameEmbed(false)
+			components := game.createActionButtons()
+			_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseUpdateMessage,
+				Data: &discordgo.InteractionResponseData{
+					Embeds:     []*discordgo.MessageEmbed{embed},
+					Components: components,
+				},
+			})
+			return
+		} else {
+			// Hand 2 stands! Both done.
+			game.stopTimer()
+			if game.PlayerHand.Score > 21 && game.SplitHand.Score > 21 {
+				game.Status = "split_ended"
+			} else {
+				game.playDealer()
+			}
+			game.endGameInteraction(s, i)
+			return
+		}
+	}
+
+	game.stopTimer()
 
 	// Dealer plays
 	game.playDealer()
@@ -674,6 +854,74 @@ func HandleBlackjackDouble(s *discordgo.Session, i *discordgo.InteractionCreate,
 	game.mu.Lock()
 	defer game.mu.Unlock()
 
+	if game.IsSplit {
+		var activeHand *Hand
+		var activeDoubled *bool
+		betAmount := game.Bet
+		if game.ActiveHand == 0 {
+			activeHand = &game.PlayerHand
+			activeDoubled = &game.DoubledDown
+		} else {
+			activeHand = &game.SplitHand
+			activeDoubled = &game.SplitDoubledDown
+			betAmount = game.SplitBet
+		}
+
+		if len(activeHand.Cards) != 2 || *activeDoubled {
+			respondEmbed(s, i, utils.ErrorEmbed("Cannot double down on this hand."))
+			return
+		}
+
+		balance := database.GetBalance(userID)
+		if balance < betAmount {
+			respondEmbed(s, i, utils.ErrorEmbed("Insufficient balance to double down!"))
+			return
+		}
+
+		// Deduct additional bet atomically
+		if err := database.CollectLostBet(userID, betAmount); err != nil {
+			respondEmbed(s, i, utils.ErrorEmbed("Failed to deduct double down bet."))
+			return
+		}
+
+		if game.ActiveHand == 0 {
+			game.Bet *= 2
+		} else {
+			game.SplitBet *= 2
+		}
+		*activeDoubled = true
+
+		card := game.dealCard()
+		activeHand.Cards = append(activeHand.Cards, card)
+		calculateScore(activeHand)
+
+		if game.ActiveHand == 0 {
+			// Hand 1 finished after double, switch to Hand 2
+			game.ActiveHand = 1
+			game.resetTimer(s)
+			embed := game.createGameEmbed(false)
+			components := game.createActionButtons()
+			_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseUpdateMessage,
+				Data: &discordgo.InteractionResponseData{
+					Embeds:     []*discordgo.MessageEmbed{embed},
+					Components: components,
+				},
+			})
+			return
+		} else {
+			// Hand 2 finished after double!
+			game.stopTimer()
+			if game.PlayerHand.Score > 21 && game.SplitHand.Score > 21 {
+				game.Status = "split_ended"
+			} else {
+				game.playDealer()
+			}
+			game.endGameInteraction(s, i)
+			return
+		}
+	}
+
 	if len(game.PlayerHand.Cards) != 2 || game.DoubledDown {
 		respondEmbed(s, i, utils.ErrorEmbed("Cannot double down now."))
 		return
@@ -685,6 +933,15 @@ func HandleBlackjackDouble(s *discordgo.Session, i *discordgo.InteractionCreate,
 		return
 	}
 
+	// If dealer shows Ace and player skipped insurance, check dealer BJ FIRST (protect double bet)
+	if game.DealerHand.Cards[1].Value == "A" && !game.Insurance {
+		if game.checkDealerBlackjackOnAction() {
+			game.stopTimer()
+			game.endGameInteraction(s, i)
+			return
+		}
+	}
+
 	// Deduct additional bet atomically
 	if err := database.CollectLostBet(userID, game.Bet); err != nil {
 		respondEmbed(s, i, utils.ErrorEmbed("Failed to deduct double down bet."))
@@ -694,14 +951,6 @@ func HandleBlackjackDouble(s *discordgo.Session, i *discordgo.InteractionCreate,
 	game.Bet *= 2
 	game.DoubledDown = true
 	game.stopTimer()
-
-	// If dealer shows Ace and player skipped insurance, check dealer BJ
-	if game.DealerHand.Cards[1].Value == "A" && !game.Insurance {
-		if game.checkDealerBlackjackOnAction() {
-			game.endGameInteraction(s, i)
-			return
-		}
-	}
 
 	// Deal one card and stand
 	card := game.dealCard()
@@ -718,6 +967,101 @@ func HandleBlackjackDouble(s *discordgo.Session, i *discordgo.InteractionCreate,
 	// Dealer plays
 	game.playDealer()
 	game.endGameInteraction(s, i)
+}
+
+// Handle Split action
+func HandleBlackjackSplit(s *discordgo.Session, i *discordgo.InteractionCreate, userID string) {
+	if i.Member.User.ID != userID {
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "❌ This is not your game!",
+				Flags:   discordgo.MessageFlagsEphemeral,
+			},
+		})
+		return
+	}
+
+	blackjackMu.Lock()
+	game, exists := activeBlackjackGames[userID]
+	blackjackMu.Unlock()
+
+	if !exists {
+		respondEmbed(s, i, utils.ErrorEmbed("No active game found!"))
+		return
+	}
+
+	game.mu.Lock()
+	defer game.mu.Unlock()
+
+	if game.IsSplit || len(game.PlayerHand.Cards) != 2 || game.DoubledDown || game.Insurance {
+		respondEmbed(s, i, utils.ErrorEmbed("Cannot split now."))
+		return
+	}
+
+	// Check if cards have equal value or score
+	c0 := game.PlayerHand.Cards[0]
+	c1 := game.PlayerHand.Cards[1]
+	if c0.Value != c1.Value && c0.Score != c1.Score {
+		respondEmbed(s, i, utils.ErrorEmbed("You can only split cards of the same rank or value!"))
+		return
+	}
+
+	balance := database.GetBalance(userID)
+	if balance < game.Bet {
+		respondEmbed(s, i, utils.ErrorEmbed("Insufficient balance to split!"))
+		return
+	}
+
+	// If dealer shows Ace and player skipped insurance, check dealer BJ first
+	if game.DealerHand.Cards[1].Value == "A" && !game.Insurance {
+		if game.checkDealerBlackjackOnAction() {
+			game.stopTimer()
+			game.endGameInteraction(s, i)
+			return
+		}
+	}
+
+	// Deduct split bet atomically
+	if err := database.CollectLostBet(userID, game.Bet); err != nil {
+		respondEmbed(s, i, utils.ErrorEmbed("Failed to deduct split bet."))
+		return
+	}
+
+	game.IsSplit = true
+	game.ActiveHand = 0
+	game.SplitBet = game.Bet
+
+	// Deal 1 card to each split hand
+	game.PlayerHand.Cards = []Card{c0, game.dealCard()}
+	game.SplitHand.Cards = []Card{c1, game.dealCard()}
+	calculateScore(&game.PlayerHand)
+	calculateScore(&game.SplitHand)
+
+	// If Hand 1 immediately has 21, advance to Hand 2
+	if game.PlayerHand.Score == 21 {
+		game.ActiveHand = 1
+		// If Hand 2 also immediately has 21, both hands are finished!
+		if game.SplitHand.Score == 21 {
+			game.stopTimer()
+			game.playDealer()
+			game.endGameInteraction(s, i)
+			return
+		}
+	}
+
+	game.resetTimer(s)
+
+	embed := game.createGameEmbed(false)
+	components := game.createActionButtons()
+
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseUpdateMessage,
+		Data: &discordgo.InteractionResponseData{
+			Embeds:     []*discordgo.MessageEmbed{embed},
+			Components: components,
+		},
+	})
 }
 
 // Handle Insurance action
@@ -846,7 +1190,7 @@ func HandleBlackjackTextAction(s *discordgo.Session, m *discordgo.MessageCreate,
 
 	switch strings.ToLower(action) {
 	case "hit":
-		if len(game.PlayerHand.Cards) == 2 && game.DealerHand.Cards[1].Value == "A" && !game.Insurance {
+		if len(game.PlayerHand.Cards) == 2 && game.DealerHand.Cards[1].Value == "A" && !game.Insurance && !game.IsSplit {
 			if game.checkDealerBlackjackOnAction() {
 				game.stopTimer()
 				game.endGameText(s, m.ChannelID)
@@ -855,6 +1199,48 @@ func HandleBlackjackTextAction(s *discordgo.Session, m *discordgo.MessageCreate,
 		}
 
 		game.resetTimer(s)
+
+		if game.IsSplit {
+			if game.ActiveHand == 0 {
+				card := game.dealCard()
+				game.PlayerHand.Cards = append(game.PlayerHand.Cards, card)
+				calculateScore(&game.PlayerHand)
+				if game.PlayerHand.Score >= 21 {
+					game.ActiveHand = 1
+				}
+			} else {
+				card := game.dealCard()
+				game.SplitHand.Cards = append(game.SplitHand.Cards, card)
+				calculateScore(&game.SplitHand)
+				if game.SplitHand.Score >= 21 {
+					game.stopTimer()
+					if game.PlayerHand.Score > 21 && game.SplitHand.Score > 21 {
+						game.Status = "split_ended"
+					} else {
+						game.playDealer()
+					}
+					game.endGameText(s, m.ChannelID)
+					return
+				}
+			}
+
+			embed := game.createGameEmbed(false)
+			embed.Footer.Text = fmt.Sprintf("Use: !bj hit | !bj stand | !bj double (Playing Hand %d - %s)", game.ActiveHand+1, m.Author.Username)
+			components := game.createActionButtons()
+
+			if game.MessageID != "" {
+				_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
+					ID:         game.MessageID,
+					Channel:    game.ChannelID,
+					Embeds:     &[]*discordgo.MessageEmbed{embed},
+					Components: &components,
+				})
+			} else {
+				_, _ = s.ChannelMessageSendEmbed(m.ChannelID, embed)
+			}
+			return
+		}
+
 		card := game.dealCard()
 		game.PlayerHand.Cards = append(game.PlayerHand.Cards, card)
 		calculateScore(&game.PlayerHand)
@@ -883,16 +1269,117 @@ func HandleBlackjackTextAction(s *discordgo.Session, m *discordgo.MessageCreate,
 
 	case "stand":
 		game.stopTimer()
-		if len(game.PlayerHand.Cards) == 2 && game.DealerHand.Cards[1].Value == "A" && !game.Insurance {
+		if len(game.PlayerHand.Cards) == 2 && game.DealerHand.Cards[1].Value == "A" && !game.Insurance && !game.IsSplit {
 			if game.checkDealerBlackjackOnAction() {
 				game.endGameText(s, m.ChannelID)
 				return
 			}
 		}
+
+		if game.IsSplit {
+			if game.ActiveHand == 0 {
+				game.ActiveHand = 1
+				game.resetTimer(s)
+				embed := game.createGameEmbed(false)
+				embed.Footer.Text = fmt.Sprintf("Use: !bj hit | !bj stand | !bj double (Playing Hand %d - %s)", game.ActiveHand+1, m.Author.Username)
+				components := game.createActionButtons()
+
+				if game.MessageID != "" {
+					_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
+						ID:         game.MessageID,
+						Channel:    game.ChannelID,
+						Embeds:     &[]*discordgo.MessageEmbed{embed},
+						Components: &components,
+					})
+				} else {
+					_, _ = s.ChannelMessageSendEmbed(m.ChannelID, embed)
+				}
+				return
+			} else {
+				if game.PlayerHand.Score > 21 && game.SplitHand.Score > 21 {
+					game.Status = "split_ended"
+				} else {
+					game.playDealer()
+				}
+				game.endGameText(s, m.ChannelID)
+				return
+			}
+		}
+
 		game.playDealer()
 		game.endGameText(s, m.ChannelID)
 
 	case "double":
+		if game.IsSplit {
+			var activeHand *Hand
+			var activeDoubled *bool
+			betAmount := game.Bet
+			if game.ActiveHand == 0 {
+				activeHand = &game.PlayerHand
+				activeDoubled = &game.DoubledDown
+			} else {
+				activeHand = &game.SplitHand
+				activeDoubled = &game.SplitDoubledDown
+				betAmount = game.SplitBet
+			}
+
+			if len(activeHand.Cards) != 2 || *activeDoubled {
+				s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Cannot double down on this hand."))
+				return
+			}
+
+			balance := database.GetBalance(userID)
+			if balance < betAmount {
+				s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Insufficient balance to double down!"))
+				return
+			}
+
+			if err := database.CollectLostBet(userID, betAmount); err != nil {
+				s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Failed to deduct double down bet."))
+				return
+			}
+
+			if game.ActiveHand == 0 {
+				game.Bet *= 2
+			} else {
+				game.SplitBet *= 2
+			}
+			*activeDoubled = true
+
+			card := game.dealCard()
+			activeHand.Cards = append(activeHand.Cards, card)
+			calculateScore(activeHand)
+
+			if game.ActiveHand == 0 {
+				game.ActiveHand = 1
+				game.resetTimer(s)
+				embed := game.createGameEmbed(false)
+				embed.Footer.Text = fmt.Sprintf("Use: !bj hit | !bj stand | !bj double (Playing Hand %d - %s)", game.ActiveHand+1, m.Author.Username)
+				components := game.createActionButtons()
+
+				if game.MessageID != "" {
+					_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
+						ID:         game.MessageID,
+						Channel:    game.ChannelID,
+						Embeds:     &[]*discordgo.MessageEmbed{embed},
+						Components: &components,
+					})
+				} else {
+					_, _ = s.ChannelMessageSendEmbed(m.ChannelID, embed)
+				}
+				return
+			} else {
+				game.stopTimer()
+				if game.PlayerHand.Score > 21 && game.SplitHand.Score > 21 {
+					game.Status = "split_ended"
+				} else {
+					game.playDealer()
+				}
+				game.endGameText(s, m.ChannelID)
+				return
+			}
+		}
+
 		if len(game.PlayerHand.Cards) != 2 || game.DoubledDown {
 			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Cannot double down now."))
 			return
@@ -904,6 +1391,15 @@ func HandleBlackjackTextAction(s *discordgo.Session, m *discordgo.MessageCreate,
 			return
 		}
 
+		// Check dealer BJ BEFORE deducting double down bet (protecting player from losing 2x)
+		if game.DealerHand.Cards[1].Value == "A" && !game.Insurance {
+			if game.checkDealerBlackjackOnAction() {
+				game.stopTimer()
+				game.endGameText(s, m.ChannelID)
+				return
+			}
+		}
+
 		if err := database.CollectLostBet(userID, game.Bet); err != nil {
 			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Failed to deduct double down bet."))
 			return
@@ -912,13 +1408,6 @@ func HandleBlackjackTextAction(s *discordgo.Session, m *discordgo.MessageCreate,
 		game.Bet *= 2
 		game.DoubledDown = true
 		game.stopTimer()
-
-		if game.DealerHand.Cards[1].Value == "A" && !game.Insurance {
-			if game.checkDealerBlackjackOnAction() {
-				game.endGameText(s, m.ChannelID)
-				return
-			}
-		}
 
 		card := game.dealCard()
 		game.PlayerHand.Cards = append(game.PlayerHand.Cards, card)
@@ -932,6 +1421,74 @@ func HandleBlackjackTextAction(s *discordgo.Session, m *discordgo.MessageCreate,
 
 		game.playDealer()
 		game.endGameText(s, m.ChannelID)
+
+	case "split", "dividir":
+		if game.IsSplit || len(game.PlayerHand.Cards) != 2 || game.DoubledDown || game.Insurance {
+			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Cannot split now."))
+			return
+		}
+
+		c0 := game.PlayerHand.Cards[0]
+		c1 := game.PlayerHand.Cards[1]
+		if c0.Value != c1.Value && c0.Score != c1.Score {
+			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("You can only split cards of the same rank or value!"))
+			return
+		}
+
+		balance := database.GetBalance(userID)
+		if balance < game.Bet {
+			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Insufficient balance to split!"))
+			return
+		}
+
+		if game.DealerHand.Cards[1].Value == "A" && !game.Insurance {
+			if game.checkDealerBlackjackOnAction() {
+				game.stopTimer()
+				game.endGameText(s, m.ChannelID)
+				return
+			}
+		}
+
+		if err := database.CollectLostBet(userID, game.Bet); err != nil {
+			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Failed to deduct split bet."))
+			return
+		}
+
+		game.IsSplit = true
+		game.ActiveHand = 0
+		game.SplitBet = game.Bet
+
+		game.PlayerHand.Cards = []Card{c0, game.dealCard()}
+		game.SplitHand.Cards = []Card{c1, game.dealCard()}
+		calculateScore(&game.PlayerHand)
+		calculateScore(&game.SplitHand)
+
+		if game.PlayerHand.Score == 21 {
+			game.ActiveHand = 1
+			if game.SplitHand.Score == 21 {
+				game.stopTimer()
+				game.playDealer()
+				game.endGameText(s, m.ChannelID)
+				return
+			}
+		}
+
+		game.resetTimer(s)
+
+		embed := game.createGameEmbed(false)
+		embed.Footer.Text = fmt.Sprintf("Use: !bj hit | !bj stand | !bj double (Playing Hand %d - %s)", game.ActiveHand+1, m.Author.Username)
+		components := game.createActionButtons()
+
+		if game.MessageID != "" {
+			_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
+				ID:         game.MessageID,
+				Channel:    game.ChannelID,
+				Embeds:     &[]*discordgo.MessageEmbed{embed},
+				Components: &components,
+			})
+		} else {
+			_, _ = s.ChannelMessageSendEmbed(m.ChannelID, embed)
+		}
 
 	case "insurance":
 		if game.Insurance || game.DealerHand.Cards[1].Value != "A" {
@@ -1001,6 +1558,11 @@ func (g *BlackjackGame) playDealer() {
 		calculateScore(&g.DealerHand)
 	}
 
+	if g.IsSplit {
+		g.Status = "split_ended"
+		return
+	}
+
 	// Determine winner
 	if g.DealerHand.Score > 21 {
 		g.Status = "dealer_bust"
@@ -1013,8 +1575,103 @@ func (g *BlackjackGame) playDealer() {
 	}
 }
 
+// buildSplitGameOverEmbed handles payouts and creates embed for split games
+func (g *BlackjackGame) buildSplitGameOverEmbed() *discordgo.MessageEmbed {
+	winnings := 0
+	totalSpent := g.Bet + g.SplitBet
+
+	evalHand := func(hand Hand, bet int) (string, int) {
+		if hand.Score > 21 {
+			return "💥 **BUST - YOU LOSE**", 0
+		}
+		if g.DealerHand.Score > 21 {
+			return "💥 **DEALER BUST - YOU WIN!**", bet * 2
+		}
+		if hand.Score > g.DealerHand.Score {
+			return "✅ **YOU WIN!**", bet * 2
+		}
+		if hand.Score < g.DealerHand.Score {
+			return "❌ **DEALER WINS**", 0
+		}
+		return "🤝 **PUSH - TIE**", bet
+	}
+
+	h1Result, h1Win := evalHand(g.PlayerHand, g.Bet)
+	h2Result, h2Win := evalHand(g.SplitHand, g.SplitBet)
+	winnings = h1Win + h2Win
+
+	if winnings > 0 {
+		_ = database.AddCoins(g.UserID, winnings)
+	}
+
+	netProfit := winnings - totalSpent
+	resultColor := 0x888888
+	profitText := ""
+	if netProfit > 0 {
+		resultColor = 0x00FF00
+		profitText = fmt.Sprintf("💰 **Net Profit:** +%d %s", netProfit, config.Bot.CurrencySymbol)
+	} else if netProfit < 0 {
+		resultColor = 0xFF0000
+		profitText = fmt.Sprintf("💸 **Net Loss:** %d %s", netProfit, config.Bot.CurrencySymbol)
+	} else {
+		resultColor = 0xFFA500
+		profitText = fmt.Sprintf("⚖️ **Net Result:** Even (0 %s)", config.Bot.CurrencySymbol)
+	}
+
+	newBalance := database.GetBalance(g.UserID)
+
+	h1Title := "🎴 Hand 1"
+	if g.DoubledDown {
+		h1Title += " *(Doubled)*"
+	}
+	h2Title := "🎴 Hand 2"
+	if g.SplitDoubledDown {
+		h2Title += " *(Doubled)*"
+	}
+
+	dealerScore := fmt.Sprintf("%d", g.DealerHand.Score)
+	if g.DealerHand.Score > 21 {
+		dealerScore = fmt.Sprintf("%d (Bust)", g.DealerHand.Score)
+	}
+
+	return &discordgo.MessageEmbed{
+		Title:       "🃏 Blackjack - Game Over (Split)",
+		Description: profitText,
+		Color:       resultColor,
+		Fields: []*discordgo.MessageEmbedField{
+			{
+				Name:   "🎰 Dealer's Hand",
+				Value:  fmt.Sprintf("%s\nScore: **%s**", formatHand(g.DealerHand, false), dealerScore),
+				Inline: false,
+			},
+			{
+				Name:   h1Title,
+				Value:  fmt.Sprintf("%s\nScore: **%d**\nResult: %s", formatHand(g.PlayerHand, false), g.PlayerHand.Score, h1Result),
+				Inline: true,
+			},
+			{
+				Name:   h2Title,
+				Value:  fmt.Sprintf("%s\nScore: **%d**\nResult: %s", formatHand(g.SplitHand, false), g.SplitHand.Score, h2Result),
+				Inline: true,
+			},
+			{
+				Name:   "💵 New Balance",
+				Value:  fmt.Sprintf("**%d %s**", newBalance, config.Bot.CurrencySymbol),
+				Inline: false,
+			},
+		},
+		Footer: &discordgo.MessageEmbedFooter{
+			Text: "Game ended (Split)",
+		},
+		Timestamp: time.Now().Format(time.RFC3339),
+	}
+}
+
 // buildGameOverEmbed handles payouts and creates the final game over embed
 func (g *BlackjackGame) buildGameOverEmbed() *discordgo.MessageEmbed {
+	if g.IsSplit {
+		return g.buildSplitGameOverEmbed()
+	}
 	var resultText string
 	var resultColor int
 	winnings := 0

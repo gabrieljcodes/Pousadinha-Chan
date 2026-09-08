@@ -47,6 +47,9 @@ func ComponentsHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	} else if strings.HasPrefix(customID, "bj_surrender_") {
 		userID := strings.TrimPrefix(customID, "bj_surrender_")
 		games.HandleBlackjackSurrender(s, i, userID)
+	} else if strings.HasPrefix(customID, "bj_split_") {
+		userID := strings.TrimPrefix(customID, "bj_split_")
+		games.HandleBlackjackSplit(s, i, userID)
 	} else if strings.HasPrefix(customID, "rr_") {
 		games.HandleRussianRouletteInteraction(s, i)
 	} else if strings.HasPrefix(customID, "slots_") {
