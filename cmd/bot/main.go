@@ -7,6 +7,7 @@ import (
 	"estudocoin/internal/events"
 	"estudocoin/internal/api"
 	"estudocoin/internal/games"
+	"estudocoin/internal/polymarket"
 	"estudocoin/internal/stockmarket"
 	"log"
 	"os"
@@ -75,6 +76,9 @@ func main() {
 
 	// Start Event Betting
 	games.StartEventBetting(dg)
+
+	// Start Polymarket Oracle
+	polymarket.StartOracle(dg)
 
 	// Start loan overdue collector background worker
 	commands.StartLoanWorker(dg)

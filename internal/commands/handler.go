@@ -138,6 +138,8 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		games.CmdCloseEvent(s, m, args)
 	case "!cancelevent":
 		games.CmdCancelEvent(s, m, args)
+	case "!poly", "!polymarket":
+		CmdPolymarket(s, m, args)
 	case "!loan":
 		if len(args) < 1 {
 			s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("Loan System",

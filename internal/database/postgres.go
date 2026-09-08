@@ -246,6 +246,58 @@ func (p *PostgresDatabase) CreateTables() error {
 			amount BIGINT NOT NULL,
 			created_at TIMESTAMPTZ DEFAULT NOW()
 		);`,
+		`CREATE TABLE IF NOT EXISTS polymarket_settings (
+			guild_id TEXT PRIMARY KEY,
+			import_mode TEXT DEFAULT 'admin_only',
+			channel_id TEXT DEFAULT '',
+			min_bet BIGINT DEFAULT 10,
+			house_edge NUMERIC(5, 4) DEFAULT 0.0300,
+			updated_at TIMESTAMPTZ DEFAULT NOW()
+		);`,
+		`CREATE TABLE IF NOT EXISTS polymarket_markets (
+			id TEXT PRIMARY KEY,
+			polymarket_id TEXT NOT NULL UNIQUE,
+			condition_id TEXT DEFAULT '',
+			slug TEXT NOT NULL,
+			question TEXT NOT NULL,
+			description TEXT DEFAULT '',
+			category TEXT DEFAULT '',
+			image_url TEXT DEFAULT '',
+			yes_price NUMERIC(6, 4) DEFAULT 0.5000,
+			no_price NUMERIC(6, 4) DEFAULT 0.5000,
+			status TEXT DEFAULT 'open',
+			winner TEXT DEFAULT '',
+			end_date TIMESTAMPTZ,
+			guild_id TEXT NOT NULL,
+			channel_id TEXT NOT NULL,
+			message_id TEXT NOT NULL,
+			created_at TIMESTAMPTZ DEFAULT NOW(),
+			updated_at TIMESTAMPTZ DEFAULT NOW(),
+			resolved_at TIMESTAMPTZ
+		);`,
+		`CREATE TABLE IF NOT EXISTS polymarket_positions (
+			id BIGSERIAL PRIMARY KEY,
+			market_id TEXT NOT NULL REFERENCES polymarket_markets(id) ON DELETE CASCADE,
+			user_id TEXT NOT NULL,
+			outcome TEXT NOT NULL,
+			shares BIGINT NOT NULL DEFAULT 0,
+			total_invested BIGINT NOT NULL DEFAULT 0,
+			created_at TIMESTAMPTZ DEFAULT NOW(),
+			updated_at TIMESTAMPTZ DEFAULT NOW(),
+			CONSTRAINT uq_poly_pos UNIQUE(market_id, user_id, outcome)
+		);`,
+		`CREATE TABLE IF NOT EXISTS polymarket_orders (
+			id BIGSERIAL PRIMARY KEY,
+			market_id TEXT NOT NULL REFERENCES polymarket_markets(id) ON DELETE CASCADE,
+			user_id TEXT NOT NULL,
+			side TEXT NOT NULL,
+			outcome TEXT NOT NULL,
+			shares BIGINT NOT NULL,
+			price_per_share NUMERIC(6, 4) NOT NULL,
+			fee_amount BIGINT NOT NULL DEFAULT 0,
+			total_amount BIGINT NOT NULL,
+			created_at TIMESTAMPTZ DEFAULT NOW()
+		);`,
 	}
 
 	for _, query := range createTableQueries {
@@ -389,6 +441,9 @@ func (p *PostgresDatabase) CreateTables() error {
 		`CREATE INDEX IF NOT EXISTS idx_betting_events_guild ON betting_events (guild_id);`,
 		`CREATE INDEX IF NOT EXISTS idx_event_bets_event_id ON event_bets (event_id);`,
 		`CREATE INDEX IF NOT EXISTS idx_event_bets_user_id ON event_bets (user_id);`,
+		`CREATE INDEX IF NOT EXISTS idx_poly_markets_status ON polymarket_markets (status);`,
+		`CREATE INDEX IF NOT EXISTS idx_poly_positions_user ON polymarket_positions (user_id);`,
+		`CREATE INDEX IF NOT EXISTS idx_poly_orders_user ON polymarket_orders (user_id);`,
 	}
 	for _, query := range indexQueries {
 		if _, err := p.db.Exec(query); err != nil {
@@ -407,6 +462,10 @@ func (p *PostgresDatabase) CreateTables() error {
 		`ALTER TABLE loans ENABLE ROW LEVEL SECURITY;`,
 		`ALTER TABLE betting_events ENABLE ROW LEVEL SECURITY;`,
 		`ALTER TABLE event_bets ENABLE ROW LEVEL SECURITY;`,
+		`ALTER TABLE polymarket_settings ENABLE ROW LEVEL SECURITY;`,
+		`ALTER TABLE polymarket_markets ENABLE ROW LEVEL SECURITY;`,
+		`ALTER TABLE polymarket_positions ENABLE ROW LEVEL SECURITY;`,
+		`ALTER TABLE polymarket_orders ENABLE ROW LEVEL SECURITY;`,
 	}
 	for _, query := range rlsQueries {
 		if _, err := p.db.Exec(query); err != nil {

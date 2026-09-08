@@ -594,4 +594,101 @@ var SlashCommands = []*discordgo.ApplicationCommand{
 			},
 		},
 	},
+	{
+		Name:        "poly",
+		Description: "Polymarket Prediction Markets - Trade shares on real-world events",
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Name:        "trending",
+				Description: "View top volume trending markets on Polymarket",
+				Type:        discordgo.ApplicationCommandOptionSubCommand,
+			},
+			{
+				Name:        "search",
+				Description: "Search for real-world prediction markets on Polymarket",
+				Type:        discordgo.ApplicationCommandOptionSubCommand,
+				Options: []*discordgo.ApplicationCommandOption{
+					{
+						Type:        discordgo.ApplicationCommandOptionString,
+						Name:        "query",
+						Description: "Search keywords (e.g. Bitcoin, Trump, Champions League)",
+						Required:    true,
+					},
+				},
+			},
+			{
+				Name:        "import",
+				Description: "Import a Polymarket event into the server's betting channel",
+				Type:        discordgo.ApplicationCommandOptionSubCommand,
+				Options: []*discordgo.ApplicationCommandOption{
+					{
+						Type:        discordgo.ApplicationCommandOptionString,
+						Name:        "query",
+						Description: "Polymarket slug, ID, or full URL",
+						Required:    true,
+					},
+				},
+			},
+			{
+				Name:        "suggest",
+				Description: "Suggest a Polymarket event for admin approval",
+				Type:        discordgo.ApplicationCommandOptionSubCommand,
+				Options: []*discordgo.ApplicationCommandOption{
+					{
+						Type:        discordgo.ApplicationCommandOptionString,
+						Name:        "query",
+						Description: "Polymarket slug, ID, or full URL",
+						Required:    true,
+					},
+				},
+			},
+			{
+				Name:        "view",
+				Description: "View details and live odds for an imported market",
+				Type:        discordgo.ApplicationCommandOptionSubCommand,
+				Options: []*discordgo.ApplicationCommandOption{
+					{
+						Type:        discordgo.ApplicationCommandOptionString,
+						Name:        "id",
+						Description: "Market ID (e.g. poly_559651)",
+						Required:    true,
+					},
+				},
+			},
+			{
+				Name:        "portfolio",
+				Description: "View your Polymarket shares, positions, and unrealized profit",
+				Type:        discordgo.ApplicationCommandOptionSubCommand,
+			},
+			{
+				Name:        "config",
+				Description: "Configure Polymarket settings (Admin only)",
+				Type:        discordgo.ApplicationCommandOptionSubCommand,
+				Options: []*discordgo.ApplicationCommandOption{
+					{
+						Type:        discordgo.ApplicationCommandOptionChannel,
+						Name:        "channel",
+						Description: "Dedicated channel for Polymarket prediction markets",
+						Required:    false,
+					},
+					{
+						Type:        discordgo.ApplicationCommandOptionString,
+						Name:        "import_mode",
+						Description: "Who can import markets",
+						Required:    false,
+						Choices: []*discordgo.ApplicationCommandOptionChoice{
+							{Name: "Admins Only", Value: "admin_only"},
+							{Name: "All Users", Value: "all_users"},
+						},
+					},
+					{
+						Type:        discordgo.ApplicationCommandOptionNumber,
+						Name:        "house_edge",
+						Description: "House edge fee percentage (e.g. 0.03 for 3%)",
+						Required:    false,
+					},
+				},
+			},
+		},
+	},
 }

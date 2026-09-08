@@ -77,6 +77,8 @@ func SlashHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		handleSlashStock(s, i)
 	case "crypto":
 		handleSlashCrypto(s, i)
+	case "poly":
+		HandleSlashPolymarket(s, i)
 	}
 }
 

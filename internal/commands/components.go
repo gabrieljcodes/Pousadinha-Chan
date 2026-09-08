@@ -10,6 +10,13 @@ import (
 )
 
 func ComponentsHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	if i.Type == discordgo.InteractionModalSubmit {
+		if strings.HasPrefix(i.ModalSubmitData().CustomID, "poly_modal_") {
+			HandlePolymarketModalSubmit(s, i)
+		}
+		return
+	}
+
 	if i.Type != discordgo.InteractionMessageComponent {
 		return
 	}
@@ -56,6 +63,8 @@ func ComponentsHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		games.HandleSlotsInteraction(s, i)
 	} else if strings.HasPrefix(customID, "mines_") {
 		games.HandleMinesInteraction(s, i)
+	} else if strings.HasPrefix(customID, "poly_") {
+		HandlePolymarketButton(s, i)
 	} else if strings.HasPrefix(customID, "help_nav_") {
 		HandleHelpNavigation(s, i, customID)
 	} else if strings.HasPrefix(customID, "loan_accept_") {

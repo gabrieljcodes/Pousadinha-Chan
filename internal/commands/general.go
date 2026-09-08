@@ -80,6 +80,17 @@ func getHelpSections() []HelpSection {
 				"*Dynamic odds: less popular = higher payout!*",
 		},
 		{
+			ID:    "polymarket",
+			Name:  "Polymarket Predictions",
+			Emoji: "🔮",
+			Value: "`!poly trending` / `/poly trending`\nVer eventos reais em alta no mundo.\n\n" +
+				"`!poly search <query>` / `/poly search`\nPesquisar mercados reais no Polymarket.\n\n" +
+				"`!poly import <slug>` / `/poly import`\nImportar mercado para o canal de apostas.\n\n" +
+				"`!poly portfolio` / `/poly portfolio`\nVer suas ações ativas e lucros potenciais.\n\n" +
+				"`!poly config` / `/poly config`\nConfigurar canal e permissões *(Apenas Admins)*.\n\n" +
+				"*Compre ações de SIM ou NÃO. Cada ação vencedora paga 100 EC no encerramento!*",
+		},
+		{
 			ID:    "stocks",
 			Name:  "Stock Market",
 			Emoji: "📈",
