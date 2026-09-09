@@ -2,6 +2,7 @@ package commands
 
 import (
 	"estudocoin/internal/crypto"
+	"estudocoin/internal/database"
 	"estudocoin/internal/games"
 	"estudocoin/internal/stockmarket"
 	"estudocoin/pkg/config"
@@ -22,15 +23,27 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
-	// Check if channel is allowed
-	if !config.Bot.IsChannelAllowed(m.ChannelID) {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("❌ This bot can only be used in designated channels."))
+	args := strings.Fields(m.Content)
+	if len(args) == 0 {
 		return
 	}
-
-	args := strings.Fields(m.Content)
 	command := strings.ToLower(args[0])
 	args = args[1:]
+
+	// Check if channel is allowed
+	if !config.Bot.IsChannelAllowed(m.ChannelID) {
+		allowedInPoly := false
+		if strings.HasPrefix(command, "!poly") && m.GuildID != "" {
+			settings, _ := database.GetGuildPolymarketSettings(m.GuildID)
+			if settings != nil && settings.ChannelID == m.ChannelID {
+				allowedInPoly = true
+			}
+		}
+		if !allowedInPoly {
+			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("❌ This bot can only be used in designated channels."))
+			return
+		}
+	}
 
 	switch command {
 	case "!help", "!ajuda":

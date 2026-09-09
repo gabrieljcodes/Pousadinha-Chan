@@ -30,14 +30,23 @@ func SlashHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	// Check if channel is allowed
 	if !config.Bot.IsChannelAllowed(i.ChannelID) {
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Embeds: []*discordgo.MessageEmbed{utils.ErrorEmbed("❌ This bot can only be used in designated channels.")},
-				Flags:  discordgo.MessageFlagsEphemeral,
-			},
-		})
-		return
+		allowedInPoly := false
+		if i.ApplicationCommandData().Name == "poly" && i.GuildID != "" {
+			settings, _ := database.GetGuildPolymarketSettings(i.GuildID)
+			if settings != nil && settings.ChannelID == i.ChannelID {
+				allowedInPoly = true
+			}
+		}
+		if !allowedInPoly {
+			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Embeds: []*discordgo.MessageEmbed{utils.ErrorEmbed("❌ This bot can only be used in designated channels.")},
+					Flags:  discordgo.MessageFlagsEphemeral,
+				},
+			})
+			return
+		}
 	}
 
 	switch i.ApplicationCommandData().Name {

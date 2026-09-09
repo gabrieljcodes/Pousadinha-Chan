@@ -21,8 +21,10 @@ func ComponentsHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		return
 	}
 
-	// Check if channel is allowed
-	if !config.Bot.IsChannelAllowed(i.ChannelID) {
+	customID := i.MessageComponentData().CustomID
+
+	// Polymarket component interactions (buy buttons, positions, refresh, etc.) are always allowed on market embeds
+	if !strings.HasPrefix(customID, "poly_") && !config.Bot.IsChannelAllowed(i.ChannelID) {
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
@@ -32,8 +34,6 @@ func ComponentsHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		})
 		return
 	}
-
-	customID := i.MessageComponentData().CustomID
 
 	if strings.HasPrefix(customID, "aviator_stop_") {
 		games.HandleButton(s, i)
