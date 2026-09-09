@@ -30,14 +30,20 @@ func SlashHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	// Check if channel is allowed
 	if !config.Bot.IsChannelAllowed(i.ChannelID) {
-		allowedInPoly := false
+		allowedInSpecial := false
 		if i.ApplicationCommandData().Name == "poly" && i.GuildID != "" {
 			settings, _ := database.GetGuildPolymarketSettings(i.GuildID)
 			if settings != nil && settings.ChannelID == i.ChannelID {
-				allowedInPoly = true
+				allowedInSpecial = true
 			}
 		}
-		if !allowedInPoly {
+		if i.ApplicationCommandData().Name == "bicho" && i.GuildID != "" {
+			bichoSettings, _ := database.GetBichoSettings(i.GuildID)
+			if bichoSettings != nil && bichoSettings.ChannelID == i.ChannelID {
+				allowedInSpecial = true
+			}
+		}
+		if !allowedInSpecial {
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
 				Data: &discordgo.InteractionResponseData{
@@ -88,6 +94,8 @@ func SlashHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		handleSlashCrypto(s, i)
 	case "poly":
 		HandleSlashPolymarket(s, i)
+	case "bicho":
+		HandleSlashBicho(s, i)
 	}
 }
 

@@ -49,7 +49,9 @@ func CmdBet(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
 			}
 		}
 		games.StartMinesText(s, m, amount, minesCount)
+	case "bicho", "jb":
+		CmdBicho(s, m, append([]string{"apostar"}, args[1:]...))
 	default:
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Game not found. Try: `aviator`, `cups`, `blackjack`, `slots`, `mines`, or use `!roulette @user <amount>`"))
+		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Game not found. Try: `aviator`, `cups`, `blackjack`, `slots`, `mines`, `bicho`, or use `!roulette @user <amount>`"))
 	}
 }

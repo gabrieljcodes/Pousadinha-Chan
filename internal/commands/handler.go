@@ -32,18 +32,25 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	// Check if channel is allowed
 	if !config.Bot.IsChannelAllowed(m.ChannelID) {
-		allowedInPoly := false
+		allowedInSpecial := false
 		if strings.HasPrefix(command, "!poly") && m.GuildID != "" {
 			settings, _ := database.GetGuildPolymarketSettings(m.GuildID)
 			if settings != nil && settings.ChannelID == m.ChannelID {
-				allowedInPoly = true
+				allowedInSpecial = true
 			}
 		}
-		if !allowedInPoly {
+		if (strings.HasPrefix(command, "!bicho") || command == "!jb" || command == "!jogodobicho") && m.GuildID != "" {
+			bichoSettings, _ := database.GetBichoSettings(m.GuildID)
+			if bichoSettings != nil && bichoSettings.ChannelID == m.ChannelID {
+				allowedInSpecial = true
+			}
+		}
+		if !allowedInSpecial {
 			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("❌ This bot can only be used in designated channels."))
 			return
 		}
 	}
+
 
 	switch command {
 	case "!help", "!ajuda":
@@ -153,6 +160,8 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		games.CmdCancelEvent(s, m, args)
 	case "!poly", "!polymarket":
 		CmdPolymarket(s, m, args)
+	case "!bicho", "!jb", "!jogodobicho":
+		CmdBicho(s, m, args)
 	case "!loan":
 		if len(args) < 1 {
 			s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("Loan System",

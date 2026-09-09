@@ -80,6 +80,9 @@ func main() {
 	// Start Polymarket Oracle
 	polymarket.StartOracle(dg)
 
+	// Start Jogo do Bicho Daily Manager
+	games.StartBichoManager(dg)
+
 	// Start loan overdue collector background worker
 	commands.StartLoanWorker(dg)
 

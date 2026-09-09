@@ -91,6 +91,17 @@ func getHelpSections() []HelpSection {
 				"*Compre ações de SIM ou NÃO. Cada ação vencedora paga 100 EC no encerramento!*",
 		},
 		{
+			ID:    "bicho",
+			Name:  "Jogo do Bicho",
+			Emoji: "🎲",
+			Value: "`!bicho` / `/bicho painel`\nVer painel oficial com bilheteria e botões interativos.\n\n" +
+				"`!bicho apostar <mod> <alvo> <val> [pos]`\nFazer aposta (grupo, dezena, centena, milhar, duque, terno).\n\n" +
+				"`!bicho tabela` / `/bicho tabela`\nVer tabela oficial dos 25 bichos e 100 dezenas.\n\n" +
+				"`!bicho apostas` / `/bicho minhas-apostas`\nVer seus bilhetes na rodada ativa.\n\n" +
+				"`!bicho config` / `!bicho sortear`\nAdministração do canal e sorteios diários.\n\n" +
+				"*Sorteio oficial 'Deu no Poste' diário com 5 prêmios auditados!*",
+		},
+		{
 			ID:    "stocks",
 			Name:  "Stock Market",
 			Emoji: "📈",

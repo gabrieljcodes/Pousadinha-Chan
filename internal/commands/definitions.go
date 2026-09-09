@@ -716,4 +716,110 @@ var SlashCommands = []*discordgo.ApplicationCommand{
 			},
 		},
 	},
+	{
+		Name:        "bicho",
+		Description: "Tradicional Jogo do Bicho diário (Deu no Poste)",
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Name:        "painel",
+				Description: "Exibir o painel da rodada ativa com botões de aposta",
+				Type:        discordgo.ApplicationCommandOptionSubCommand,
+			},
+			{
+				Name:        "tabela",
+				Description: "Ver a tabela com os 25 bichos, grupos e dezenas",
+				Type:        discordgo.ApplicationCommandOptionSubCommand,
+			},
+			{
+				Name:        "minhas-apostas",
+				Description: "Ver seus bilhetes apostados na rodada atual",
+				Type:        discordgo.ApplicationCommandOptionSubCommand,
+			},
+			{
+				Name:        "apostar",
+				Description: "Fazer uma aposta no Jogo do Bicho",
+				Type:        discordgo.ApplicationCommandOptionSubCommand,
+				Options: []*discordgo.ApplicationCommandOption{
+					{
+						Type:        discordgo.ApplicationCommandOptionString,
+						Name:        "modalidade",
+						Description: "Modalidade da aposta",
+						Required:    true,
+						Choices: []*discordgo.ApplicationCommandOptionChoice{
+							{Name: "Grupo (18x cabeça / 3.6x cercado)", Value: "grupo"},
+							{Name: "Dezena (60x cabeça / 12x cercado)", Value: "dezena"},
+							{Name: "Centena (600x cabeça / 120x cercado)", Value: "centena"},
+							{Name: "Milhar (4000x cabeça / 800x cercado)", Value: "milhar"},
+							{Name: "Duque de Grupo (18.5x)", Value: "duque"},
+							{Name: "Terno de Grupo (130x)", Value: "terno"},
+						},
+					},
+					{
+						Type:        discordgo.ApplicationCommandOptionString,
+						Name:        "alvo",
+						Description: "Bicho ou número (Ex: Macaco, 28, 528, 4528, ou Macaco Leao)",
+						Required:    true,
+					},
+					{
+						Type:        discordgo.ApplicationCommandOptionInteger,
+						Name:        "valor",
+						Description: "Valor a ser apostado em EC",
+						Required:    true,
+					},
+					{
+						Type:        discordgo.ApplicationCommandOptionString,
+						Name:        "posicao",
+						Description: "Cabeça (1º prêmio) ou Cercado (1º ao 5º prêmio)",
+						Required:    false,
+						Choices: []*discordgo.ApplicationCommandOptionChoice{
+							{Name: "Cabeça (1º Prêmio)", Value: "cabeca"},
+							{Name: "Cercado (1º ao 5º Prêmio)", Value: "cercado"},
+						},
+					},
+				},
+			},
+			{
+				Name:        "sortear",
+				Description: "Disparar o sorteio imediatamente (Apenas Administradores)",
+				Type:        discordgo.ApplicationCommandOptionSubCommand,
+			},
+			{
+				Name:        "config",
+				Description: "Configurar canal e horário do Jogo do Bicho (Apenas Administradores)",
+				Type:        discordgo.ApplicationCommandOptionSubCommand,
+				Options: []*discordgo.ApplicationCommandOption{
+					{
+						Type:        discordgo.ApplicationCommandOptionChannel,
+						Name:        "canal",
+						Description: "Canal oficial dedicado ao Jogo do Bicho",
+						Required:    false,
+					},
+					{
+						Type:        discordgo.ApplicationCommandOptionInteger,
+						Name:        "hora",
+						Description: "Hora diária do sorteio (0 a 23)",
+						Required:    false,
+					},
+					{
+						Type:        discordgo.ApplicationCommandOptionInteger,
+						Name:        "minuto",
+						Description: "Minuto diário do sorteio (0 a 59)",
+						Required:    false,
+					},
+					{
+						Type:        discordgo.ApplicationCommandOptionInteger,
+						Name:        "min_bet",
+						Description: "Aposta mínima permitida",
+						Required:    false,
+					},
+					{
+						Type:        discordgo.ApplicationCommandOptionBoolean,
+						Name:        "ativado",
+						Description: "Ativar ou desativar o Jogo do Bicho",
+						Required:    false,
+					},
+				},
+			},
+		},
+	},
 }

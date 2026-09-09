@@ -13,6 +13,8 @@ func ComponentsHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if i.Type == discordgo.InteractionModalSubmit {
 		if strings.HasPrefix(i.ModalSubmitData().CustomID, "poly_modal_") {
 			HandlePolymarketModalSubmit(s, i)
+		} else if strings.HasPrefix(i.ModalSubmitData().CustomID, "bicho_modal_") {
+			HandleBichoModalSubmit(s, i)
 		}
 		return
 	}
@@ -23,8 +25,8 @@ func ComponentsHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	customID := i.MessageComponentData().CustomID
 
-	// Polymarket component interactions (buy buttons, positions, refresh, etc.) are always allowed on market embeds
-	if !strings.HasPrefix(customID, "poly_") && !config.Bot.IsChannelAllowed(i.ChannelID) {
+	// Polymarket and Bicho component interactions are always allowed on their respective embeds
+	if !strings.HasPrefix(customID, "poly_") && !strings.HasPrefix(customID, "bicho_") && !config.Bot.IsChannelAllowed(i.ChannelID) {
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
@@ -65,6 +67,8 @@ func ComponentsHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		games.HandleMinesInteraction(s, i)
 	} else if strings.HasPrefix(customID, "poly_") {
 		HandlePolymarketButton(s, i)
+	} else if strings.HasPrefix(customID, "bicho_") {
+		HandleBichoButton(s, i)
 	} else if strings.HasPrefix(customID, "help_nav_") {
 		HandleHelpNavigation(s, i, customID)
 	} else if strings.HasPrefix(customID, "loan_accept_") {

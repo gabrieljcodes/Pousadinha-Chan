@@ -298,6 +298,47 @@ func (p *PostgresDatabase) CreateTables() error {
 			total_amount BIGINT NOT NULL,
 			created_at TIMESTAMPTZ DEFAULT NOW()
 		);`,
+		`CREATE TABLE IF NOT EXISTS bicho_settings (
+			guild_id TEXT PRIMARY KEY,
+			channel_id TEXT DEFAULT '',
+			draw_hour INT NOT NULL DEFAULT 20,
+			draw_minute INT NOT NULL DEFAULT 0,
+			enabled BOOLEAN NOT NULL DEFAULT TRUE,
+			min_bet BIGINT DEFAULT 10,
+			updated_at TIMESTAMPTZ DEFAULT NOW()
+		);`,
+		`CREATE TABLE IF NOT EXISTS bicho_rounds (
+			id BIGSERIAL PRIMARY KEY,
+			guild_id TEXT NOT NULL,
+			channel_id TEXT NOT NULL,
+			round_number INT NOT NULL DEFAULT 1,
+			status TEXT NOT NULL DEFAULT 'open',
+			draw_time TIMESTAMPTZ NOT NULL,
+			message_id TEXT DEFAULT '',
+			prize_1 INT DEFAULT 0,
+			prize_2 INT DEFAULT 0,
+			prize_3 INT DEFAULT 0,
+			prize_4 INT DEFAULT 0,
+			prize_5 INT DEFAULT 0,
+			created_at TIMESTAMPTZ DEFAULT NOW(),
+			drawn_at TIMESTAMPTZ
+		);`,
+		`CREATE TABLE IF NOT EXISTS bicho_bets (
+			id BIGSERIAL PRIMARY KEY,
+			round_id BIGINT NOT NULL REFERENCES bicho_rounds(id) ON DELETE CASCADE,
+			user_id TEXT NOT NULL,
+			guild_id TEXT NOT NULL,
+			bet_type TEXT NOT NULL,
+			scope TEXT NOT NULL,
+			target TEXT NOT NULL,
+			amount BIGINT NOT NULL,
+			payout BIGINT DEFAULT 0,
+			won BOOLEAN DEFAULT FALSE,
+			created_at TIMESTAMPTZ DEFAULT NOW()
+		);`,
+		`CREATE INDEX IF NOT EXISTS idx_bicho_rounds_guild_status ON bicho_rounds(guild_id, status);`,
+		`CREATE INDEX IF NOT EXISTS idx_bicho_bets_round ON bicho_bets(round_id);`,
+		`CREATE INDEX IF NOT EXISTS idx_bicho_bets_user ON bicho_bets(user_id);`,
 	}
 
 	for _, query := range createTableQueries {
