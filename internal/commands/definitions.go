@@ -627,6 +627,12 @@ var SlashCommands = []*discordgo.ApplicationCommand{
 						Description: "Polymarket slug, ID, or full URL",
 						Required:    true,
 					},
+					{
+						Type:        discordgo.ApplicationCommandOptionString,
+						Name:        "candidate",
+						Description: "Candidate or option name (e.g. 'lula' or 'bolsonaro' for multi-candidate events)",
+						Required:    false,
+					},
 				},
 			},
 			{
@@ -638,6 +644,25 @@ var SlashCommands = []*discordgo.ApplicationCommand{
 						Type:        discordgo.ApplicationCommandOptionString,
 						Name:        "query",
 						Description: "Polymarket slug, ID, or full URL",
+						Required:    true,
+					},
+					{
+						Type:        discordgo.ApplicationCommandOptionString,
+						Name:        "candidate",
+						Description: "Candidate or option name (e.g. 'lula' or 'bolsonaro' for multi-candidate events)",
+						Required:    false,
+					},
+				},
+			},
+			{
+				Name:        "cancel",
+				Description: "Cancel an imported market and refund all bettors (Admin only)",
+				Type:        discordgo.ApplicationCommandOptionSubCommand,
+				Options: []*discordgo.ApplicationCommandOption{
+					{
+						Type:        discordgo.ApplicationCommandOptionString,
+						Name:        "market_id",
+						Description: "Market ID (e.g. poly_601818 or 601818)",
 						Required:    true,
 					},
 				},

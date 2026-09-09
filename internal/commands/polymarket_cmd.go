@@ -40,17 +40,32 @@ func CmdPolymarket(s *discordgo.Session, m *discordgo.MessageCreate, args []stri
 
 	case "import", "importar":
 		if len(args) < 2 {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Uso: `!poly import <slug_ou_url>`\nExemplo: `!poly import xi-jinping-out-before-2027`"))
+			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Uso: `!poly import <slug_ou_url> [candidato]`\nExemplo: `!poly import brazil-presidential-election lula`\nOu digite apenas o slug/URL para escolher no menu interativo!"))
 			return
 		}
-		handleTextImport(s, m, args[1])
+		candidate := ""
+		if len(args) >= 3 {
+			candidate = strings.Join(args[2:], " ")
+		}
+		handleTextImport(s, m, args[1], candidate)
 
 	case "suggest", "sugerir":
 		if len(args) < 2 {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Uso: `!poly suggest <slug_ou_url>`\nExemplo: `!poly suggest bitcoin-100k`"))
+			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Uso: `!poly suggest <slug_ou_url> [candidato]`\nExemplo: `!poly suggest brazil-presidential-election lula`"))
 			return
 		}
-		handleTextSuggest(s, m, args[1])
+		candidate := ""
+		if len(args) >= 3 {
+			candidate = strings.Join(args[2:], " ")
+		}
+		handleTextSuggest(s, m, args[1], candidate)
+
+	case "cancel", "cancelar", "fechar", "reembolsar":
+		if len(args) < 2 {
+			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Uso: `!poly cancel <market_id>`\nExemplo: `!poly cancel poly_601818`"))
+			return
+		}
+		handleTextCancelMarket(s, m, args[1])
 
 	case "view", "ver", "mercado":
 		if len(args) < 2 {
@@ -78,8 +93,9 @@ func sendPolymarketHelp(s *discordgo.Session, channelID string) {
 			"**Comandos Disponíveis:**\n" +
 			"`!poly trending` - Ver mercados com maior volume global\n" +
 			"`!poly search <termo>` - Pesquisar eventos reais no Polymarket\n" +
-			"`!poly import <slug_ou_url>` - Importar mercado para o canal de apostas\n" +
-			"`!poly suggest <slug_ou_url>` - Sugerir mercado para aprovação de admins\n" +
+			"`!poly import <slug_ou_url> [candidato]` - Importar mercado (com seletor interativo para eleições)\n" +
+			"`!poly suggest <slug_ou_url> [candidato]` - Sugerir mercado para aprovação de admins\n" +
+			"`!poly cancel <id>` - Cancelar mercado e reembolsar apostadores (apenas admins)\n" +
 			"`!poly view <id>` - Ver detalhes e cotações de um mercado importado\n" +
 			"`!poly portfolio` - Ver suas ações e lucros potenciais\n" +
 			"`!poly config` - Configurar permissões e canal (apenas administradores)\n\n" +
@@ -147,7 +163,7 @@ func buildMarketListEmbed(title string, markets []*polymarket.GammaMarket) *disc
 	}
 }
 
-func handleTextImport(s *discordgo.Session, m *discordgo.MessageCreate, input string) {
+func handleTextImport(s *discordgo.Session, m *discordgo.MessageCreate, input string, candidate string) {
 	guildID := m.GuildID
 	if guildID == "" {
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Este comando só pode ser usado dentro de um servidor Discord."))
@@ -179,24 +195,101 @@ func handleTextImport(s *discordgo.Session, m *discordgo.MessageCreate, input st
 		return
 	}
 
-	importMarketInternal(s, guildID, settings.ChannelID, m.ChannelID, m.Author.ID, input, settings)
+	importMarketInternal(s, guildID, settings.ChannelID, m.ChannelID, m.Author.ID, input, candidate, settings)
 }
 
-func importMarketInternal(s *discordgo.Session, guildID, targetChannelID, responseChannelID, userID, input string, settings *database.DBPolymarketSettings) {
-	client := polymarket.GetClient()
-	gammaMarket, err := client.GetMarketBySlugOrID(input)
-	if err != nil {
-		s.ChannelMessageSendEmbed(responseChannelID, utils.ErrorEmbed(fmt.Sprintf("Mercado não encontrado no Polymarket: %v", err)))
-		return
+func buildCandidateSelectionEmbedAndComponents(event *polymarket.GammaEvent) (*discordgo.MessageEmbed, []discordgo.MessageComponent) {
+	var lines []string
+	limit := 8
+	if len(event.Markets) < limit {
+		limit = len(event.Markets)
 	}
 
+	for idx := 0; idx < limit; idx++ {
+		m := event.Markets[idx]
+		title := m.GroupItemTitle
+		if title == "" {
+			title = m.Question
+		}
+		yesP, noP, _ := m.GetPrices()
+		lines = append(lines, fmt.Sprintf(
+			"**%d. %s**\n• Cotação: 🟢 `%.0f%% Sim` | 🔴 `%.0f%% Não` | Volume: `%s`",
+			idx+1, title, yesP*100, noP*100, m.FormatVolume(),
+		))
+	}
+
+	embed := &discordgo.MessageEmbed{
+		Title: fmt.Sprintf("🗳️ Selecione o Candidato: %s", event.Title),
+		Description: fmt.Sprintf(
+			"Este evento possui **%d mercados/candidatos** no Polymarket.\n\n"+
+				"%s\n\n"+
+				"👇 **Selecione no menu abaixo o candidato que deseja abrir para apostas no servidor:**\n"+
+				"*💡 Dica: Você também pode importar direto usando: `!poly import %s <nome>`*",
+			len(event.Markets), strings.Join(lines, "\n"), event.Slug,
+		),
+		Color: 0x5865f2,
+		Thumbnail: &discordgo.MessageEmbedThumbnail{
+			URL: event.Image,
+		},
+		Footer: &discordgo.MessageEmbedFooter{
+			Text: "Oráculo automatizado com dados oficiais do Polymarket",
+		},
+	}
+
+	var options []discordgo.SelectMenuOption
+	maxOptions := 25
+	if len(event.Markets) < maxOptions {
+		maxOptions = len(event.Markets)
+	}
+
+	for idx := 0; idx < maxOptions; idx++ {
+		m := event.Markets[idx]
+		label := m.GroupItemTitle
+		if label == "" {
+			label = m.Question
+		}
+		if len(label) > 100 {
+			label = label[:97] + "..."
+		}
+		yesP, noP, _ := m.GetPrices()
+		desc := fmt.Sprintf("%.0f%% Sim | %.0f%% Não | Vol: %s", yesP*100, noP*100, m.FormatVolume())
+		if len(desc) > 100 {
+			desc = desc[:97] + "..."
+		}
+
+		options = append(options, discordgo.SelectMenuOption{
+			Label:       label,
+			Value:       m.ID,
+			Description: desc,
+			Emoji:       &discordgo.ComponentEmoji{Name: "🟢"},
+		})
+	}
+
+	menu := discordgo.SelectMenu{
+		CustomID:    "poly_candidate_select:" + event.Slug,
+		Placeholder: "Clique aqui para escolher o candidato...",
+		Options:     options,
+	}
+
+	components := []discordgo.MessageComponent{
+		discordgo.ActionsRow{
+			Components: []discordgo.MessageComponent{menu},
+		},
+	}
+
+	return embed, components
+}
+
+func publishMarketToChannel(s *discordgo.Session, guildID, targetChannelID, responseChannelID string, gammaMarket *polymarket.GammaMarket, settings *database.DBPolymarketSettings) {
 	// Check if already imported
 	existing, _ := database.GetPolymarketMarketByPolyID(gammaMarket.ID)
 	if existing != nil && existing.Status == "open" {
-		s.ChannelMessageSendEmbed(responseChannelID, utils.InfoEmbed(
-			"Mercado Já Ativo",
-			fmt.Sprintf("Este mercado já está aberto para apostas em <#%s>!\nID interno: `%s`", existing.ChannelID, existing.ID),
-		))
+		if responseChannelID != "" {
+			s.ChannelMessageSendEmbed(responseChannelID, utils.InfoEmbed(
+				"Mercado Já Ativo",
+				fmt.Sprintf("Este mercado já está aberto para apostas em <#%s>!\nID interno: `%s`", existing.ChannelID, existing.ID),
+			))
+		}
 		return
 	}
 
@@ -231,7 +324,9 @@ func importMarketInternal(s *discordgo.Session, guildID, targetChannelID, respon
 	})
 
 	if err != nil {
-		s.ChannelMessageSendEmbed(responseChannelID, utils.ErrorEmbed(fmt.Sprintf("Erro ao publicar mercado em <#%s>: %v", targetChannelID, err)))
+		if responseChannelID != "" {
+			s.ChannelMessageSendEmbed(responseChannelID, utils.ErrorEmbed(fmt.Sprintf("Erro ao publicar mercado em <#%s>: %v", targetChannelID, err)))
+		}
 		return
 	}
 
@@ -240,15 +335,38 @@ func importMarketInternal(s *discordgo.Session, guildID, targetChannelID, respon
 		log.Printf("[PolymarketCmd] Error saving market to DB: %v", err)
 	}
 
-	if responseChannelID != targetChannelID {
+	if responseChannelID != "" && responseChannelID != targetChannelID {
 		s.ChannelMessageSendEmbed(responseChannelID, utils.SuccessEmbed(
 			"Mercado Importado!",
-			fmt.Sprintf("O mercado **%s** foi aberto para apostas com sucesso em <#%s>!", gammaMarket.Question, targetChannelID),
+			fmt.Sprintf("O mercado **%s** foi aberto para apostas com sucesso em <#%s>!\nID: `%s`", gammaMarket.Question, targetChannelID, dbMarket.ID),
 		))
 	}
 }
 
-func handleTextSuggest(s *discordgo.Session, m *discordgo.MessageCreate, input string) {
+func importMarketInternal(s *discordgo.Session, guildID, targetChannelID, responseChannelID, userID, input, candidate string, settings *database.DBPolymarketSettings) {
+	client := polymarket.GetClient()
+	gammaMarket, gammaEvent, err := client.ResolveImportQuery(input, candidate)
+	if err != nil {
+		s.ChannelMessageSendEmbed(responseChannelID, utils.ErrorEmbed(fmt.Sprintf("Erro ao consultar Polymarket: %v", err)))
+		return
+	}
+
+	if gammaMarket != nil {
+		publishMarketToChannel(s, guildID, targetChannelID, responseChannelID, gammaMarket, settings)
+		return
+	}
+
+	if gammaEvent != nil {
+		// Multi-candidate event with no specific candidate provided: send interactive dropdown
+		embed, components := buildCandidateSelectionEmbedAndComponents(gammaEvent)
+		_, _ = s.ChannelMessageSendComplex(responseChannelID, &discordgo.MessageSend{
+			Embeds:     []*discordgo.MessageEmbed{embed},
+			Components: components,
+		})
+	}
+}
+
+func handleTextSuggest(s *discordgo.Session, m *discordgo.MessageCreate, input string, candidate string) {
 	guildID := m.GuildID
 	if guildID == "" {
 		return
@@ -261,9 +379,17 @@ func handleTextSuggest(s *discordgo.Session, m *discordgo.MessageCreate, input s
 	}
 
 	client := polymarket.GetClient()
-	gammaMarket, err := client.GetMarketBySlugOrID(input)
+	gammaMarket, gammaEvent, err := client.ResolveImportQuery(input, candidate)
 	if err != nil {
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(fmt.Sprintf("Não foi possível encontrar este evento no Polymarket: %v", err)))
+		return
+	}
+
+	if gammaEvent != nil && gammaMarket == nil {
+		s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed(
+			"Especifique o Candidato",
+			fmt.Sprintf("O evento **%s** possui múltiplos candidatos.\nPor favor, especifique o candidato desejado:\n`!poly suggest %s <nome_do_candidato>`", gammaEvent.Title, gammaEvent.Slug),
+		))
 		return
 	}
 
@@ -315,6 +441,75 @@ func handleTextSuggest(s *discordgo.Session, m *discordgo.MessageCreate, input s
 	s.ChannelMessageSendEmbed(m.ChannelID, utils.SuccessEmbed(
 		"Sugestão Enviada!",
 		fmt.Sprintf("Sua sugestão de mercado foi enviada para moderação em <#%s>.", settings.ChannelID),
+	))
+}
+
+func handleTextCancelMarket(s *discordgo.Session, m *discordgo.MessageCreate, query string) {
+	guildID := m.GuildID
+	if guildID == "" {
+		return
+	}
+	if !isUserAdmin(s, guildID, m.Author.ID) {
+		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Apenas administradores podem cancelar mercados."))
+		return
+	}
+
+	cleanID := polymarket.ExtractSlug(query)
+	internalID := cleanID
+	if !strings.HasPrefix(internalID, "poly_") {
+		internalID = "poly_" + cleanID
+	}
+
+	market, err := database.GetPolymarketMarketByID(internalID)
+	if err != nil || market == nil {
+		market, _ = database.GetPolymarketMarketByPolyID(cleanID)
+	}
+	if market == nil {
+		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(fmt.Sprintf("Mercado com ID `%s` não foi encontrado no banco de dados.", query)))
+		return
+	}
+
+	if market.Status != "open" && market.Status != "closed" {
+		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(fmt.Sprintf("Este mercado já se encontra com status `%s`.", market.Status)))
+		return
+	}
+
+	refunds, err := database.CancelAndRefundPolymarketMarketDB(market.ID)
+	if err != nil {
+		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(fmt.Sprintf("Erro ao cancelar mercado: %v", err)))
+		return
+	}
+
+	market.Status = "cancelled"
+	market.Winner = "cancelled"
+
+	settings, _ := database.GetGuildPolymarketSettings(guildID)
+	if settings == nil {
+		settings = &database.DBPolymarketSettings{HouseEdge: 0.03}
+	}
+
+	// Update original embed if exists
+	if market.ChannelID != "" && market.MessageID != "" {
+		embed := polymarket.CreateMarketEmbed(market, settings)
+		components := polymarket.CreateMarketComponents(market, settings)
+		embeds := []*discordgo.MessageEmbed{embed}
+		_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
+			Channel:    market.ChannelID,
+			ID:         market.MessageID,
+			Embeds:     &embeds,
+			Components: &components,
+		})
+	}
+
+	totalRefunded := int64(0)
+	for _, amt := range refunds {
+		totalRefunded += amt
+	}
+
+	s.ChannelMessageSendEmbed(m.ChannelID, utils.SuccessEmbed(
+		"Mercado Cancelado e Reembolsado",
+		fmt.Sprintf("O mercado **%s** (`%s`) foi cancelado com sucesso!\nTotal reembolsado: **%d %s** para **%d** apostador(es).",
+			market.Question, market.ID, totalRefunded, config.Bot.CurrencySymbol, len(refunds)),
 	))
 }
 
@@ -454,6 +649,12 @@ func handleTextAutoResolve(s *discordgo.Session, m *discordgo.MessageCreate, que
 // HandlePolymarketButton routes button clicks starting with poly_
 func HandlePolymarketButton(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	customID := i.MessageComponentData().CustomID
+
+	if strings.HasPrefix(customID, "poly_candidate_select:") {
+		handleCandidateSelectInteraction(s, i)
+		return
+	}
+
 	parts := strings.Split(customID, "_")
 	if len(parts) < 3 {
 		return
@@ -591,7 +792,7 @@ func HandlePolymarketButton(s *discordgo.Session, i *discordgo.InteractionCreate
 			},
 		})
 
-		importMarketInternal(s, i.GuildID, settings.ChannelID, i.ChannelID, i.Member.User.ID, polyID, settings)
+		importMarketInternal(s, i.GuildID, settings.ChannelID, i.ChannelID, i.Member.User.ID, polyID, "", settings)
 
 	case "reject":
 		if !isUserAdmin(s, i.GuildID, i.Member.User.ID) {
@@ -612,6 +813,70 @@ func HandlePolymarketButton(s *discordgo.Session, i *discordgo.InteractionCreate
 			},
 		})
 	}
+}
+
+func handleCandidateSelectInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	data := i.MessageComponentData()
+	if len(data.Values) == 0 {
+		return
+	}
+	selectedPolyID := data.Values[0]
+
+	settings, err := database.GetGuildPolymarketSettings(i.GuildID)
+	if err != nil || settings == nil {
+		settings = &database.DBPolymarketSettings{ImportMode: "admin_only", HouseEdge: 0.03}
+	}
+
+	if settings.ChannelID == "" {
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "⚠️ Canal do Polymarket não configurado no servidor! Use `!poly config channel #canal`.",
+				Flags:   discordgo.MessageFlagsEphemeral,
+			},
+		})
+		return
+	}
+
+	isAdmin := isUserAdmin(s, i.GuildID, i.Member.User.ID)
+	if settings.ImportMode == "admin_only" && !isAdmin {
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "❌ Apenas administradores podem importar mercados para o canal oficial.",
+				Flags:   discordgo.MessageFlagsEphemeral,
+			},
+		})
+		return
+	}
+
+	client := polymarket.GetClient()
+	gammaMarket, err := client.GetMarketByID(selectedPolyID)
+	if err != nil {
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: fmt.Sprintf("❌ Erro ao consultar o mercado selecionado: %v", err),
+				Flags:   discordgo.MessageFlagsEphemeral,
+			},
+		})
+		return
+	}
+
+	candidateName := gammaMarket.GroupItemTitle
+	if candidateName == "" {
+		candidateName = gammaMarket.Question
+	}
+
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseUpdateMessage,
+		Data: &discordgo.InteractionResponseData{
+			Content: fmt.Sprintf("✅ **%s** selecionado por <@%s>! Publicando mercado no canal oficial...", candidateName, i.Member.User.ID),
+			Components: []discordgo.MessageComponent{},
+		},
+	})
+
+	publishMarketToChannel(s, i.GuildID, settings.ChannelID, i.ChannelID, gammaMarket, settings)
 }
 
 // HandlePolymarketModalSubmit processes the share purchase submitted via modal
@@ -753,6 +1018,12 @@ func HandleSlashPolymarket(s *discordgo.Session, i *discordgo.InteractionCreate)
 
 	case "import":
 		input := options[0].Options[0].StringValue()
+		candidate := ""
+		for _, opt := range options[0].Options {
+			if opt.Name == "candidate" {
+				candidate = opt.StringValue()
+			}
+		}
 		settings, _ := database.GetGuildPolymarketSettings(i.GuildID)
 		if settings == nil || settings.ChannelID == "" {
 			respondEmbed(s, i, utils.ErrorEmbed("Canal do Polymarket não configurado! Um admin precisa definir com `/poly config channel`."))
@@ -764,10 +1035,16 @@ func HandleSlashPolymarket(s *discordgo.Session, i *discordgo.InteractionCreate)
 			return
 		}
 		respondEmbed(s, i, utils.InfoEmbed("Importando...", "Buscando dados no Polymarket..."))
-		importMarketInternal(s, i.GuildID, settings.ChannelID, i.ChannelID, i.Member.User.ID, input, settings)
+		importMarketInternal(s, i.GuildID, settings.ChannelID, i.ChannelID, i.Member.User.ID, input, candidate, settings)
 
 	case "suggest":
 		input := options[0].Options[0].StringValue()
+		candidate := ""
+		for _, opt := range options[0].Options {
+			if opt.Name == "candidate" {
+				candidate = opt.StringValue()
+			}
+		}
 		// Wrap text suggestion logic
 		msgDummy := &discordgo.MessageCreate{
 			Message: &discordgo.Message{
@@ -777,7 +1054,19 @@ func HandleSlashPolymarket(s *discordgo.Session, i *discordgo.InteractionCreate)
 			},
 		}
 		respondEmbed(s, i, utils.InfoEmbed("Enviando sugestão...", "Processando seu pedido..."))
-		handleTextSuggest(s, msgDummy, input)
+		handleTextSuggest(s, msgDummy, input, candidate)
+
+	case "cancel":
+		marketID := options[0].Options[0].StringValue()
+		msgDummy := &discordgo.MessageCreate{
+			Message: &discordgo.Message{
+				ChannelID: i.ChannelID,
+				GuildID:   i.GuildID,
+				Author:    i.Member.User,
+			},
+		}
+		respondEmbed(s, i, utils.InfoEmbed("Processando cancelamento...", "Verificando mercado e reembolsando..."))
+		handleTextCancelMarket(s, msgDummy, marketID)
 
 	case "view":
 		marketID := options[0].Options[0].StringValue()

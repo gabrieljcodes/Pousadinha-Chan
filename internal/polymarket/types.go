@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -24,9 +25,25 @@ type GammaMarket struct {
 	Description      string `json:"description"`
 	Outcomes         string `json:"outcomes"`      // e.g. "[\"Yes\", \"No\"]"
 	OutcomePrices    string `json:"outcomePrices"` // e.g. "[\"0.65\", \"0.35\"]"
-	Volume           string `json:"volume"`
-	Active           bool   `json:"active"`
-	Closed           bool   `json:"closed"`
+	Volume           string  `json:"volume"`
+	VolumeNum        float64 `json:"volumeNum"`
+	GroupItemTitle   string  `json:"groupItemTitle"`
+	Active           bool    `json:"active"`
+	Closed           bool    `json:"closed"`
+}
+
+// GammaEvent represents an event container returned by the Polymarket Gamma API
+type GammaEvent struct {
+	ID          string         `json:"id"`
+	Ticker      string         `json:"ticker"`
+	Slug        string         `json:"slug"`
+	Title       string         `json:"title"`
+	Description string         `json:"description"`
+	Image       string         `json:"image"`
+	Icon        string         `json:"icon"`
+	Active      bool           `json:"active"`
+	Closed      bool           `json:"closed"`
+	Markets     []*GammaMarket `json:"markets"`
 }
 
 // GetPrices parses the OutcomePrices JSON string array into (yesPrice, noPrice)
@@ -144,19 +161,47 @@ type ShareCost struct {
 // ExtractSlug extracts slug or ID from user input (raw ID, slug, or full URL)
 func ExtractSlug(input string) string {
 	input = strings.TrimSpace(input)
-	input = strings.TrimPrefix(input, "https://")
-	input = strings.TrimPrefix(input, "http://")
-	input = strings.TrimPrefix(input, "polymarket.com/event/")
-	input = strings.TrimPrefix(input, "polymarket.com/market/")
-	input = strings.TrimPrefix(input, "gamma-api.polymarket.com/events/")
-	input = strings.TrimPrefix(input, "gamma-api.polymarket.com/markets/")
+	if input == "" {
+		return ""
+	}
 
-	// Strip URL query parameters if present
+	// Check if it's an API URL with ?id= or ?slug=
+	if strings.Contains(input, "gamma-api.polymarket.com") {
+		if u, err := url.Parse(input); err == nil {
+			if id := u.Query().Get("id"); id != "" {
+				return id
+			}
+			if slug := u.Query().Get("slug"); slug != "" {
+				return slug
+			}
+		}
+	}
+
+	// Strip URL query parameters and hash fragments
 	if idx := strings.Index(input, "?"); idx != -1 {
 		input = input[:idx]
 	}
-	// Strip trailing slash
+	if idx := strings.Index(input, "#"); idx != -1 {
+		input = input[:idx]
+	}
 	input = strings.TrimSuffix(input, "/")
+
+	// If URL contains /event/ or /market/ (with optional language prefix like /pt/, /es/, /de/, etc.)
+	for _, marker := range []string{"/event/", "/events/", "/market/", "/markets/"} {
+		if idx := strings.Index(input, marker); idx != -1 {
+			slugPart := input[idx+len(marker):]
+			parts := strings.Split(slugPart, "/")
+			if len(parts) > 0 && parts[0] != "" {
+				return parts[0]
+			}
+		}
+	}
+
+	// Strip protocol and domain prefixes if any remain
+	input = strings.TrimPrefix(input, "https://")
+	input = strings.TrimPrefix(input, "http://")
+	input = strings.TrimPrefix(input, "www.")
+	input = strings.TrimPrefix(input, "polymarket.com/")
 
 	// If path like "slug/market-id", take slug
 	parts := strings.Split(input, "/")
