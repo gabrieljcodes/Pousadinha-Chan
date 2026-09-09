@@ -2,7 +2,7 @@ package crypto
 
 import (
 	"encoding/json"
-	"estudocoin/internal/database"
+	"bot/internal/database"
 	"fmt"
 	"net/http"
 	"strings"

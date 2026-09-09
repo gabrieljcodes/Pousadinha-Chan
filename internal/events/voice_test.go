@@ -1,7 +1,7 @@
 package events
 
 import (
-	"estudocoin/pkg/config"
+	"bot/pkg/config"
 	"testing"
 	"time"
 

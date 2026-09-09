@@ -2,9 +2,9 @@ package games
 
 import (
 	"crypto/rand"
-	"estudocoin/internal/database"
-	"estudocoin/pkg/config"
-	"estudocoin/pkg/utils"
+	"bot/internal/database"
+	"bot/pkg/config"
+	"bot/pkg/utils"
 	"fmt"
 	"log"
 	"strconv"

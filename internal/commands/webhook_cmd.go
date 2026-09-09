@@ -1,9 +1,9 @@
 package commands
 
 import (
-	"estudocoin/internal/database"
-	"estudocoin/internal/webhook"
-	"estudocoin/pkg/utils"
+	"bot/internal/database"
+	"bot/internal/webhook"
+	"bot/pkg/utils"
 
 	"github.com/bwmarrin/discordgo"
 )

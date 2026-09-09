@@ -1,12 +1,12 @@
 package commands
 
 import (
-	"estudocoin/internal/crypto"
-	"estudocoin/internal/database"
-	"estudocoin/internal/games"
-	"estudocoin/internal/stockmarket"
-	"estudocoin/pkg/config"
-	"estudocoin/pkg/utils"
+	"bot/internal/crypto"
+	"bot/internal/database"
+	"bot/internal/games"
+	"bot/internal/stockmarket"
+	"bot/pkg/config"
+	"bot/pkg/utils"
 	"fmt"
 	"strconv"
 	"strings"

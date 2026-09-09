@@ -1,8 +1,8 @@
 package events
 
 import (
-	"estudocoin/internal/database"
-	"estudocoin/pkg/config"
+	"bot/internal/database"
+	"bot/pkg/config"
 	"log"
 	"sync"
 	"time"

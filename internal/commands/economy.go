@@ -1,10 +1,10 @@
 package commands
 
 import (
-	"estudocoin/internal/database"
-	"estudocoin/internal/webhook"
-	"estudocoin/pkg/config"
-	"estudocoin/pkg/utils"
+	"bot/internal/database"
+	"bot/internal/webhook"
+	"bot/pkg/config"
+	"bot/pkg/utils"
 	"fmt"
 	"log"
 	"strconv"

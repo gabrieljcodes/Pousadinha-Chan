@@ -1,13 +1,13 @@
 package commands
 
 import (
-	"estudocoin/internal/crypto"
-	"estudocoin/internal/database"
-	"estudocoin/internal/games"
-	"estudocoin/internal/stockmarket"
-	"estudocoin/internal/webhook"
-	"estudocoin/pkg/config"
-	"estudocoin/pkg/utils"
+	"bot/internal/crypto"
+	"bot/internal/database"
+	"bot/internal/games"
+	"bot/internal/stockmarket"
+	"bot/internal/webhook"
+	"bot/pkg/config"
+	"bot/pkg/utils"
 	"fmt"
 
 	"github.com/bwmarrin/discordgo"

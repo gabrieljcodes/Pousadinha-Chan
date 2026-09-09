@@ -1,9 +1,9 @@
 package commands
 
 import (
-	"estudocoin/internal/games"
-	"estudocoin/pkg/config"
-	"estudocoin/pkg/utils"
+	"bot/internal/games"
+	"bot/pkg/config"
+	"bot/pkg/utils"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"

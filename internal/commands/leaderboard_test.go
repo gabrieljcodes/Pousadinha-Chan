@@ -1,7 +1,7 @@
 package commands
 
 import (
-	"estudocoin/internal/database"
+	"bot/internal/database"
 	"testing"
 	"time"
 

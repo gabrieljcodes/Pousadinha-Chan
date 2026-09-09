@@ -3,7 +3,7 @@ package stockmarket
 import (
 	_ "embed"
 	"encoding/json"
-	"estudocoin/internal/database"
+	"bot/internal/database"
 	"log"
 	"os"
 	"time"

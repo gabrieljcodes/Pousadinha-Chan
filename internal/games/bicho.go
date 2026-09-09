@@ -3,8 +3,8 @@ package games
 import (
 	"crypto/rand"
 	"encoding/binary"
-	"estudocoin/internal/database"
-	"estudocoin/pkg/config"
+	"bot/internal/database"
+	"bot/pkg/config"
 	"fmt"
 	"log"
 	"math"

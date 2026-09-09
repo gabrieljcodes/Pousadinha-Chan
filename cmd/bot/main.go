@@ -1,14 +1,14 @@
 package main
 
 import (
-	"estudocoin/internal/commands"
-	"estudocoin/pkg/config"
-	"estudocoin/internal/database"
-	"estudocoin/internal/events"
-	"estudocoin/internal/api"
-	"estudocoin/internal/games"
-	"estudocoin/internal/polymarket"
-	"estudocoin/internal/stockmarket"
+	"bot/internal/commands"
+	"bot/pkg/config"
+	"bot/internal/database"
+	"bot/internal/events"
+	"bot/internal/api"
+	"bot/internal/games"
+	"bot/internal/polymarket"
+	"bot/internal/stockmarket"
 	"log"
 	"os"
 	"os/signal"

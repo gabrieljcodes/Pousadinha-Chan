@@ -2,9 +2,9 @@ package api
 
 import (
 	"encoding/json"
-	"estudocoin/internal/crypto"
-	"estudocoin/internal/database"
-	"estudocoin/internal/webhook"
+	"bot/internal/crypto"
+	"bot/internal/database"
+	"bot/internal/webhook"
 	"fmt"
 	"math"
 	"net/http"

@@ -1,7 +1,7 @@
 package utils
 
 import (
-	"estudocoin/internal/webhook"
+	"bot/internal/webhook"
 
 	"github.com/bwmarrin/discordgo"
 )

@@ -1,8 +1,8 @@
 package commands
 
 import (
-	"estudocoin/internal/games"
-	"estudocoin/pkg/utils"
+	"bot/internal/games"
+	"bot/pkg/utils"
 	"strconv"
 	"strings"
 

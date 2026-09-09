@@ -1,7 +1,7 @@
 package polymarket
 
 import (
-	"estudocoin/internal/database"
+	"bot/internal/database"
 	"strings"
 	"testing"
 )

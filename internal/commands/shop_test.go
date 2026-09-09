@@ -1,8 +1,8 @@
 package commands
 
 import (
-	"estudocoin/pkg/config"
-	"estudocoin/pkg/utils"
+	"bot/pkg/config"
+	"bot/pkg/utils"
 	"strings"
 	"testing"
 

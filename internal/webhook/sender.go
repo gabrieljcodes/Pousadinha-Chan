@@ -3,8 +3,8 @@ package webhook
 import (
 	"bytes"
 	"encoding/json"
-	"estudocoin/internal/database"
-	"estudocoin/pkg/config"
+	"bot/internal/database"
+	"bot/pkg/config"
 	"fmt"
 	"log"
 	"net"

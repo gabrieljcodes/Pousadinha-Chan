@@ -1,8 +1,8 @@
 package polymarket
 
 import (
-	"estudocoin/internal/database"
-	"estudocoin/pkg/config"
+	"bot/internal/database"
+	"bot/pkg/config"
 	"fmt"
 	"math"
 	"strings"

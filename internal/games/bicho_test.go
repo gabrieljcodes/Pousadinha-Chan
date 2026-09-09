@@ -1,7 +1,7 @@
 package games
 
 import (
-	"estudocoin/internal/database"
+	"bot/internal/database"
 	"testing"
 	"time"
 )

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"estudocoin/pkg/config"
+	"bot/pkg/config"
 )
 
 // Initialize initializes the database based on configuration

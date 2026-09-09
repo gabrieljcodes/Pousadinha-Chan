@@ -1,9 +1,9 @@
 package stockmarket
 
 import (
-	"estudocoin/internal/database"
-	"estudocoin/pkg/config"
-	"estudocoin/pkg/utils"
+	"bot/internal/database"
+	"bot/pkg/config"
+	"bot/pkg/utils"
 	"fmt"
 	"math"
 	"strconv"

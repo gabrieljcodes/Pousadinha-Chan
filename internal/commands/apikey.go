@@ -3,8 +3,8 @@ package commands
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"estudocoin/internal/database"
-	"estudocoin/pkg/utils"
+	"bot/internal/database"
+	"bot/pkg/utils"
 	"fmt"
 	"strings"
 
