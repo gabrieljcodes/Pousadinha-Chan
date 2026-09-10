@@ -24,7 +24,7 @@ func main() {
 func run() error {
 	_ = godotenv.Load()
 	if len(os.Args) < 2 {
-		return fmt.Errorf("usage: gacha import-batch --job initial-10k --limit 10000 --auto-approve | batch-status <job> | migrate | import <AniList ID> | tag <character ID> <tag> | image <character ID> <Gelbooru post ID> | pending | approve/reject <asset ID> <reviewer> | enable/disable <character ID>")
+		return fmt.Errorf("usage: gacha import-batch [--force] --job initial-10k --limit 10000 --auto-approve | clear-lease | batch-status <job> | migrate | import <AniList ID> | tag <character ID> <tag> | image <character ID> <Gelbooru post ID> | pending | approve/reject <asset ID> <reviewer> | enable/disable <character ID>")
 	}
 	config.Load()
 	cfg, e := gacha.LoadConfig()
@@ -44,24 +44,36 @@ func run() error {
 	}
 	args := os.Args[2:]
 	id := int64(0)
-	if len(args) > 0 && os.Args[1] != "import-batch" && os.Args[1] != "batch-status" {
+	if len(args) > 0 && os.Args[1] != "import-batch" && os.Args[1] != "batch-status" && os.Args[1] != "clear-lease" {
 		id, e = strconv.ParseInt(args[0], 10, 64)
 		if e != nil || id <= 0 {
 			return fmt.Errorf("positive numeric ID required")
 		}
 	}
 	switch os.Args[1] {
+	case "clear-lease":
+		_, e = s.DB.ExecContext(ctx, `DELETE FROM gacha_import_leases WHERE provider='anilist'`)
+		if e == nil {
+			fmt.Println("AniList import lease cleared.")
+		}
+		return e
 	case "import-batch":
 		flags := flag.NewFlagSet("import-batch", flag.ContinueOnError)
 		job := flags.String("job", "initial-10k", "Persistent job name")
 		limit := flags.Int("limit", 10000, "Number of successfully imported characters")
 		auto := flags.Bool("auto-approve", false, "Approve AniList portraits and enable eligible characters")
 		retry := flags.Bool("retry-failed", false, "Retry failed items when resuming")
+		force := flags.Bool("force", false, "Force release any existing stale batch importer lease")
 		if e = flags.Parse(args); e != nil {
 			return e
 		}
 		if flags.NArg() != 0 {
 			return fmt.Errorf("unexpected batch arguments")
+		}
+		if *force {
+			if _, e = s.DB.ExecContext(ctx, `DELETE FROM gacha_import_leases WHERE provider='anilist'`); e != nil {
+				return e
+			}
 		}
 		return s.RunBatch(ctx, gacha.NewAniList(), gacha.BatchOptions{Name: *job, Target: *limit, AutoApprove: *auto, RetryFailed: *retry}, os.Stdout)
 	case "batch-status":
