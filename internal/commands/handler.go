@@ -3,6 +3,7 @@ package commands
 import (
 	"bot/internal/crypto"
 	"bot/internal/database"
+	"bot/internal/gacha"
 	"bot/internal/games"
 	"bot/internal/stockmarket"
 	"bot/pkg/config"
@@ -51,8 +52,9 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		}
 	}
 
-
 	switch command {
+	case "!gacha":
+		gacha.Text(s, m, args)
 	case "!help", "!ajuda":
 		CmdHelp(s, m)
 	case "!daily":

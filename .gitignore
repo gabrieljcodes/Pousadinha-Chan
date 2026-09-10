@@ -5,3 +5,5 @@ main
 config.json
 .agents/
 skills-lock.json
+# Downloaded gacha media
+/data/gacha/

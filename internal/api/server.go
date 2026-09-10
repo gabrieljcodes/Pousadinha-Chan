@@ -1,10 +1,11 @@
 package api
 
 import (
-	"encoding/json"
 	"bot/internal/database"
+	"bot/internal/gacha"
 	"bot/internal/webhook"
 	"bot/pkg/config"
+	"encoding/json"
 	"log"
 	"net/http"
 	"strings"
@@ -118,6 +119,9 @@ func HandleTransfer(w http.ResponseWriter, r *http.Request) {
 
 func Start() {
 	mux := http.NewServeMux()
+	if gacha.Default != nil {
+		mux.Handle("/", gacha.Default)
+	}
 
 	// User endpoints
 	mux.HandleFunc("/api/v1/me", AuthMiddleware(HandleMe))

@@ -1,25 +1,28 @@
 package main
 
 import (
+	"bot/internal/api"
 	"bot/internal/commands"
-	"bot/pkg/config"
 	"bot/internal/database"
 	"bot/internal/events"
-	"bot/internal/api"
+	"bot/internal/gacha"
 	"bot/internal/games"
 	"bot/internal/polymarket"
 	"bot/internal/stockmarket"
+	"bot/pkg/config"
+	"context"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/joho/godotenv"
 )
 
 func main() {
-	_ = godotenv.Load() 
+	_ = godotenv.Load()
 
 	// Load Configuration
 	config.Load()
@@ -31,6 +34,23 @@ func main() {
 
 	database.Initialize()
 	defer database.DB.Close()
+	gachaConfig, err := gacha.LoadConfig()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if gachaConfig.Enabled {
+		if !config.Bot.EnableAPI {
+			log.Fatal("GACHA_ENABLED requires ENABLE_API=true to serve local media")
+		}
+		store := &gacha.Store{DB: database.DB.GetDB(), Config: gachaConfig}
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		err = store.Migrate(ctx)
+		cancel()
+		if err != nil {
+			log.Fatalf("Gacha migration failed: %v", err)
+		}
+		gacha.Default = store
+	}
 
 	// Start API Server
 	if config.Bot.EnableAPI {
@@ -98,7 +118,7 @@ func main() {
 	}
 
 	log.Println("Bot is now running. Press CTRL-C to exit.")
-	
+
 	// Wait here until CTRL-C or other term signal is received.
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)

@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"bot/internal/gacha"
 	"bot/internal/games"
 	"bot/pkg/config"
 	"bot/pkg/utils"
@@ -37,7 +38,9 @@ func ComponentsHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		return
 	}
 
-	if strings.HasPrefix(customID, "aviator_stop_") {
+	if strings.HasPrefix(customID, "gacha_claim_") {
+		gacha.HandleClaim(s, i)
+	} else if strings.HasPrefix(customID, "aviator_stop_") {
 		games.HandleButton(s, i)
 	} else if strings.HasPrefix(customID, "cup_") {
 		games.HandleCupInteraction(s, i)

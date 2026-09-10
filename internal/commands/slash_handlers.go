@@ -3,6 +3,7 @@ package commands
 import (
 	"bot/internal/crypto"
 	"bot/internal/database"
+	"bot/internal/gacha"
 	"bot/internal/games"
 	"bot/internal/stockmarket"
 	"bot/internal/webhook"
@@ -56,6 +57,8 @@ func SlashHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	}
 
 	switch i.ApplicationCommandData().Name {
+	case "gacha":
+		gacha.Slash(s, i)
 	case "help":
 		HandleSlashHelp(s, i)
 	case "daily":
@@ -244,7 +247,7 @@ func handleSlashSlots(s *discordgo.Session, i *discordgo.InteractionCreate) {
 func handleSlashBlackjack(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	options := i.ApplicationCommandData().Options
 	bet := int(options[0].IntValue())
-	
+
 	games.StartBlackjackGame(s, i, bet)
 }
 

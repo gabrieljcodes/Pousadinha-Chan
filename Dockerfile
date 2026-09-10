@@ -21,13 +21,17 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -ldflags="-s -w" \
     -o /app/bot ./cmd/bot
 
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o /app/gacha ./cmd/gacha
+
+RUN test -f config.json || cp config.example.json config.json
+
 # ============================================
 # Stage 2: Minimal runtime container
 # ============================================
 FROM alpine:3.21
 
 # Install CA certificates for HTTPS/WSS (Discord & External APIs) and timezone data
-RUN apk add --no-cache ca-certificates tzdata
+RUN apk add --no-cache ca-certificates tzdata ffmpeg
 
 # Create non-root user and group for security
 RUN addgroup -g 10001 -S appgroup && \
@@ -37,16 +41,17 @@ WORKDIR /app
 
 # Copy binary from builder
 COPY --from=builder /app/bot /app/bot
+COPY --from=builder /app/gacha /app/gacha
 
-# Copy default configurations (wildcards ensure build succeeds whether config.json is present or not)
+# Copy configurations; builder supplies the example when config.json is absent.
 COPY economy.json ./
 COPY config.example.json ./
-COPY config.json* ./
+COPY --from=builder /app/config.json ./
 COPY internal/stockmarket/companies.json ./internal/stockmarket/companies.json
 COPY internal/stockmarket/companies.json ./companies.json
 
 # Ensure correct file permissions
-RUN chown -R appuser:appgroup /app
+RUN mkdir -p /app/data/gacha && chown -R appuser:appgroup /app
 
 # Run as unprivileged user
 USER appuser

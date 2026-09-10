@@ -42,3 +42,6 @@ coverage.txt
 *.log
 tmp/
 scratch/
+
+# Persistent gacha downloads must not be baked into the image
+data/gacha/
