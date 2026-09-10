@@ -63,10 +63,13 @@ func (a *AniList) request(ctx context.Context, payload any, out any) error {
 		if e != nil {
 			return fmt.Errorf("AniList request failed")
 		}
-		data, e := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+		data, e := io.ReadAll(io.LimitReader(resp.Body, (8<<20)+1))
 		resp.Body.Close()
 		if e != nil {
 			return e
+		}
+		if len(data) > 8<<20 {
+			return fmt.Errorf("AniList response exceeds 8 MiB")
 		}
 		if resp.StatusCode == 429 || resp.StatusCode >= 500 {
 			delay := time.Duration(3*(attempt+1)) * time.Second
@@ -102,62 +105,58 @@ func (a *AniList) request(ctx context.Context, payload any, out any) error {
 	return fmt.Errorf("AniList unavailable after retries")
 }
 
-const characterQuery = `query($id:Int!,$page:Int!){Character(id:$id){id name{full native alternative} gender description(asHtml:false) favourites siteUrl image{large} media(page:$page,perPage:25,sort:POPULARITY_DESC,type:ANIME){pageInfo{hasNextPage} edges{characterRole node{id type isAdult title{romaji english native} genres siteUrl studios(isMain:true){nodes{name}}}}}}}`
+const characterFields = `id name{full native alternative} gender description(asHtml:false) favourites siteUrl image{large} media(page:$mediaPage,perPage:25,sort:POPULARITY_DESC,type:ANIME){pageInfo{hasNextPage} edges{characterRole node{id type isAdult title{romaji english native} genres siteUrl studios(isMain:true){nodes{name}}}}}`
+const characterQuery = `query($id:Int!,$mediaPage:Int!){Character(id:$id){` + characterFields + `}}`
+const charactersQuery = `query($ids:[Int!]!,$mediaPage:Int!){Page(page:1,perPage:50){characters(id_in:$ids){` + characterFields + `}}}`
 
-func (a *AniList) Character(ctx context.Context, id int64) (Character, error) {
-	c := Character{Provider: "anilist", ExternalID: strconv.FormatInt(id, 10)}
-	if id <= 0 {
-		return c, fmt.Errorf("invalid AniList ID")
+type anilistCharacter struct {
+	ID   int64
+	Name struct {
+		Full, Native string
+		Alternative  []string
 	}
-	for page := 1; page <= 100; page++ {
-		var result struct {
-			Errors []struct{ Message string }
-			Data   struct {
-				Character *struct {
-					ID   int64
-					Name struct {
-						Full, Native string
-						Alternative  []string
-					}
-					Gender, Description, SiteURL string
-					Image                        struct{ Large string }
-					Favourites                   int
-					Media                        struct {
-						PageInfo struct{ HasNextPage bool }
-						Edges    []struct {
-							CharacterRole string
-							Node          struct {
-								ID      int64
-								Type    string
-								IsAdult bool
-								Title   struct{ Romaji, English, Native string }
-								Genres  []string
-								SiteURL string
-								Studios struct{ Nodes []struct{ Name string } }
-							}
-						}
-					}
-				}
+	Gender, Description, SiteURL string
+	Image                        struct{ Large string }
+	Favourites                   int
+	Media                        struct {
+		PageInfo struct{ HasNextPage bool }
+		Edges    []struct {
+			CharacterRole string
+			Node          struct {
+				ID      int64
+				Type    string
+				IsAdult bool
+				Title   struct{ Romaji, English, Native string }
+				Genres  []string
+				SiteURL string
+				Studios struct{ Nodes []struct{ Name string } }
 			}
 		}
-		if e := a.request(ctx, map[string]any{"query": characterQuery, "variables": map[string]any{"id": id, "page": page}}, &result); e != nil {
-			return c, e
-		}
-		if len(result.Errors) > 0 {
-			return c, fmt.Errorf("AniList GraphQL: %s", result.Errors[0].Message)
-		}
-		v := result.Data.Character
-		if v == nil {
-			return c, fmt.Errorf("character not found")
-		}
-		c.Name = v.Name.Full
-		c.NativeName = v.Name.Native
-		c.Aliases = v.Name.Alternative
-		c.Gender = v.Gender
-		c.Description = v.Description
-		c.Favourites = v.Favourites
-		c.URL = v.SiteURL
-		c.Portrait = v.Image.Large
+	}
+}
+
+func (a *AniList) characterPage(ctx context.Context, id int64, page int) (*anilistCharacter, error) {
+	var result struct {
+		Errors []struct{ Message string }
+		Data   struct{ Character *anilistCharacter }
+	}
+	if e := a.request(ctx, map[string]any{"query": characterQuery, "variables": map[string]any{"id": id, "mediaPage": page}}, &result); e != nil {
+		return nil, e
+	}
+	if len(result.Errors) > 0 {
+		return nil, fmt.Errorf("AniList GraphQL: %s", result.Errors[0].Message)
+	}
+	if result.Data.Character == nil {
+		return nil, fmt.Errorf("character not found")
+	}
+	if result.Data.Character.ID != id {
+		return nil, fmt.Errorf("AniList returned a different character")
+	}
+	return result.Data.Character, nil
+}
+func (a *AniList) completeCharacter(ctx context.Context, v *anilistCharacter) (Character, error) {
+	c := Character{Provider: "anilist", ExternalID: strconv.FormatInt(v.ID, 10), Name: v.Name.Full, NativeName: v.Name.Native, Aliases: v.Name.Alternative, Gender: v.Gender, Description: v.Description, Favourites: v.Favourites, URL: v.SiteURL, Portrait: v.Image.Large}
+	for page := 1; page <= 100; page++ {
 		for _, edge := range v.Media.Edges {
 			n := edge.Node
 			if n.IsAdult {
@@ -176,8 +175,70 @@ func (a *AniList) Character(ctx context.Context, id int64) (Character, error) {
 		if !v.Media.PageInfo.HasNextPage {
 			return c, nil
 		}
+		if page == 100 {
+			break
+		}
+		var e error
+		v, e = a.characterPage(ctx, v.ID, page+1)
+		if e != nil {
+			return c, e
+		}
 	}
 	return c, fmt.Errorf("too many work pages; incomplete import refused")
+}
+func (a *AniList) Character(ctx context.Context, id int64) (Character, error) {
+	if id <= 0 {
+		return Character{}, fmt.Errorf("invalid AniList ID")
+	}
+	v, e := a.characterPage(ctx, id, 1)
+	if e != nil {
+		return Character{}, e
+	}
+	return a.completeCharacter(ctx, v)
+}
+
+// Characters fetches up to 50 first pages together; only overflowing media connections
+// need follow-up requests. GraphQL errors reject the whole response, never partial metadata.
+func (a *AniList) Characters(ctx context.Context, ids []int64) ([]Character, error) {
+	if len(ids) == 0 || len(ids) > 50 {
+		return nil, fmt.Errorf("expected 1..50 character IDs")
+	}
+	requested := map[int64]bool{}
+	for _, id := range ids {
+		if id <= 0 {
+			return nil, fmt.Errorf("invalid AniList ID")
+		}
+		requested[id] = true
+	}
+	var result struct {
+		Errors []struct{ Message string }
+		Data   struct {
+			Page *struct{ Characters []*anilistCharacter }
+		}
+	}
+	if e := a.request(ctx, map[string]any{"query": charactersQuery, "variables": map[string]any{"ids": ids, "mediaPage": 1}}, &result); e != nil {
+		return nil, e
+	}
+	if len(result.Errors) > 0 {
+		return nil, fmt.Errorf("AniList GraphQL: %s", result.Errors[0].Message)
+	}
+	if result.Data.Page == nil {
+		return nil, fmt.Errorf("AniList returned no page")
+	}
+	out := make([]Character, 0, len(ids))
+	seen := map[int64]bool{}
+	for _, v := range result.Data.Page.Characters {
+		if v == nil || !requested[v.ID] || seen[v.ID] {
+			return nil, fmt.Errorf("invalid character in batch response")
+		}
+		seen[v.ID] = true
+		c, e := a.completeCharacter(ctx, v)
+		if e != nil {
+			return nil, e
+		}
+		out = append(out, c)
+	}
+	return out, nil
 }
 
 // CharacterIDs discovers identities in popularity order without assuming consecutive IDs.

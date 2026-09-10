@@ -2,6 +2,7 @@ package gacha
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -177,5 +178,106 @@ func TestAniListDisabledResponse(t *testing.T) {
 	var apiError *AniListHTTPError
 	if !errors.As(e, &apiError) || apiError.Status != 403 || apiError.Message == "" {
 		t.Fatalf("source explanation lost: %v", e)
+	}
+}
+
+type cachedBatchProvider struct{ calls int }
+
+func (p *cachedBatchProvider) Character(context.Context, int64) (Character, error) {
+	return Character{}, fmt.Errorf("unexpected individual fetch")
+}
+func (p *cachedBatchProvider) CharacterIDs(context.Context, int) ([]int64, bool, error) {
+	return []int64{200, 201}, false, nil
+}
+func (p *cachedBatchProvider) Characters(_ context.Context, ids []int64) ([]Character, error) {
+	p.calls++
+	out := []Character{}
+	for _, id := range ids {
+		out = append(out, Character{Provider: "anilist", ExternalID: fmt.Sprint(id), Name: fmt.Sprint(id)})
+	}
+	return out, nil
+}
+func testBatchCache(t *testing.T, s *Store) {
+	ctx := context.Background()
+	p := &cachedBatchProvider{}
+	fail := true
+	importer := func(ctx context.Context, id int64) (int64, error) {
+		var payload []byte
+		if e := s.DB.QueryRowContext(ctx, `SELECT payload FROM gacha_import_items WHERE job='bulk-cache' AND external_id=$1`, id).Scan(&payload); e != nil {
+			t.Fatal(e)
+		}
+		if len(payload) == 0 {
+			t.Fatal("metadata not persisted before portrait work")
+		}
+		if fail && id == 201 {
+			return 0, fmt.Errorf("portrait download interrupted")
+		}
+		var c Character
+		if e := json.Unmarshal(payload, &c); e != nil {
+			t.Fatal(e)
+		}
+		return s.Import(ctx, c)
+	}
+	opt := BatchOptions{Name: "bulk-cache", Target: 2}
+	if e := s.runBatch(ctx, p, opt, io.Discard, importer); e == nil {
+		t.Fatal("expected incomplete job")
+	}
+	if p.calls != 1 {
+		t.Fatal("not batched", p.calls)
+	}
+	fail = false
+	opt.RetryFailed = true
+	if e := s.runBatch(ctx, p, opt, io.Discard, importer); e != nil {
+		t.Fatal(e)
+	}
+	if p.calls != 1 {
+		t.Fatal("refetched persisted metadata on resume", p.calls)
+	}
+	stats, e := s.BatchStats(ctx, opt.Name)
+	if e != nil || stats.Imported != 2 {
+		t.Fatal(stats, e)
+	}
+}
+func TestCharactersBatchContinuesOnlyOverflow(t *testing.T) {
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if r.Header.Get("Referer") != "https://anilist.co/" || r.Header.Get("Origin") != "https://anilist.co" {
+			t.Error("client must send Referer and Origin headers")
+		}
+		var req struct {
+			Variables struct {
+				IDs           []int64
+				ID, MediaPage int
+			}
+		}
+		if e := json.NewDecoder(r.Body).Decode(&req); e != nil {
+			t.Fatal(e)
+		}
+		if calls == 1 {
+			if len(req.Variables.IDs) != 2 || req.Variables.MediaPage != 1 {
+				t.Error("invalid batch arguments")
+			}
+			fmt.Fprint(w, `{"data":{"Page":{"characters":[{"id":17,"name":{"full":"A"},"media":{"pageInfo":{"hasNextPage":true},"edges":[{"node":{"id":1,"type":"ANIME","title":{"romaji":"One"}}}]}},{"id":18,"name":{"full":"B"},"media":{"pageInfo":{"hasNextPage":false},"edges":[]}}]}}}`)
+		} else {
+			if req.Variables.ID != 17 || req.Variables.MediaPage != 2 {
+				t.Error("refetched first page or fetched non-overflowing character")
+			}
+			fmt.Fprint(w, `{"data":{"Character":{"id":17,"media":{"pageInfo":{"hasNextPage":false},"edges":[{"node":{"id":2,"type":"ANIME","title":{"romaji":"Two"}}}]}}}}`)
+		}
+	}))
+	defer srv.Close()
+	a := NewAniList()
+	a.Endpoint = srv.URL
+	a.Client = srv.Client()
+	characters, e := a.Characters(context.Background(), []int64{17, 18})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if calls != 2 || len(characters) != 2 || len(characters[0].Works) != 2 || characters[0].Name != "A" {
+		t.Fatal(calls, characters)
+	}
+	if _, e = a.Characters(context.Background(), make([]int64, 51)); e == nil {
+		t.Fatal("oversized batch accepted")
 	}
 }

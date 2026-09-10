@@ -322,6 +322,6 @@ func TestPostgresGame(t *testing.T) {
 	if rec.Code != 404 {
 		t.Fatal("rejected asset served")
 	}
-	t.Run("batch", func(t *testing.T) { testBatch(t, store) })
+	t.Run("batch", func(t *testing.T) { testBatch(t, store); testBatchCache(t, store) })
 
 }

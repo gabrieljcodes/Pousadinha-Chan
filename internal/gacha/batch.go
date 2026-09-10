@@ -3,11 +3,13 @@ package gacha
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/google/uuid"
 	"io"
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -15,6 +17,10 @@ type BatchProvider interface {
 	CatalogProvider
 	CharacterIDs(context.Context, int) ([]int64, bool, error)
 }
+type CharacterBatchProvider interface {
+	Characters(context.Context, []int64) ([]Character, error)
+}
+
 type BatchOptions struct {
 	Name                     string
 	Target                   int
@@ -73,6 +79,9 @@ func (s *Store) ImportOne(ctx context.Context, p CatalogProvider, id int64, auto
 	if e != nil {
 		return 0, e
 	}
+	return s.importPrepared(ctx, c, auto)
+}
+func (s *Store) importPrepared(ctx context.Context, c Character, auto bool) (int64, error) {
 	if len(c.Works) == 0 {
 		return 0, errNotAnime
 	}
@@ -101,7 +110,23 @@ func (s *Store) ImportOne(ctx context.Context, p CatalogProvider, id int64, auto
 var errNotAnime = errors.New("no eligible anime works")
 
 func (s *Store) RunBatch(ctx context.Context, p BatchProvider, opt BatchOptions, out io.Writer) error {
-	return s.runBatch(ctx, p, opt, out, func(ctx context.Context, id int64) (int64, error) { return s.ImportOne(ctx, p, id, opt.AutoApprove) })
+	return s.runBatch(ctx, p, opt, out, func(ctx context.Context, id int64) (int64, error) {
+		var payload []byte
+		if e := s.DB.QueryRowContext(ctx, `SELECT payload FROM gacha_import_items WHERE job=$1 AND external_id=$2`, opt.Name, id).Scan(&payload); e != nil {
+			return 0, e
+		}
+		if len(payload) == 0 {
+			return s.ImportOne(ctx, p, id, opt.AutoApprove)
+		}
+		var c Character
+		if e := json.Unmarshal(payload, &c); e != nil {
+			return 0, e
+		}
+		if c.Provider != "anilist" || c.ExternalID != strconv.FormatInt(id, 10) {
+			return 0, fmt.Errorf("invalid cached character identity")
+		}
+		return s.importPrepared(ctx, c, opt.AutoApprove)
+	})
 }
 func (s *Store) runBatch(ctx context.Context, p BatchProvider, opt BatchOptions, out io.Writer, importOne func(context.Context, int64) (int64, error)) error {
 	if opt.Name == "" || len(opt.Name) > 100 || opt.Target < 1 || opt.Target > 100000 {
@@ -207,6 +232,11 @@ func (s *Store) runBatch(ctx context.Context, p BatchProvider, opt BatchOptions,
 		if e != nil {
 			return e
 		}
+		if bulk, ok := p.(CharacterBatchProvider); ok {
+			if e = s.prepareBatch(ctx, bulk, opt.Name, id, target-stats.Imported, renew); e != nil {
+				return e
+			}
+		}
 		step, cancel := context.WithTimeout(ctx, 3*time.Minute)
 		cid, importErr := importOne(step, id)
 		cancel()
@@ -244,4 +274,61 @@ func (s *Store) runBatch(ctx context.Context, p BatchProvider, opt BatchOptions,
 			return fmt.Errorf("paused after 5 consecutive failures; resolve the cause and resume with --retry-failed")
 		}
 	}
+}
+
+// prepareBatch persists metadata before processing portraits. Existing completed payloads
+// survive crashes and retries; a null payload from an older job is filled on demand.
+func (s *Store) prepareBatch(ctx context.Context, p CharacterBatchProvider, job string, nextID int64, remaining int, renew func() error) error {
+	var cached bool
+	if e := s.DB.QueryRowContext(ctx, `SELECT payload IS NOT NULL FROM gacha_import_items WHERE job=$1 AND external_id=$2`, job, nextID).Scan(&cached); e != nil {
+		return e
+	}
+	if cached {
+		return nil
+	}
+	rows, e := s.DB.QueryContext(ctx, `SELECT external_id FROM gacha_import_items WHERE job=$1 AND status='pending' AND payload IS NULL ORDER BY external_id LIMIT $2`, job, min(50, remaining))
+	if e != nil {
+		return e
+	}
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if e = rows.Scan(&id); e != nil {
+			rows.Close()
+			return e
+		}
+		ids = append(ids, id)
+	}
+	e = rows.Err()
+	rows.Close()
+	if e != nil {
+		return e
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	step, cancel := context.WithTimeout(ctx, 3*time.Minute)
+	characters, e := p.Characters(step, ids)
+	cancel()
+	if e != nil {
+		return e
+	}
+	if e = renew(); e != nil {
+		return e
+	}
+	tx, e := s.DB.BeginTx(ctx, nil)
+	if e != nil {
+		return e
+	}
+	defer tx.Rollback()
+	for _, c := range characters {
+		payload, e := json.Marshal(c)
+		if e != nil {
+			return e
+		}
+		if _, e = tx.ExecContext(ctx, `UPDATE gacha_import_items SET payload=$3,updated_at=now() WHERE job=$1 AND external_id=$2 AND status='pending' AND payload IS NULL`, job, c.ExternalID, string(payload)); e != nil {
+			return e
+		}
+	}
+	return tx.Commit()
 }

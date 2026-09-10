@@ -28,6 +28,9 @@ func (s *Store) Migrate(ctx context.Context) error {
 	if _, e = tx.ExecContext(ctx, migrations.GachaImport); e != nil {
 		return e
 	}
+	if _, e = tx.ExecContext(ctx, migrations.GachaImportPayload); e != nil {
+		return e
+	}
 	return tx.Commit()
 }
 
