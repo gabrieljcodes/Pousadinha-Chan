@@ -55,7 +55,9 @@ func (a *AniList) request(ctx context.Context, payload any, out any) error {
 			return e
 		}
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("User-Agent", "Pousadinha-Gacha/1.0")
+		req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+		req.Header.Set("Referer", "https://anilist.co/")
+		req.Header.Set("Origin", "https://anilist.co")
 		resp, e := a.Client.Do(req)
 		a.next = time.Now().Add(2200 * time.Millisecond)
 		if e != nil {
