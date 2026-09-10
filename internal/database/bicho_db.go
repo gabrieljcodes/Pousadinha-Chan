@@ -223,17 +223,17 @@ func PlaceBichoBetDB(roundID int64, userID, guildID, betType, scope, target stri
 	}
 
 	if currentBalance < amount {
-		return fmt.Errorf("saldo insuficiente: você tem %d EC, mas a aposta custa %d EC", currentBalance, amount)
+		return fmt.Errorf("insufficient balance: you have %d EC, but the bet costs %d EC", currentBalance, amount)
 	}
 
 	// 2. Verify round is still open
 	var roundStatus string
 	err = tx.QueryRow(`SELECT status FROM bicho_rounds WHERE id = $1`, roundID).Scan(&roundStatus)
 	if err != nil {
-		return fmt.Errorf("rodada não encontrada: %w", err)
+		return fmt.Errorf("round not found: %w", err)
 	}
 	if roundStatus != "open" {
-		return fmt.Errorf("a bilheteria para esta rodada já foi encerrada")
+		return fmt.Errorf("betting for this round has already closed")
 	}
 
 	// 3. Deduct user balance

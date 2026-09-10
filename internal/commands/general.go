@@ -92,14 +92,14 @@ func getHelpSections() []HelpSection {
 		},
 		{
 			ID:    "bicho",
-			Name:  "Jogo do Bicho",
+			Name:  "Jogo do Bicho (Lottery)",
 			Emoji: "🎲",
-			Value: "`!bicho` / `/bicho painel`\nVer painel oficial com bilheteria e botões interativos.\n\n" +
-				"`!bicho apostar <mod> <alvo> <val> [pos]`\nFazer aposta (grupo, dezena, centena, milhar, duque, terno).\n\n" +
-				"`!bicho tabela` / `/bicho tabela`\nVer tabela oficial dos 25 bichos e 100 dezenas.\n\n" +
-				"`!bicho apostas` / `/bicho minhas-apostas`\nVer seus bilhetes na rodada ativa.\n\n" +
-				"`!bicho config` / `!bicho sortear`\nAdministração do canal e sorteios diários.\n\n" +
-				"*Sorteio oficial 'Deu no Poste' diário com 5 prêmios auditados!*",
+			Value: "`!bicho` / `/bicho panel`\nView official lottery panel with live stats and action buttons.\n\n" +
+				"`!bicho bet <mod> <target> <val> [pos]`\nPlace bet (group, tens, hundreds, thousands, pair, trio).\n\n" +
+				"`!bicho table` / `/bicho table`\nView official catalog of all 25 animals and 100 tens.\n\n" +
+				"`!bicho bets` / `/bicho my-bets`\nView your registered tickets in the active round.\n\n" +
+				"`!bicho config` / `!bicho draw`\nConfigure channel and trigger draws *(Admin only)*.\n\n" +
+				"*Official daily 5-prize audited animal lottery draw!*",
 		},
 		{
 			ID:    "stocks",

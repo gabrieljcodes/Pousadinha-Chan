@@ -46,24 +46,30 @@ func TestAnimalDezenaMapping(t *testing.T) {
 }
 
 func TestFindAnimal(t *testing.T) {
-	// Search by name (case and accent insensitive)
+	// Search by name (English and Portuguese, case and accent insensitive)
 	tests := []struct {
 		query    string
 		expected int
 	}{
+		{"monkey", 17},
+		{"Monkey", 17},
 		{"macaco", 17},
 		{"MACACO", 17},
+		{"eagle", 2},
+		{"Eagle", 2},
 		{"aguia", 2},
 		{"Águia", 2},
+		{"cow", 25},
 		{"vaca", 25},
-		{"VACA", 25},
+		{"ostrich", 1},
 		{"avestruz", 1},
+		{"lion", 16},
+		{"leao", 16},
+		{"Leão", 16},
 		{"1", 1},
 		{"01", 1},
 		{"25", 25},
 		{"17", 17},
-		{"leao", 16},
-		{"Leão", 16},
 	}
 
 	for _, tt := range tests {
@@ -216,61 +222,67 @@ func TestCalculateNextDrawTime(t *testing.T) {
 }
 
 func TestValidateAndFormatBichoBet(t *testing.T) {
-	// 1. Grupo by name
-	v1, err := ValidateAndFormatBichoBet("grupo", "macaco", "cabeca")
-	if err != nil || v1.Modality != "grupo" || v1.Target != "Macaco" || v1.Scope != "cabeca" {
-		t.Errorf("Failed to validate grupo by name: %v, %+v", err, v1)
+	// 1. Group by English name and head
+	v1, err := ValidateAndFormatBichoBet("group", "monkey", "head")
+	if err != nil || v1.Modality != "group" || v1.Target != "Monkey" || v1.Scope != "head" {
+		t.Errorf("Failed to validate group by English name: %v, %+v", err, v1)
 	}
 
-	// 2. Grupo by number
-	v2, err := ValidateAndFormatBichoBet("g", "17", "cercado")
-	if err != nil || v2.Modality != "grupo" || v2.Target != "Macaco" || v2.Scope != "cercado" {
-		t.Errorf("Failed to validate grupo by number: %v, %+v", err, v2)
+	// 2. Group by Portuguese name and Portuguese scope
+	v2, err := ValidateAndFormatBichoBet("grupo", "macaco", "cabeca")
+	if err != nil || v2.Modality != "group" || v2.Target != "Monkey" || v2.Scope != "head" {
+		t.Errorf("Failed to validate group by Portuguese name: %v, %+v", err, v2)
 	}
 
-	// 3. Dezena
-	v3, err := ValidateAndFormatBichoBet("dezena", "28", "cabeca")
-	if err != nil || v3.Modality != "dezena" || v3.Target != "28" {
-		t.Errorf("Failed to validate dezena: %v, %+v", err, v3)
+	// 3. Group by number and board
+	v3, err := ValidateAndFormatBichoBet("g", "17", "board")
+	if err != nil || v3.Modality != "group" || v3.Target != "Monkey" || v3.Scope != "board" {
+		t.Errorf("Failed to validate group by number: %v, %+v", err, v3)
 	}
 
-	// 4. Centena
-	v4, err := ValidateAndFormatBichoBet("c", "528", "")
-	if err != nil || v4.Modality != "centena" || v4.Target != "528" || v4.Scope != "cabeca" {
-		t.Errorf("Failed to validate centena: %v, %+v", err, v4)
+	// 4. Tens
+	v4, err := ValidateAndFormatBichoBet("tens", "28", "head")
+	if err != nil || v4.Modality != "tens" || v4.Target != "28" || v4.Scope != "head" {
+		t.Errorf("Failed to validate tens: %v, %+v", err, v4)
 	}
 
-	// 5. Milhar
-	v5, err := ValidateAndFormatBichoBet("m", "4528", "cer")
-	if err != nil || v5.Modality != "milhar" || v5.Target != "4528" || v5.Scope != "cercado" {
-		t.Errorf("Failed to validate milhar: %v, %+v", err, v5)
+	// 5. Hundreds
+	v5, err := ValidateAndFormatBichoBet("hundreds", "528", "")
+	if err != nil || v5.Modality != "hundreds" || v5.Target != "528" || v5.Scope != "head" {
+		t.Errorf("Failed to validate hundreds: %v, %+v", err, v5)
 	}
 
-	// 6. Duque
-	v6, err := ValidateAndFormatBichoBet("duque", "macaco, leao", "")
-	if err != nil || v6.Modality != "duque" || v6.Target != "Macaco,Leão" || v6.Scope != "cercado" {
-		t.Errorf("Failed to validate duque: %v, %+v", err, v6)
+	// 6. Thousands
+	v6, err := ValidateAndFormatBichoBet("thousands", "4528", "board")
+	if err != nil || v6.Modality != "thousands" || v6.Target != "4528" || v6.Scope != "board" {
+		t.Errorf("Failed to validate thousands: %v, %+v", err, v6)
 	}
 
-	// 7. Terno
-	v7, err := ValidateAndFormatBichoBet("terno", "1 17 25", "")
-	if err != nil || v7.Modality != "terno" || v7.Target != "Avestruz,Macaco,Vaca" || v7.Scope != "cercado" {
-		t.Errorf("Failed to validate terno: %v, %+v", err, v7)
+	// 7. Animal Pair
+	v7, err := ValidateAndFormatBichoBet("pair", "monkey, lion", "")
+	if err != nil || v7.Modality != "pair" || v7.Target != "Monkey,Lion" || v7.Scope != "board" {
+		t.Errorf("Failed to validate pair: %v, %+v", err, v7)
 	}
 
-	// 8. Invalid modality
+	// 8. Animal Trio
+	v8, err := ValidateAndFormatBichoBet("trio", "1 17 25", "")
+	if err != nil || v8.Modality != "trio" || v8.Target != "Ostrich,Monkey,Cow" || v8.Scope != "board" {
+		t.Errorf("Failed to validate trio: %v, %+v", err, v8)
+	}
+
+	// 9. Invalid modality
 	if _, err := ValidateAndFormatBichoBet("quadra", "1 2 3 4", ""); err == nil {
 		t.Errorf("Expected error for invalid modality")
 	}
 
-	// 9. Invalid dezena out of range
-	if _, err := ValidateAndFormatBichoBet("dezena", "105", ""); err == nil {
-		t.Errorf("Expected error for dezena > 99")
+	// 10. Invalid tens out of range
+	if _, err := ValidateAndFormatBichoBet("tens", "105", ""); err == nil {
+		t.Errorf("Expected error for tens > 99")
 	}
 
-	// 10. Duque with identical animals
-	if _, err := ValidateAndFormatBichoBet("duque", "macaco macaco", ""); err == nil {
-		t.Errorf("Expected error for duplicate animals in duque")
+	// 11. Pair with identical animals
+	if _, err := ValidateAndFormatBichoBet("pair", "monkey monkey", ""); err == nil {
+		t.Errorf("Expected error for duplicate animals in pair")
 	}
 }
 
