@@ -24,7 +24,7 @@ func main() {
 func run() error {
 	_ = godotenv.Load()
 	if len(os.Args) < 2 {
-		return fmt.Errorf("usage: gacha import-batch [--force] --job initial-10k --limit 10000 --auto-approve | clear-lease | batch-status <job> | migrate | import <AniList ID> | tag <character ID> <tag> | image <character ID> <Gelbooru post ID> | pending | approve/reject <asset ID> <reviewer> | enable/disable <character ID>")
+		return fmt.Errorf("usage: gacha booru-top [--limit 5] [--auto-approve] <character ID> [tag] | delete-extra <character ID | all> | assets <character ID> | import-batch [--force] --job initial-10k --limit 10000 --auto-approve | clear-lease | batch-status <job> | migrate | import <AniList ID> | tag <character ID> <tag> | image <character ID> <Gelbooru post ID> | pending | approve/reject <asset ID> <reviewer> | enable/disable <character ID>")
 	}
 	config.Load()
 	cfg, e := gacha.LoadConfig()
@@ -44,7 +44,7 @@ func run() error {
 	}
 	args := os.Args[2:]
 	id := int64(0)
-	if len(args) > 0 && os.Args[1] != "import-batch" && os.Args[1] != "batch-status" && os.Args[1] != "clear-lease" {
+	if len(args) > 0 && os.Args[1] != "import-batch" && os.Args[1] != "batch-status" && os.Args[1] != "clear-lease" && os.Args[1] != "delete-extra" && os.Args[1] != "booru-top" && os.Args[1] != "assets" {
 		id, e = strconv.ParseInt(args[0], 10, 64)
 		if e != nil || id <= 0 {
 			return fmt.Errorf("positive numeric ID required")
@@ -56,7 +56,85 @@ func run() error {
 		if e == nil {
 			fmt.Println("AniList import lease cleared.")
 		}
-		return e
+	case "booru-top":
+		flags := flag.NewFlagSet("booru-top", flag.ContinueOnError)
+		limit := flags.Int("limit", 5, "Number of top images to import")
+		auto := flags.Bool("auto-approve", false, "Approve imported images immediately")
+		if e = flags.Parse(args); e != nil {
+			return e
+		}
+		rem := flags.Args()
+		if len(rem) < 1 {
+			return fmt.Errorf("usage: booru-top [--limit 5] [--auto-approve] <character ID> [tag]")
+		}
+		charID, err := strconv.ParseInt(rem[0], 10, 64)
+		if err != nil || charID <= 0 {
+			return fmt.Errorf("positive numeric character ID required")
+		}
+		customTag := ""
+		if len(rem) > 1 {
+			customTag = rem[1]
+		}
+		aids, usedTag, err := s.AddBooruTop(ctx, charID, customTag, *limit, *auto)
+		if err != nil {
+			return err
+		}
+		statusMsg := "pending review"
+		if *auto {
+			statusMsg = "approved"
+		}
+		fmt.Printf("Successfully imported %d top safe solo portrait images for character %d using tag '%s' (status: %s):\n", len(aids), charID, usedTag, statusMsg)
+		for _, aid := range aids {
+			fmt.Printf("  • Asset ID: %d (extra image)\n", aid)
+		}
+		return nil
+	case "delete-extra":
+		if len(args) < 1 {
+			return fmt.Errorf("usage: delete-extra <character ID | all>")
+		}
+		if args[0] == "all" {
+			count, err := s.DeleteExtraAssets(ctx, 0)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("Deleted %d extra (Gelbooru) images across all characters. Official AniList portraits preserved.\n", count)
+			return nil
+		}
+		charID, err := strconv.ParseInt(args[0], 10, 64)
+		if err != nil || charID <= 0 {
+			return fmt.Errorf("specify a positive character ID or 'all'")
+		}
+		count, err := s.DeleteExtraAssets(ctx, charID)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Deleted %d extra (Gelbooru) images for character %d. Official AniList portrait preserved.\n", count, charID)
+		return nil
+	case "assets":
+		if len(args) < 1 {
+			return fmt.Errorf("usage: assets <character ID>")
+		}
+		charID, err := strconv.ParseInt(args[0], 10, 64)
+		if err != nil || charID <= 0 {
+			return fmt.Errorf("positive numeric character ID required")
+		}
+		list, err := s.ListAssets(ctx, charID)
+		if err != nil {
+			return err
+		}
+		if len(list) == 0 {
+			fmt.Printf("No assets registered for character %d.\n", charID)
+			return nil
+		}
+		fmt.Printf("Assets for character %d (%d total):\n", charID, len(list))
+		for _, a := range list {
+			extraLabel := "OFFICIAL PORTRAIT"
+			if a.IsExtra {
+				extraLabel = "EXTRA / GELBOORU"
+			}
+			fmt.Printf("  [ID %d] Provider: %-8s Status: %-8s Type: %-18s Path: %s\n", a.ID, a.Provider, a.Status, extraLabel, a.Path)
+		}
+		return nil
 	case "import-batch":
 		flags := flag.NewFlagSet("import-batch", flag.ContinueOnError)
 		job := flags.String("job", "initial-10k", "Persistent job name")

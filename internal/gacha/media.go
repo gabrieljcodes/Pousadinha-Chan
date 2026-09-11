@@ -12,6 +12,7 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -80,7 +81,114 @@ type BooruPost struct {
 	Rating  string `json:"rating"`
 	Tags    string `json:"tags"`
 	Source  string `json:"source"`
+	Width   int    `json:"width"`
+	Height  int    `json:"height"`
+	Score   int    `json:"score"`
 }
+
+// GuessBooruTag derives candidate Gelbooru tags from character name.
+func GuessBooruTag(name string) []string {
+	clean := slugPattern.ReplaceAllString(strings.ToLower(name), " ")
+	parts := strings.Fields(clean)
+	if len(parts) == 0 {
+		return nil
+	}
+	if len(parts) == 1 {
+		return []string{parts[0]}
+	}
+	// Japanese convention: surname_givenname (e.g. uzumaki_naruto)
+	// Western convention: givenname_surname (e.g. naruto_uzumaki)
+	lastFirst := parts[len(parts)-1] + "_" + strings.Join(parts[:len(parts)-1], "_")
+	firstLast := strings.Join(parts, "_")
+	if lastFirst == firstLast {
+		return []string{firstLast}
+	}
+	return []string{lastFirst, firstLast}
+}
+
+// FetchBooruTop fetches top-rated safe solo portrait posts from Gelbooru.
+// Rejects landscape images (e.g. 1920x1080) and preserves character framing.
+func FetchBooruTop(ctx context.Context, tag string, limit int) ([]BooruPost, error) {
+	tag = strings.TrimSpace(tag)
+	if !tagPattern.MatchString(tag) || limit <= 0 {
+		return nil, fmt.Errorf("invalid tag or limit")
+	}
+	q := url.Values{
+		"page":  {"dapi"},
+		"s":     {"post"},
+		"q":     {"index"},
+		"json":  {"1"},
+		"tags":  {tag + " rating:general solo sort:score -cosplay -no_humans -comic"},
+		"limit": {"50"},
+	}
+	if key := os.Getenv("GELBOORU_API_KEY"); key != "" {
+		q.Set("api_key", key)
+		q.Set("user_id", os.Getenv("GELBOORU_USER_ID"))
+	}
+	req, e := http.NewRequestWithContext(ctx, "GET", "https://gelbooru.com/index.php?"+q.Encode(), nil)
+	if e != nil {
+		return nil, e
+	}
+	client := mediaClient()
+	defer client.CloseIdleConnections()
+	resp, e := client.Do(req)
+	if e != nil {
+		return nil, fmt.Errorf("Gelbooru request failed (check connectivity/credentials): %w", e)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("Gelbooru HTTP %d", resp.StatusCode)
+	}
+	var body struct {
+		Post []BooruPost `json:"post"`
+	}
+	if e = json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&body); e != nil {
+		return nil, e
+	}
+	var out []BooruPost
+	for _, p := range body.Post {
+		if p.Rating != "general" && p.Rating != "safe" && p.Rating != "s" {
+			continue
+		}
+		// Aspect ratio filter: skip landscape images (1920x1080) and squarish banners.
+		// Card is 420x600 px (ratio ~0.70). Must be strictly portrait (height > width)
+		// with width/height ratio between 0.45 and 0.88.
+		if p.Width <= 0 || p.Height <= 0 || p.Width >= p.Height {
+			continue
+		}
+		ratio := float64(p.Width) / float64(p.Height)
+		if ratio < 0.45 || ratio > 0.88 {
+			continue
+		}
+		if p.Width < 350 || p.Height < 450 {
+			continue
+		}
+		postTags := strings.Fields(p.Tags)
+		hasTag := false
+		hasSolo := false
+		hasBad := false
+		for _, t := range postTags {
+			if t == tag {
+				hasTag = true
+			}
+			if t == "solo" {
+				hasSolo = true
+			}
+			if t == "no_humans" || t == "comic" || t == "cosplay" {
+				hasBad = true
+			}
+		}
+		if !hasTag || !hasSolo || hasBad {
+			continue
+		}
+		out = append(out, p)
+		if len(out) >= limit {
+			break
+		}
+	}
+	return out, nil
+}
+
 
 func FetchBooru(ctx context.Context, tag string, postID int64) (BooruPost, error) {
 	var p BooruPost
@@ -172,16 +280,16 @@ func (s *Store) AddBooruAsset(ctx context.Context, id, postID int64) (int64, err
 	if e != nil {
 		return 0, e
 	}
-	return s.addAsset(ctx, id, "gelbooru", strconv.FormatInt(postID, 10), work, name, p.FileURL, fmt.Sprintf("https://gelbooru.com/index.php?page=post&s=view&id=%d", postID), p.Source)
+	return s.addAsset(ctx, id, "gelbooru", strconv.FormatInt(postID, 10), work, name, p.FileURL, fmt.Sprintf("https://gelbooru.com/index.php?page=post&s=view&id=%d", postID), p.Source, true)
 }
 func (s *Store) AddPortrait(ctx context.Context, id int64, c Character) (int64, error) {
 	work := "original"
 	if len(c.Works) > 0 {
 		work = c.Works[0].Title
 	}
-	return s.addAsset(ctx, id, c.Provider, c.ExternalID, work, c.Name, c.Portrait, c.URL, "")
+	return s.addAsset(ctx, id, c.Provider, c.ExternalID, work, c.Name, c.Portrait, c.URL, "", false)
 }
-func (s *Store) addAsset(ctx context.Context, id int64, provider, externalID, work, name, fileURL, source, attribution string) (int64, error) {
+func (s *Store) addAsset(ctx context.Context, id int64, provider, externalID, work, name, fileURL, source, attribution string, isExtra bool) (int64, error) {
 	var existing int64
 	e := s.DB.QueryRowContext(ctx, `SELECT id FROM gacha_assets WHERE character_id=$1 AND provider=$2 AND external_id=$3`, id, provider, externalID).Scan(&existing)
 	if e == nil {
@@ -199,6 +307,12 @@ func (s *Store) addAsset(ctx context.Context, id int64, provider, externalID, wo
 	req, e := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
 	if e != nil {
 		return 0, e
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+	if strings.Contains(u.Host, "gelbooru.com") {
+		req.Header.Set("Referer", "https://gelbooru.com/")
+	} else if strings.Contains(u.Host, "anilist.co") {
+		req.Header.Set("Referer", "https://anilist.co/")
 	}
 	resp, e := client.Do(req)
 	if e != nil {
@@ -276,7 +390,7 @@ func (s *Store) addAsset(ctx context.Context, id int64, provider, externalID, wo
 		return 0, e
 	}
 	var assetID int64
-	e = s.DB.QueryRowContext(ctx, `INSERT INTO gacha_assets(character_id,provider,external_id,source_url,attribution,sha256,path,media_type) VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(character_id,sha256) DO UPDATE SET sha256=excluded.sha256 RETURNING id`, id, provider, externalID, source, attribution, sum, rel, mime).Scan(&assetID)
+	e = s.DB.QueryRowContext(ctx, `INSERT INTO gacha_assets(character_id,provider,external_id,source_url,attribution,sha256,path,media_type,is_extra) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(character_id,sha256) DO UPDATE SET sha256=excluded.sha256 RETURNING id`, id, provider, externalID, source, attribution, sum, rel, mime, isExtra).Scan(&assetID)
 	return assetID, e
 }
 func (s *Store) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -320,3 +434,131 @@ func (s *Store) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "public, max-age=300")
 	http.ServeContent(w, r, st.Name(), st.ModTime(), f)
 }
+
+// AddBooruTop downloads and processes the top safe solo portrait images for a character from Gelbooru.
+// It skips landscape images (like 1920x1080) and flags all created assets with is_extra=true.
+func (s *Store) AddBooruTop(ctx context.Context, id int64, tag string, limit int, autoApprove bool) ([]int64, string, error) {
+	var name, work string
+	e := s.DB.QueryRowContext(ctx, `SELECT c.name,COALESCE((SELECT w.title FROM gacha_character_works cw JOIN gacha_works w ON w.id=cw.work_id WHERE cw.character_id=c.id ORDER BY w.id LIMIT 1),'original') FROM gacha_characters c WHERE c.id=$1`, id).Scan(&name, &work)
+	if e != nil {
+		return nil, "", fmt.Errorf("character %d not found: %w", id, e)
+	}
+	usedTag := strings.TrimSpace(tag)
+	var posts []BooruPost
+	if usedTag != "" {
+		posts, e = FetchBooruTop(ctx, usedTag, limit)
+		if e != nil {
+			return nil, "", e
+		}
+		_, _ = s.DB.ExecContext(ctx, `INSERT INTO gacha_booru_tags(character_id,provider,tag) VALUES($1,'gelbooru',$2) ON CONFLICT(character_id,provider) DO UPDATE SET tag=excluded.tag`, id, usedTag)
+	} else {
+		var regTag string
+		if err := s.DB.QueryRowContext(ctx, `SELECT tag FROM gacha_booru_tags WHERE character_id=$1 AND provider='gelbooru'`, id).Scan(&regTag); err == nil && regTag != "" {
+			usedTag = regTag
+			posts, _ = FetchBooruTop(ctx, usedTag, limit)
+		}
+		if len(posts) == 0 {
+			candidates := GuessBooruTag(name)
+			for _, cand := range candidates {
+				p, err := FetchBooruTop(ctx, cand, limit)
+				if err == nil && len(p) > 0 {
+					posts = p
+					usedTag = cand
+					_, _ = s.DB.ExecContext(ctx, `INSERT INTO gacha_booru_tags(character_id,provider,tag) VALUES($1,'gelbooru',$2) ON CONFLICT(character_id,provider) DO UPDATE SET tag=excluded.tag`, id, usedTag)
+					break
+				}
+			}
+		}
+	}
+	if len(posts) == 0 {
+		return nil, usedTag, fmt.Errorf("no matching safe solo portrait images found on Gelbooru (tag: %s)", usedTag)
+	}
+	var assetIDs []int64
+	for _, p := range posts {
+		aid, err := s.addAsset(ctx, id, "gelbooru", strconv.FormatInt(p.ID, 10), work, name, p.FileURL, fmt.Sprintf("https://gelbooru.com/index.php?page=post&s=view&id=%d", p.ID), p.Source, true)
+		if err != nil {
+			log.Printf("[booru-top] failed to process post %d: %v", p.ID, err)
+			continue
+		}
+		if autoApprove {
+			_, _ = s.DB.ExecContext(ctx, `UPDATE gacha_assets SET status='approved',reviewed_by='auto:booru-top',reviewed_at=now() WHERE id=$1`, aid)
+		}
+		assetIDs = append(assetIDs, aid)
+	}
+	return assetIDs, usedTag, nil
+}
+
+// DeleteExtraAssets removes all non-official (is_extra=true) assets from both disk and database.
+// If characterID is > 0, it removes only that character's extra assets.
+// Official AniList portraits (is_extra=false) are strictly protected and never touched.
+func (s *Store) DeleteExtraAssets(ctx context.Context, characterID int64) (int, error) {
+	query := `SELECT id, path FROM gacha_assets WHERE is_extra = true`
+	var args []any
+	if characterID > 0 {
+		query += ` AND character_id = $1`
+		args = append(args, characterID)
+	}
+	rows, e := s.DB.QueryContext(ctx, query, args...)
+	if e != nil {
+		return 0, e
+	}
+	defer rows.Close()
+	var paths []string
+	var count int
+	for rows.Next() {
+		var aid int64
+		var relPath string
+		if e = rows.Scan(&aid, &relPath); e != nil {
+			return 0, e
+		}
+		paths = append(paths, relPath)
+		count++
+	}
+	if e = rows.Err(); e != nil {
+		return 0, e
+	}
+	if count == 0 {
+		return 0, nil
+	}
+	for _, rel := range paths {
+		filePath := filepath.Join(s.Config.MediaDir, filepath.FromSlash(rel))
+		_ = os.Remove(filePath)
+	}
+	delQuery := `DELETE FROM gacha_assets WHERE is_extra = true`
+	if characterID > 0 {
+		delQuery += ` AND character_id = $1`
+		_, e = s.DB.ExecContext(ctx, delQuery, characterID)
+	} else {
+		_, e = s.DB.ExecContext(ctx, delQuery)
+	}
+	return count, e
+}
+
+type AssetInfo struct {
+	ID         int64
+	Provider   string
+	ExternalID string
+	SourceURL  string
+	Path       string
+	Status     string
+	IsExtra    bool
+}
+
+// ListAssets returns all assets (official portraits and extras) registered for a character.
+func (s *Store) ListAssets(ctx context.Context, characterID int64) ([]AssetInfo, error) {
+	rows, e := s.DB.QueryContext(ctx, `SELECT id, provider, external_id, source_url, path, status, is_extra FROM gacha_assets WHERE character_id=$1 ORDER BY id`, characterID)
+	if e != nil {
+		return nil, e
+	}
+	defer rows.Close()
+	var out []AssetInfo
+	for rows.Next() {
+		var a AssetInfo
+		if e = rows.Scan(&a.ID, &a.Provider, &a.ExternalID, &a.SourceURL, &a.Path, &a.Status, &a.IsExtra); e != nil {
+			return nil, e
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+

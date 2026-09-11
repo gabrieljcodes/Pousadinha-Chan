@@ -10,3 +10,6 @@ var GachaImport string
 
 //go:embed 006_gacha_import_payload.sql
 var GachaImportPayload string
+
+//go:embed 007_gacha_assets_extra.sql
+var GachaAssetsExtra string
