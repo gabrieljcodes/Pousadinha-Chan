@@ -37,6 +37,7 @@ const (
 )
 
 type MinesGame struct {
+	GuildID           string
 	UserID            string
 	Bet               int
 	MinesCount        int
@@ -116,6 +117,17 @@ func generateProvablyFairSeed(minePositions []int) (string, string) {
 
 // StartMinesInteraction starts a Mines game from a Discord slash command
 func StartMinesInteraction(s *discordgo.Session, i *discordgo.InteractionCreate, bet int, minesCount int) {
+	if i.GuildID == "" {
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Embeds: []*discordgo.MessageEmbed{utils.ErrorEmbed("Este jogo só pode ser jogado em um servidor.")},
+				Flags:  discordgo.MessageFlagsEphemeral,
+			},
+		})
+		return
+	}
+	guildID := i.GuildID
 	userID := i.Member.User.ID
 	if minesCount < MinesMinCount || minesCount > MinesMaxCount {
 		minesCount = MinesDefaultCount
@@ -132,7 +144,7 @@ func StartMinesInteraction(s *discordgo.Session, i *discordgo.InteractionCreate,
 		return
 	}
 
-	balance := database.GetBalance(userID)
+	balance := database.GetBalance(guildID, userID)
 	if balance < bet {
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -169,7 +181,7 @@ func StartMinesInteraction(s *discordgo.Session, i *discordgo.InteractionCreate,
 		return
 	}
 
-	if err := database.CollectLostBet(userID, bet); err != nil {
+	if err := database.CollectLostBet(guildID, userID, bet); err != nil {
 		minesMu.Unlock()
 		UnregisterActivePlayer(userID)
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
@@ -186,6 +198,7 @@ func StartMinesInteraction(s *discordgo.Session, i *discordgo.InteractionCreate,
 	seed, hash := generateProvablyFairSeed(minePositions)
 
 	game := &MinesGame{
+		GuildID:           guildID,
 		UserID:            userID,
 		Bet:               bet,
 		MinesCount:        minesCount,
@@ -227,12 +240,17 @@ func StartMinesInteraction(s *discordgo.Session, i *discordgo.InteractionCreate,
 		delete(activeMinesGames, userID)
 		minesMu.Unlock()
 		UnregisterActivePlayer(userID)
-		_ = database.AddCoins(userID, bet)
+		_ = database.AddCoins(guildID, userID, bet)
 	}
 }
 
 // StartMinesText starts a Mines game from a Discord text command
 func StartMinesText(s *discordgo.Session, m *discordgo.MessageCreate, bet int, minesCount int) {
+	if m.GuildID == "" {
+		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Este jogo só pode ser jogado em um servidor."))
+		return
+	}
+	guildID := m.GuildID
 	userID := m.Author.ID
 	if minesCount < MinesMinCount || minesCount > MinesMaxCount {
 		minesCount = MinesDefaultCount
@@ -243,7 +261,7 @@ func StartMinesText(s *discordgo.Session, m *discordgo.MessageCreate, bet int, m
 		return
 	}
 
-	balance := database.GetBalance(userID)
+	balance := database.GetBalance(guildID, userID)
 	if balance < bet {
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(fmt.Sprintf("Saldo insuficiente! Você possui %d %s", balance, config.Bot.CurrencySymbol)))
 		return
@@ -262,7 +280,7 @@ func StartMinesText(s *discordgo.Session, m *discordgo.MessageCreate, bet int, m
 		return
 	}
 
-	if err := database.CollectLostBet(userID, bet); err != nil {
+	if err := database.CollectLostBet(guildID, userID, bet); err != nil {
 		minesMu.Unlock()
 		UnregisterActivePlayer(userID)
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Erro ao debitar a aposta."))
@@ -273,6 +291,7 @@ func StartMinesText(s *discordgo.Session, m *discordgo.MessageCreate, bet int, m
 	seed, hash := generateProvablyFairSeed(minePositions)
 
 	game := &MinesGame{
+		GuildID:           guildID,
 		UserID:            userID,
 		Bet:               bet,
 		MinesCount:        minesCount,
@@ -311,7 +330,7 @@ func StartMinesText(s *discordgo.Session, m *discordgo.MessageCreate, bet int, m
 		delete(activeMinesGames, userID)
 		minesMu.Unlock()
 		UnregisterActivePlayer(userID)
-		_ = database.AddCoins(userID, bet)
+		_ = database.AddCoins(guildID, userID, bet)
 		return
 	}
 
@@ -403,7 +422,7 @@ func HandleMinesInteraction(s *discordgo.Session, i *discordgo.InteractionCreate
 		game.stopTimer()
 		game.Status = "cashout"
 		winnings := int(math.Round(float64(game.Bet) * game.CurrentMultiplier))
-		_ = database.AddCoins(game.UserID, winnings)
+		_ = database.AddCoins(game.GuildID, game.UserID, winnings)
 
 		minesMu.Lock()
 		delete(activeMinesGames, game.UserID)
@@ -467,7 +486,7 @@ func HandleMinesInteraction(s *discordgo.Session, i *discordgo.InteractionCreate
 			game.stopTimer()
 			game.Status = "cleared"
 			winnings := int(math.Round(float64(game.Bet) * game.CurrentMultiplier))
-			_ = database.AddCoins(game.UserID, winnings)
+			_ = database.AddCoins(game.GuildID, game.UserID, winnings)
 
 			minesMu.Lock()
 			delete(activeMinesGames, game.UserID)
@@ -532,11 +551,11 @@ func (g *MinesGame) handleInactivity(s *discordgo.Session) {
 		// Auto-cashout protection
 		g.Status = "timeout_cashout"
 		winnings := int(math.Round(float64(g.Bet) * g.CurrentMultiplier))
-		_ = database.AddCoins(g.UserID, winnings)
+		_ = database.AddCoins(g.GuildID, g.UserID, winnings)
 	} else {
 		// Refund
 		g.Status = "timeout_refund"
-		_ = database.AddCoins(g.UserID, g.Bet)
+		_ = database.AddCoins(g.GuildID, g.UserID, g.Bet)
 	}
 
 	embed := g.createMinesEmbed(true)

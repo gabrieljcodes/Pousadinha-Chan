@@ -193,10 +193,22 @@ func handleSlashWheel(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			return
 		}
 
-		userID := i.Member.User.ID
-		username := i.Member.User.Username
+		if i.GuildID == "" {
+			respondEmbed(s, i, utils.ErrorEmbed("This command can only be used within a server."))
+			return
+		}
 
-		success, msg := games.PlaceRouletteBet(userID, username, betType, value, amount)
+		userID := ""
+		username := ""
+		if i.Member != nil && i.Member.User != nil {
+			userID = i.Member.User.ID
+			username = i.Member.User.Username
+		} else if i.User != nil {
+			userID = i.User.ID
+			username = i.User.Username
+		}
+
+		success, msg := games.PlaceRouletteBet(i.GuildID, userID, username, betType, value, amount)
 		if !success {
 			respondEmbed(s, i, utils.ErrorEmbed(msg))
 			return
@@ -263,17 +275,36 @@ func handleSlashMines(s *discordgo.Session, i *discordgo.InteractionCreate) {
 }
 
 func handleSlashDaily(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	respondEmbed(s, i, ExecuteDaily(i.Member.User.ID))
+	if i.GuildID == "" {
+		respondEmbed(s, i, utils.ErrorEmbed("This command can only be used within a server."))
+		return
+	}
+	userID := ""
+	if i.Member != nil && i.Member.User != nil {
+		userID = i.Member.User.ID
+	} else if i.User != nil {
+		userID = i.User.ID
+	}
+	respondEmbed(s, i, ExecuteDaily(i.GuildID, userID))
 }
 
 func handleSlashBalance(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	targetUser := i.Member.User
+	if i.GuildID == "" {
+		respondEmbed(s, i, utils.ErrorEmbed("This command can only be used within a server."))
+		return
+	}
+	var targetUser *discordgo.User
+	if i.Member != nil && i.Member.User != nil {
+		targetUser = i.Member.User
+	} else if i.User != nil {
+		targetUser = i.User
+	}
 	options := i.ApplicationCommandData().Options
 	if len(options) > 0 {
 		targetUser = options[0].UserValue(s)
 	}
 
-	balance := database.GetBalance(targetUser.ID)
+	balance := database.GetBalance(i.GuildID, targetUser.ID)
 	respondEmbed(s, i, utils.GoldEmbed("Balance", fmt.Sprintf("**%s** has **%d %s**.", targetUser.Username, balance, config.Bot.CurrencyName)))
 }
 
@@ -293,17 +324,26 @@ func handleSlashLeaderboard(s *discordgo.Session, i *discordgo.InteractionCreate
 }
 
 func handleSlashPay(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	if i.GuildID == "" {
+		respondEmbed(s, i, utils.ErrorEmbed("This command can only be used within a server."))
+		return
+	}
 	options := i.ApplicationCommandData().Options
 	toUser := options[0].UserValue(s)
 	amount := int(options[1].IntValue())
-	fromID := i.Member.User.ID
+	fromID := ""
+	if i.Member != nil && i.Member.User != nil {
+		fromID = i.Member.User.ID
+	} else if i.User != nil {
+		fromID = i.User.ID
+	}
 
 	if toUser.ID == fromID {
 		respondEmbed(s, i, utils.ErrorEmbed("You cannot pay yourself."))
 		return
 	}
 
-	err := database.TransferCoins(fromID, toUser.ID, amount)
+	err := database.TransferCoins(i.GuildID, fromID, toUser.ID, amount)
 	if err != nil {
 		respondEmbed(s, i, utils.ErrorEmbed("Insufficient funds or transaction error."))
 		return
@@ -394,12 +434,21 @@ func handleSlashLoan(s *discordgo.Session, i *discordgo.InteractionCreate) {
 }
 
 func handleSlashStock(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	if i.GuildID == "" {
+		respondEmbed(s, i, utils.ErrorEmbed("This command can only be used within a server."))
+		return
+	}
 	options := i.ApplicationCommandData().Options
 	if len(options) == 0 {
 		return
 	}
 
-	userID := i.Member.User.ID
+	userID := ""
+	if i.Member != nil && i.Member.User != nil {
+		userID = i.Member.User.ID
+	} else if i.User != nil {
+		userID = i.User.ID
+	}
 	subCommand := options[0].Name
 
 	switch subCommand {
@@ -408,23 +457,32 @@ func handleSlashStock(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	case "buy":
 		ticker := options[0].Options[0].StringValue()
 		amount := int(options[0].Options[1].IntValue())
-		respondEmbed(s, i, stockmarket.ExecuteBuy(userID, ticker, amount))
+		respondEmbed(s, i, stockmarket.ExecuteBuy(i.GuildID, userID, ticker, amount))
 	case "sell":
 		ticker := options[0].Options[0].StringValue()
 		shares := options[0].Options[1].StringValue()
-		respondEmbed(s, i, stockmarket.ExecuteSell(userID, ticker, shares))
+		respondEmbed(s, i, stockmarket.ExecuteSell(i.GuildID, userID, ticker, shares))
 	case "portfolio":
-		respondEmbed(s, i, stockmarket.ExecutePortfolio(userID))
+		respondEmbed(s, i, stockmarket.ExecutePortfolio(i.GuildID, userID))
 	}
 }
 
 func handleSlashCrypto(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	if i.GuildID == "" {
+		respondEmbed(s, i, utils.ErrorEmbed("This command can only be used within a server."))
+		return
+	}
 	options := i.ApplicationCommandData().Options
 	if len(options) == 0 {
 		return
 	}
 
-	userID := i.Member.User.ID
+	userID := ""
+	if i.Member != nil && i.Member.User != nil {
+		userID = i.Member.User.ID
+	} else if i.User != nil {
+		userID = i.User.ID
+	}
 	subCommand := options[0].Name
 
 	switch subCommand {
@@ -433,12 +491,12 @@ func handleSlashCrypto(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	case "buy":
 		symbol := options[0].Options[0].StringValue()
 		amount := int(options[0].Options[1].IntValue())
-		respondEmbed(s, i, crypto.ExecuteCryptoBuy(userID, symbol, amount))
+		respondEmbed(s, i, crypto.ExecuteCryptoBuy(i.GuildID, userID, symbol, amount))
 	case "sell":
 		symbol := options[0].Options[0].StringValue()
 		coins := options[0].Options[1].StringValue()
-		respondEmbed(s, i, crypto.ExecuteCryptoSell(userID, symbol, coins))
+		respondEmbed(s, i, crypto.ExecuteCryptoSell(i.GuildID, userID, symbol, coins))
 	case "portfolio":
-		respondEmbed(s, i, crypto.ExecuteCryptoPortfolio(userID))
+		respondEmbed(s, i, crypto.ExecuteCryptoPortfolio(i.GuildID, userID))
 	}
 }

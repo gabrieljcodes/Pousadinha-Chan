@@ -47,7 +47,7 @@ O domínio precisa ser acessível pelo Discord. A configuração exige uma orige
 Uma URL gerada tem este formato:
 
 ```text
-https://pousadinha.com/naruto/42-naruto-uzumaki/foto-gelbooru-123456/<sha256>-v1.png
+https://pousadinha.com/naruto/42-naruto-uzumaki/photo-gelbooru-123456/<sha256>-v1.png
 ```
 
 O ID interno evita colisões entre homônimos; o hash e a versão identificam o conteúdo/renderizador. URLs persistidas não mudam quando o nome do personagem é atualizado. Somente arquivos aprovados são públicos; não configure um servidor estático apontando diretamente para todo o volume, pois isso exporia pendências e rejeições. Cache HTTP de cinco minutos limita a demora de revogações; caches externos do Discord podem persistir por mais tempo.

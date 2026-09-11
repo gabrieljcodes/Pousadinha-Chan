@@ -45,6 +45,7 @@ var (
 )
 
 type SlotsSession struct {
+	GuildID    string
 	UserID     string
 	Username   string
 	Bet        int
@@ -271,6 +272,11 @@ func cleanupSlotsSession(userID string, disableUI bool, s *discordgo.Session) {
 
 // StartSlotsText starts a slots game from a text command (!slots <bet> or !bet slots <bet>)
 func StartSlotsText(s *discordgo.Session, m *discordgo.MessageCreate, bet int) {
+	if m.GuildID == "" {
+		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("This game can only be played within a server."))
+		return
+	}
+	guildID := m.GuildID
 	userID := m.Author.ID
 	username := m.Author.Username
 	channelID := m.ChannelID
@@ -285,13 +291,13 @@ func StartSlotsText(s *discordgo.Session, m *discordgo.MessageCreate, bet int) {
 		return
 	}
 
-	if database.GetBalance(userID) < bet {
+	if database.GetBalance(guildID, userID) < bet {
 		UnregisterActivePlayer(userID)
 		s.ChannelMessageSendEmbed(channelID, utils.ErrorEmbed(fmt.Sprintf("<@%s> Insufficient balance! You need %d %s.", userID, bet, config.Bot.CurrencySymbol)))
 		return
 	}
 
-	if err := database.CollectLostBet(userID, bet); err != nil {
+	if err := database.CollectLostBet(guildID, userID, bet); err != nil {
 		UnregisterActivePlayer(userID)
 		s.ChannelMessageSendEmbed(channelID, utils.ErrorEmbed("Error deducting bet coins."))
 		return
@@ -303,12 +309,13 @@ func StartSlotsText(s *discordgo.Session, m *discordgo.MessageCreate, bet int) {
 		Embeds:  []*discordgo.MessageEmbed{embed},
 	})
 	if err != nil || msg == nil {
-		_ = database.AddCoins(userID, bet)
+		_ = database.AddCoins(guildID, userID, bet)
 		UnregisterActivePlayer(userID)
 		return
 	}
 
 	session := &SlotsSession{
+		GuildID:    guildID,
 		UserID:     userID,
 		Username:   username,
 		Bet:        bet,
@@ -326,6 +333,11 @@ func StartSlotsText(s *discordgo.Session, m *discordgo.MessageCreate, bet int) {
 
 // StartSlotsInteraction starts a slots game from a slash command (/bet slots <bet> or /slots <bet>)
 func StartSlotsInteraction(s *discordgo.Session, i *discordgo.InteractionCreate, bet int) {
+	if i.GuildID == "" {
+		respondPrivate(s, i, utils.ErrorEmbed("This game can only be played within a server."))
+		return
+	}
+	guildID := i.GuildID
 	userID := i.Member.User.ID
 	username := i.Member.User.Username
 	channelID := i.ChannelID
@@ -340,13 +352,13 @@ func StartSlotsInteraction(s *discordgo.Session, i *discordgo.InteractionCreate,
 		return
 	}
 
-	if database.GetBalance(userID) < bet {
+	if database.GetBalance(guildID, userID) < bet {
 		UnregisterActivePlayer(userID)
 		respondPrivate(s, i, utils.ErrorEmbed(fmt.Sprintf("Insufficient balance! You need %d %s.", bet, config.Bot.CurrencySymbol)))
 		return
 	}
 
-	if err := database.CollectLostBet(userID, bet); err != nil {
+	if err := database.CollectLostBet(guildID, userID, bet); err != nil {
 		UnregisterActivePlayer(userID)
 		respondPrivate(s, i, utils.ErrorEmbed("Error deducting bet coins."))
 		return
@@ -361,19 +373,20 @@ func StartSlotsInteraction(s *discordgo.Session, i *discordgo.InteractionCreate,
 		},
 	})
 	if err != nil {
-		_ = database.AddCoins(userID, bet)
+		_ = database.AddCoins(guildID, userID, bet)
 		UnregisterActivePlayer(userID)
 		return
 	}
 
 	msg, err := s.InteractionResponse(i.Interaction)
 	if err != nil || msg == nil {
-		_ = database.AddCoins(userID, bet)
+		_ = database.AddCoins(guildID, userID, bet)
 		UnregisterActivePlayer(userID)
 		return
 	}
 
 	session := &SlotsSession{
+		GuildID:    guildID,
 		UserID:     userID,
 		Username:   username,
 		Bet:        bet,
@@ -397,7 +410,7 @@ func executeSpinCycle(s *discordgo.Session, session *SlotsSession) {
 	result := spinSlots(session.Bet)
 
 	if result.WinAmount > 0 {
-		_ = database.AddCoins(session.UserID, result.WinAmount)
+		_ = database.AddCoins(session.GuildID, session.UserID, result.WinAmount)
 	}
 
 	finalEmbed := createResultEmbed(session.Username, session.Bet, result)
@@ -509,7 +522,7 @@ func HandleSlotsInteraction(s *discordgo.Session, i *discordgo.InteractionCreate
 		session.mu.Unlock()
 
 		// Verify balance
-		if database.GetBalance(expectedUser) < bet {
+		if database.GetBalance(session.GuildID, expectedUser) < bet {
 			cleanupSlotsSession(expectedUser, true, s)
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -522,7 +535,7 @@ func HandleSlotsInteraction(s *discordgo.Session, i *discordgo.InteractionCreate
 		}
 
 		// Deduct bet atomically
-		if err := database.CollectLostBet(expectedUser, bet); err != nil {
+		if err := database.CollectLostBet(session.GuildID, expectedUser, bet); err != nil {
 			cleanupSlotsSession(expectedUser, true, s)
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -545,7 +558,7 @@ func HandleSlotsInteraction(s *discordgo.Session, i *discordgo.InteractionCreate
 			},
 		})
 		if err != nil {
-			_ = database.AddCoins(expectedUser, bet)
+			_ = database.AddCoins(session.GuildID, expectedUser, bet)
 			cleanupSlotsSession(expectedUser, false, s)
 			return
 		}

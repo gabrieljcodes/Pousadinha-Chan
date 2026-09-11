@@ -13,6 +13,11 @@ import (
 )
 
 func CmdStock(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
+	if m.GuildID == "" {
+		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("This command can only be used within a server."))
+		return
+	}
+
 	if len(args) == 0 {
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("Stock Market", "Usage: `!stock <market|buy|sell|portfolio>`"))
 		return
@@ -33,15 +38,15 @@ func CmdStock(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
 			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Invalid amount."))
 			return
 		}
-		s.ChannelMessageSendEmbed(m.ChannelID, ExecuteBuy(m.Author.ID, args[1], amount))
+		s.ChannelMessageSendEmbed(m.ChannelID, ExecuteBuy(m.GuildID, m.Author.ID, args[1], amount))
 	case "sell":
 		if len(args) < 3 {
 			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Usage: `!stock sell <ticker> <shares|all>`"))
 			return
 		}
-		s.ChannelMessageSendEmbed(m.ChannelID, ExecuteSell(m.Author.ID, args[1], args[2]))
+		s.ChannelMessageSendEmbed(m.ChannelID, ExecuteSell(m.GuildID, m.Author.ID, args[1], args[2]))
 	case "portfolio", "p":
-		s.ChannelMessageSendEmbed(m.ChannelID, ExecutePortfolio(m.Author.ID))
+		s.ChannelMessageSendEmbed(m.ChannelID, ExecutePortfolio(m.GuildID, m.Author.ID))
 	default:
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Unknown subcommand. Use `market`, `buy`, `sell`, or `portfolio`."))
 	}
@@ -73,7 +78,7 @@ func ExecuteMarket() *discordgo.MessageEmbed {
 }
 
 // ExecuteBuy processes a stock purchase and returns an embed response
-func ExecuteBuy(userID, ticker string, amount int) *discordgo.MessageEmbed {
+func ExecuteBuy(guildID, userID, ticker string, amount int) *discordgo.MessageEmbed {
 	ticker = strings.ToUpper(strings.TrimSpace(ticker))
 	if amount <= 0 {
 		return utils.ErrorEmbed("Invalid amount.")
@@ -92,7 +97,7 @@ func ExecuteBuy(userID, ticker string, amount int) *discordgo.MessageEmbed {
 	}
 
 	// Check Balance
-	balance := database.GetBalance(userID)
+	balance := database.GetBalance(guildID, userID)
 	if balance < amount {
 		return utils.ErrorEmbed("Insufficient funds.")
 	}
@@ -111,13 +116,13 @@ func ExecuteBuy(userID, ticker string, amount int) *discordgo.MessageEmbed {
 	shares := float64(amount) / price
 
 	// Transaction
-	if err := database.RemoveCoins(userID, amount); err != nil {
+	if err := database.RemoveCoins(guildID, userID, amount); err != nil {
 		return utils.ErrorEmbed("Transaction failed.")
 	}
 
-	if err := database.AddShares(userID, ticker, shares, amount); err != nil {
+	if err := database.AddShares(guildID, userID, ticker, shares, amount); err != nil {
 		// Refund
-		_ = database.AddCoins(userID, amount)
+		_ = database.AddCoins(guildID, userID, amount)
 		return utils.ErrorEmbed("Database error. Refunded.")
 	}
 
@@ -127,7 +132,7 @@ func ExecuteBuy(userID, ticker string, amount int) *discordgo.MessageEmbed {
 }
 
 // ExecuteSell processes a stock sale and returns an embed response
-func ExecuteSell(userID, ticker, amountStr string) *discordgo.MessageEmbed {
+func ExecuteSell(guildID, userID, ticker, amountStr string) *discordgo.MessageEmbed {
 	ticker = strings.ToUpper(strings.TrimSpace(ticker))
 
 	// Verify ticker
@@ -142,7 +147,7 @@ func ExecuteSell(userID, ticker, amountStr string) *discordgo.MessageEmbed {
 		return utils.ErrorEmbed("Invalid Ticker.")
 	}
 
-	ownedShares, _ := database.GetInvestment(userID, ticker)
+	ownedShares, _ := database.GetInvestment(guildID, userID, ticker)
 	if ownedShares <= 0 {
 		return utils.ErrorEmbed("You don't own any shares of this company.")
 	}
@@ -176,19 +181,19 @@ func ExecuteSell(userID, ticker, amountStr string) *discordgo.MessageEmbed {
 
 	payout := int(math.Round(sharesToSell * price))
 
-	if err := database.RemoveShares(userID, ticker, sharesToSell); err != nil {
+	if err := database.RemoveShares(guildID, userID, ticker, sharesToSell); err != nil {
 		return utils.ErrorEmbed("Database error.")
 	}
 
-	_ = database.AddCoins(userID, payout)
+	_ = database.AddCoins(guildID, userID, payout)
 	return utils.SuccessEmbed("Sale Successful",
 		fmt.Sprintf("You sold **%.4f** shares of **%s** for **%d %s** (at $%.2f/share).",
 			sharesToSell, ticker, payout, config.Bot.CurrencyName, price))
 }
 
 // ExecutePortfolio generates a user's stock portfolio embed
-func ExecutePortfolio(userID string) *discordgo.MessageEmbed {
-	investments, err := database.GetAllInvestmentsByUser(userID)
+func ExecutePortfolio(guildID, userID string) *discordgo.MessageEmbed {
+	investments, err := database.GetAllInvestmentsByUser(guildID, userID)
 	if err != nil {
 		return utils.ErrorEmbed("Database error.")
 	}

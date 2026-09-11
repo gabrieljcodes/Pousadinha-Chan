@@ -27,6 +27,7 @@ type Hand struct {
 }
 
 type BlackjackGame struct {
+	GuildID          string
 	UserID           string
 	Bet              int
 	PlayerHand       Hand
@@ -170,6 +171,11 @@ func isBlackjack(hand Hand) bool {
 
 // StartBlackjackGame starts a blackjack game from a slash command
 func StartBlackjackGame(s *discordgo.Session, i *discordgo.InteractionCreate, bet int) {
+	if i.GuildID == "" {
+		respondEmbed(s, i, utils.ErrorEmbed("This game can only be played within a server."))
+		return
+	}
+	guildID := i.GuildID
 	userID := i.Member.User.ID
 
 	// Check if user already has an active game
@@ -187,20 +193,21 @@ func StartBlackjackGame(s *discordgo.Session, i *discordgo.InteractionCreate, be
 		return
 	}
 
-	balance := database.GetBalance(userID)
+	balance := database.GetBalance(guildID, userID)
 	if balance < bet {
 		respondEmbed(s, i, utils.ErrorEmbed(fmt.Sprintf("Insufficient balance! You have %d %s", balance, config.Bot.CurrencySymbol)))
 		return
 	}
 
 	// Deduct bet atomically
-	if err := database.CollectLostBet(userID, bet); err != nil {
+	if err := database.CollectLostBet(guildID, userID, bet); err != nil {
 		respondEmbed(s, i, utils.ErrorEmbed("Error deducting bet."))
 		return
 	}
 
 	// Initialize game
 	game := &BlackjackGame{
+		GuildID:   guildID,
 		UserID:    userID,
 		Bet:       bet,
 		Deck:      createDeck(),
@@ -268,12 +275,17 @@ func StartBlackjackGame(s *discordgo.Session, i *discordgo.InteractionCreate, be
 		blackjackMu.Lock()
 		delete(activeBlackjackGames, userID)
 		blackjackMu.Unlock()
-		_ = database.AddCoins(userID, bet)
+		_ = database.AddCoins(guildID, userID, bet)
 	}
 }
 
 // StartBlackjackText starts a blackjack game from a text command
 func StartBlackjackText(s *discordgo.Session, m *discordgo.MessageCreate, bet int) {
+	if m.GuildID == "" {
+		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("This game can only be played within a server."))
+		return
+	}
+	guildID := m.GuildID
 	userID := m.Author.ID
 
 	// Check if user already has an active game
@@ -291,20 +303,21 @@ func StartBlackjackText(s *discordgo.Session, m *discordgo.MessageCreate, bet in
 		return
 	}
 
-	balance := database.GetBalance(userID)
+	balance := database.GetBalance(guildID, userID)
 	if balance < bet {
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(fmt.Sprintf("Insufficient balance! You have %d %s", balance, config.Bot.CurrencySymbol)))
 		return
 	}
 
 	// Deduct bet atomically
-	if err := database.CollectLostBet(userID, bet); err != nil {
+	if err := database.CollectLostBet(guildID, userID, bet); err != nil {
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Error deducting bet."))
 		return
 	}
 
 	// Initialize game
 	game := &BlackjackGame{
+		GuildID:   guildID,
 		UserID:    userID,
 		Bet:       bet,
 		Deck:      createDeck(),
@@ -370,7 +383,7 @@ func StartBlackjackText(s *discordgo.Session, m *discordgo.MessageCreate, bet in
 		blackjackMu.Lock()
 		delete(activeBlackjackGames, userID)
 		blackjackMu.Unlock()
-		_ = database.AddCoins(userID, bet)
+		_ = database.AddCoins(guildID, userID, bet)
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Failed to start game."))
 		return
 	}
@@ -568,7 +581,7 @@ func (g *BlackjackGame) createActionButtons() []discordgo.MessageComponent {
 		}
 
 		if len(activeHand.Cards) == 2 && !doubled {
-			balance := database.GetBalance(g.UserID)
+			balance := database.GetBalance(g.GuildID, g.UserID)
 			if balance >= betAmount {
 				buttons = append(buttons, discordgo.Button{
 					Label:    "Double Down",
@@ -588,7 +601,7 @@ func (g *BlackjackGame) createActionButtons() []discordgo.MessageComponent {
 
 	// Only allow double down on first two cards
 	if len(g.PlayerHand.Cards) == 2 && !g.DoubledDown {
-		balance := database.GetBalance(g.UserID)
+		balance := database.GetBalance(g.GuildID, g.UserID)
 		if balance >= g.Bet {
 			buttons = append(buttons, discordgo.Button{
 				Label:    "Double Down",
@@ -604,7 +617,7 @@ func (g *BlackjackGame) createActionButtons() []discordgo.MessageComponent {
 		c0 := g.PlayerHand.Cards[0]
 		c1 := g.PlayerHand.Cards[1]
 		if c0.Value == c1.Value || c0.Score == c1.Score {
-			balance := database.GetBalance(g.UserID)
+			balance := database.GetBalance(g.GuildID, g.UserID)
 			if balance >= g.Bet {
 				buttons = append(buttons, discordgo.Button{
 					Label:    "Split",
@@ -619,7 +632,7 @@ func (g *BlackjackGame) createActionButtons() []discordgo.MessageComponent {
 	// Offer insurance if dealer shows an Ace and player hasn't bought it yet
 	if len(g.PlayerHand.Cards) == 2 && g.DealerHand.Cards[1].Value == "A" && !g.Insurance {
 		insuranceAmount := g.Bet / 2
-		balance := database.GetBalance(g.UserID)
+		balance := database.GetBalance(g.GuildID, g.UserID)
 		if balance >= insuranceAmount {
 			buttons = append(buttons, discordgo.Button{
 				Label:    "Insurance",
@@ -872,14 +885,14 @@ func HandleBlackjackDouble(s *discordgo.Session, i *discordgo.InteractionCreate,
 			return
 		}
 
-		balance := database.GetBalance(userID)
+		balance := database.GetBalance(game.GuildID, userID)
 		if balance < betAmount {
 			respondEmbed(s, i, utils.ErrorEmbed("Insufficient balance to double down!"))
 			return
 		}
 
 		// Deduct additional bet atomically
-		if err := database.CollectLostBet(userID, betAmount); err != nil {
+		if err := database.CollectLostBet(game.GuildID, userID, betAmount); err != nil {
 			respondEmbed(s, i, utils.ErrorEmbed("Failed to deduct double down bet."))
 			return
 		}
@@ -927,7 +940,7 @@ func HandleBlackjackDouble(s *discordgo.Session, i *discordgo.InteractionCreate,
 		return
 	}
 
-	balance := database.GetBalance(userID)
+	balance := database.GetBalance(game.GuildID, userID)
 	if balance < game.Bet {
 		respondEmbed(s, i, utils.ErrorEmbed("Insufficient balance to double down!"))
 		return
@@ -943,7 +956,7 @@ func HandleBlackjackDouble(s *discordgo.Session, i *discordgo.InteractionCreate,
 	}
 
 	// Deduct additional bet atomically
-	if err := database.CollectLostBet(userID, game.Bet); err != nil {
+	if err := database.CollectLostBet(game.GuildID, userID, game.Bet); err != nil {
 		respondEmbed(s, i, utils.ErrorEmbed("Failed to deduct double down bet."))
 		return
 	}
@@ -1007,7 +1020,7 @@ func HandleBlackjackSplit(s *discordgo.Session, i *discordgo.InteractionCreate, 
 		return
 	}
 
-	balance := database.GetBalance(userID)
+	balance := database.GetBalance(game.GuildID, userID)
 	if balance < game.Bet {
 		respondEmbed(s, i, utils.ErrorEmbed("Insufficient balance to split!"))
 		return
@@ -1023,7 +1036,7 @@ func HandleBlackjackSplit(s *discordgo.Session, i *discordgo.InteractionCreate, 
 	}
 
 	// Deduct split bet atomically
-	if err := database.CollectLostBet(userID, game.Bet); err != nil {
+	if err := database.CollectLostBet(game.GuildID, userID, game.Bet); err != nil {
 		respondEmbed(s, i, utils.ErrorEmbed("Failed to deduct split bet."))
 		return
 	}
@@ -1095,13 +1108,13 @@ func HandleBlackjackInsurance(s *discordgo.Session, i *discordgo.InteractionCrea
 	}
 
 	insuranceAmount := game.Bet / 2
-	balance := database.GetBalance(userID)
+	balance := database.GetBalance(game.GuildID, userID)
 	if balance < insuranceAmount {
 		respondEmbed(s, i, utils.ErrorEmbed("Insufficient balance for insurance!"))
 		return
 	}
 
-	if err := database.CollectLostBet(userID, insuranceAmount); err != nil {
+	if err := database.CollectLostBet(game.GuildID, userID, insuranceAmount); err != nil {
 		respondEmbed(s, i, utils.ErrorEmbed("Failed to process insurance bet."))
 		return
 	}
@@ -1328,13 +1341,13 @@ func HandleBlackjackTextAction(s *discordgo.Session, m *discordgo.MessageCreate,
 				return
 			}
 
-			balance := database.GetBalance(userID)
+			balance := database.GetBalance(game.GuildID, userID)
 			if balance < betAmount {
 				s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Insufficient balance to double down!"))
 				return
 			}
 
-			if err := database.CollectLostBet(userID, betAmount); err != nil {
+			if err := database.CollectLostBet(game.GuildID, userID, betAmount); err != nil {
 				s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Failed to deduct double down bet."))
 				return
 			}
@@ -1385,7 +1398,7 @@ func HandleBlackjackTextAction(s *discordgo.Session, m *discordgo.MessageCreate,
 			return
 		}
 
-		balance := database.GetBalance(userID)
+		balance := database.GetBalance(game.GuildID, userID)
 		if balance < game.Bet {
 			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Insufficient balance to double down!"))
 			return
@@ -1400,7 +1413,7 @@ func HandleBlackjackTextAction(s *discordgo.Session, m *discordgo.MessageCreate,
 			}
 		}
 
-		if err := database.CollectLostBet(userID, game.Bet); err != nil {
+		if err := database.CollectLostBet(game.GuildID, userID, game.Bet); err != nil {
 			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Failed to deduct double down bet."))
 			return
 		}
@@ -1435,7 +1448,7 @@ func HandleBlackjackTextAction(s *discordgo.Session, m *discordgo.MessageCreate,
 			return
 		}
 
-		balance := database.GetBalance(userID)
+		balance := database.GetBalance(game.GuildID, userID)
 		if balance < game.Bet {
 			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Insufficient balance to split!"))
 			return
@@ -1449,7 +1462,7 @@ func HandleBlackjackTextAction(s *discordgo.Session, m *discordgo.MessageCreate,
 			}
 		}
 
-		if err := database.CollectLostBet(userID, game.Bet); err != nil {
+		if err := database.CollectLostBet(game.GuildID, userID, game.Bet); err != nil {
 			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Failed to deduct split bet."))
 			return
 		}
@@ -1497,13 +1510,13 @@ func HandleBlackjackTextAction(s *discordgo.Session, m *discordgo.MessageCreate,
 		}
 
 		insuranceAmount := game.Bet / 2
-		balance := database.GetBalance(userID)
+		balance := database.GetBalance(game.GuildID, userID)
 		if balance < insuranceAmount {
 			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Insufficient balance for insurance!"))
 			return
 		}
 
-		if err := database.CollectLostBet(userID, insuranceAmount); err != nil {
+		if err := database.CollectLostBet(game.GuildID, userID, insuranceAmount); err != nil {
 			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Failed to process insurance bet."))
 			return
 		}
@@ -1601,7 +1614,7 @@ func (g *BlackjackGame) buildSplitGameOverEmbed() *discordgo.MessageEmbed {
 	winnings = h1Win + h2Win
 
 	if winnings > 0 {
-		_ = database.AddCoins(g.UserID, winnings)
+		_ = database.AddCoins(g.GuildID, g.UserID, winnings)
 	}
 
 	netProfit := winnings - totalSpent
@@ -1618,7 +1631,7 @@ func (g *BlackjackGame) buildSplitGameOverEmbed() *discordgo.MessageEmbed {
 		profitText = fmt.Sprintf("⚖️ **Net Result:** Even (0 %s)", config.Bot.CurrencySymbol)
 	}
 
-	newBalance := database.GetBalance(g.UserID)
+	newBalance := database.GetBalance(g.GuildID, g.UserID)
 
 	h1Title := "🎴 Hand 1"
 	if g.DoubledDown {
@@ -1725,7 +1738,7 @@ func (g *BlackjackGame) buildGameOverEmbed() *discordgo.MessageEmbed {
 
 	// Credit user winnings
 	if winnings > 0 {
-		_ = database.AddCoins(g.UserID, winnings)
+		_ = database.AddCoins(g.GuildID, g.UserID, winnings)
 	}
 
 	totalSpent := g.Bet
@@ -1743,7 +1756,7 @@ func (g *BlackjackGame) buildGameOverEmbed() *discordgo.MessageEmbed {
 		profitText = fmt.Sprintf("\n⚖️ **Net Result:** Even (0 %s)", config.Bot.CurrencySymbol)
 	}
 
-	newBalance := database.GetBalance(g.UserID)
+	newBalance := database.GetBalance(g.GuildID, g.UserID)
 
 	return &discordgo.MessageEmbed{
 		Title:       "🃏 Blackjack - Game Over",

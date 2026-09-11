@@ -100,7 +100,7 @@ func ExecuteBuyNickname(s *discordgo.Session, guildID, userID, newName string) *
 	}
 
 	// Atomic debit before action
-	if err := database.CollectLostBet(userID, cost); err != nil {
+	if err := database.CollectLostBet(guildID, userID, cost); err != nil {
 		return utils.ErrorEmbed("Insufficient funds.")
 	}
 
@@ -108,7 +108,7 @@ func ExecuteBuyNickname(s *discordgo.Session, guildID, userID, newName string) *
 	err := s.GuildMemberNickname(guildID, userID, newName)
 	if err != nil {
 		// Automatic refund on Discord failure
-		_ = database.AddCoins(userID, cost)
+		_ = database.AddCoins(guildID, userID, cost)
 		return utils.ErrorEmbed("Could not change nickname. Check my permissions and role hierarchy.")
 	}
 
@@ -138,14 +138,14 @@ func ExecuteBuyRename(s *discordgo.Session, guildID, userID string, targetUser *
 	}
 
 	// Atomic debit before action
-	if err := database.CollectLostBet(userID, cost); err != nil {
+	if err := database.CollectLostBet(guildID, userID, cost); err != nil {
 		return utils.ErrorEmbed("Insufficient funds.")
 	}
 
 	err := s.GuildMemberNickname(guildID, targetUser.ID, newName)
 	if err != nil {
 		// Automatic refund on Discord failure
-		_ = database.AddCoins(userID, cost)
+		_ = database.AddCoins(guildID, userID, cost)
 		return utils.ErrorEmbed("Could not change nickname. Check my permissions and role hierarchy.")
 	}
 
@@ -174,7 +174,7 @@ func ExecuteBuyTimeout(s *discordgo.Session, guildID, userID string, targetUser 
 	cost := minutes * costPerMin
 
 	// Atomic debit before action
-	if err := database.CollectLostBet(userID, cost); err != nil {
+	if err := database.CollectLostBet(guildID, userID, cost); err != nil {
 		return utils.ErrorEmbed(fmt.Sprintf("Insufficient funds. Cost: %d %s.", cost, config.Bot.CurrencySymbol))
 	}
 
@@ -185,7 +185,7 @@ func ExecuteBuyTimeout(s *discordgo.Session, guildID, userID string, targetUser 
 
 	member, err := s.GuildMember(guildID, targetUser.ID)
 	if err != nil {
-		_ = database.AddCoins(userID, cost)
+		_ = database.AddCoins(guildID, userID, cost)
 		return utils.ErrorEmbed("Member not found in this server.")
 	}
 
@@ -198,7 +198,7 @@ func ExecuteBuyTimeout(s *discordgo.Session, guildID, userID string, targetUser 
 
 	err = s.GuildMemberTimeout(guildID, targetUser.ID, &until)
 	if err != nil {
-		_ = database.AddCoins(userID, cost)
+		_ = database.AddCoins(guildID, userID, cost)
 		return utils.ErrorEmbed("Could not apply timeout. Check my permissions and role hierarchy.")
 	}
 
@@ -234,7 +234,7 @@ func ExecuteBuyMute(s *discordgo.Session, guildID, userID string, targetUser *di
 	}
 
 	// Atomic debit before action
-	if err := database.CollectLostBet(userID, cost); err != nil {
+	if err := database.CollectLostBet(guildID, userID, cost); err != nil {
 		return utils.ErrorEmbed(fmt.Sprintf("Insufficient funds. Cost: %d %s.", cost, config.Bot.CurrencySymbol))
 	}
 
@@ -246,7 +246,7 @@ func ExecuteBuyMute(s *discordgo.Session, guildID, userID string, targetUser *di
 	// Apply voice server mute
 	err = s.GuildMemberMute(guildID, targetUser.ID, true)
 	if err != nil {
-		_ = database.AddCoins(userID, cost)
+		_ = database.AddCoins(guildID, userID, cost)
 		return utils.ErrorEmbed("Could not mute user in voice. Check my permissions and role hierarchy.")
 	}
 

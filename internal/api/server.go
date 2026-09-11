@@ -17,13 +17,23 @@ type ErrorResponse struct {
 }
 
 type BalanceResponse struct {
+	GuildID string `json:"guild_id,omitempty"`
 	UserID  string `json:"user_id"`
 	Balance int    `json:"balance"`
 }
 
 type TransferRequest struct {
+	GuildID  string `json:"guild_id"`
 	ToUserID string `json:"to_user_id"`
 	Amount   int    `json:"amount"`
+}
+
+func getGuildID(r *http.Request) string {
+	guildID := r.URL.Query().Get("guild_id")
+	if guildID == "" {
+		guildID = r.Header.Get("X-Guild-ID")
+	}
+	return guildID
 }
 
 func writeJSON(w http.ResponseWriter, status int, data any) {
@@ -36,7 +46,7 @@ func CORSMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-API-Key")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-API-Key, X-Guild-ID")
 
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
@@ -74,9 +84,16 @@ func HandleMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userID := r.Header.Get("X-User-ID")
-	balance := database.GetBalance(userID)
+	guildID := getGuildID(r)
+	if guildID == "" {
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Missing guild_id parameter or X-Guild-ID header"})
+		return
+	}
+
+	balance := database.GetBalance(guildID, userID)
 
 	writeJSON(w, http.StatusOK, BalanceResponse{
+		GuildID: guildID,
 		UserID:  userID,
 		Balance: balance,
 	})
@@ -96,6 +113,15 @@ func HandleTransfer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	guildID := req.GuildID
+	if guildID == "" {
+		guildID = getGuildID(r)
+	}
+	if guildID == "" {
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Missing guild_id parameter or body field"})
+		return
+	}
+
 	if req.Amount <= 0 {
 		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Amount must be positive"})
 		return
@@ -106,7 +132,7 @@ func HandleTransfer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := database.TransferCoins(userID, req.ToUserID, req.Amount)
+	err := database.TransferCoins(guildID, userID, req.ToUserID, req.Amount)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Insufficient funds or transaction failed"})
 		return

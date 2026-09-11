@@ -37,8 +37,9 @@ type CryptoPortfolioResponse struct {
 
 // BuyCryptoRequest represents a crypto buy request
 type BuyCryptoRequest struct {
-	Symbol string `json:"symbol"`
-	Amount int    `json:"amount"`
+	GuildID string `json:"guild_id"`
+	Symbol  string `json:"symbol"`
+	Amount  int    `json:"amount"`
 }
 
 // BuyCryptoResponse represents a crypto buy response
@@ -52,8 +53,9 @@ type BuyCryptoResponse struct {
 
 // SellCryptoRequest represents a crypto sell request
 type SellCryptoRequest struct {
-	Symbol string  `json:"symbol"`
-	Coins  float64 `json:"coins"`
+	GuildID string  `json:"guild_id"`
+	Symbol  string  `json:"symbol"`
+	Coins   float64 `json:"coins"`
 }
 
 // SellCryptoResponse represents a crypto sell response
@@ -102,8 +104,13 @@ func HandleCryptoPortfolio(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userID := r.Header.Get("X-User-ID")
+	guildID := getGuildID(r)
+	if guildID == "" {
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Missing guild_id parameter or X-Guild-ID header"})
+		return
+	}
 
-	investments, err := database.GetAllCryptoInvestmentsByUser(userID)
+	investments, err := database.GetAllCryptoInvestmentsByUser(guildID, userID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Database error"})
 		return
@@ -165,6 +172,15 @@ func HandleBuyCrypto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	guildID := req.GuildID
+	if guildID == "" {
+		guildID = getGuildID(r)
+	}
+	if guildID == "" {
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Missing guild_id parameter or body field"})
+		return
+	}
+
 	// Validate symbol
 	symbol := strings.ToUpper(req.Symbol)
 	c := crypto.GetCryptoBySymbol(symbol)
@@ -180,7 +196,7 @@ func HandleBuyCrypto(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check balance
-	balance := database.GetBalance(userID)
+	balance := database.GetBalance(guildID, userID)
 	if balance < req.Amount {
 		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Insufficient funds"})
 		return
@@ -204,7 +220,7 @@ func HandleBuyCrypto(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 
 	// Atomically remove coins ensuring balance >= amount
-	res, err := tx.Exec(`UPDATE users SET balance = balance - $1 WHERE id = $2 AND balance >= $1`, req.Amount, userID)
+	res, err := tx.Exec(`UPDATE guild_members SET balance = balance - $1 WHERE guild_id = $2 AND user_id = $3 AND balance >= $1`, req.Amount, guildID, userID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Transaction failed"})
 		return
@@ -216,11 +232,11 @@ func HandleBuyCrypto(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Add crypto shares
-	query := `INSERT INTO crypto_investments (user_id, symbol, coins, total_invested) VALUES ($1, $2, $3, $4) 
-			  ON CONFLICT(user_id, symbol) DO UPDATE SET 
-			    coins = crypto_investments.coins + $3,
-			    total_invested = crypto_investments.total_invested + $4`
-	_, err = tx.Exec(query, userID, symbol, coins, req.Amount)
+	query := `INSERT INTO crypto_investments (guild_id, user_id, symbol, coins, total_invested) VALUES ($1, $2, $3, $4, $5) 
+			  ON CONFLICT(guild_id, user_id, symbol) DO UPDATE SET 
+			    coins = crypto_investments.coins + $4,
+			    total_invested = crypto_investments.total_invested + $5`
+	_, err = tx.Exec(query, guildID, userID, symbol, coins, req.Amount)
 
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Failed to add crypto"})
@@ -235,7 +251,7 @@ func HandleBuyCrypto(w http.ResponseWriter, r *http.Request) {
 	// Send webhook notification
 	webhook.SendCryptoNotification(userID, true, symbol, coins, req.Amount, price)
 
-	newBalance := database.GetBalance(userID)
+	newBalance := database.GetBalance(guildID, userID)
 
 	response := BuyCryptoResponse{
 		Symbol:     symbol,
@@ -263,6 +279,15 @@ func HandleSellCrypto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	guildID := req.GuildID
+	if guildID == "" {
+		guildID = getGuildID(r)
+	}
+	if guildID == "" {
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Missing guild_id parameter or body field"})
+		return
+	}
+
 	// Validate symbol
 	symbol := strings.ToUpper(req.Symbol)
 	c := crypto.GetCryptoBySymbol(symbol)
@@ -278,7 +303,7 @@ func HandleSellCrypto(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check owned coins
-	ownedCoins, err := database.GetCryptoInvestment(userID, symbol)
+	ownedCoins, err := database.GetCryptoInvestment(guildID, userID, symbol)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Database error"})
 		return
@@ -313,7 +338,7 @@ func HandleSellCrypto(w http.ResponseWriter, r *http.Request) {
 	res, err := tx.Exec(`UPDATE crypto_investments 
 		SET total_invested = CASE WHEN coins <= $1 THEN 0 ELSE total_invested * (1 - ($1 / coins)) END,
 		    coins = coins - $1 
-		WHERE user_id = $2 AND symbol = $3 AND coins >= $1`, req.Coins, userID, symbol)
+		WHERE guild_id = $2 AND user_id = $3 AND symbol = $4 AND coins >= $1`, req.Coins, guildID, userID, symbol)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Failed to remove crypto"})
 		return
@@ -325,10 +350,11 @@ func HandleSellCrypto(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Clean up dust
-	_, _ = tx.Exec(`DELETE FROM crypto_investments WHERE user_id = $1 AND symbol = $2 AND coins <= 0.00000001`, userID, symbol)
+	_, _ = tx.Exec(`DELETE FROM crypto_investments WHERE guild_id = $1 AND user_id = $2 AND symbol = $3 AND coins <= 0.00000001`, guildID, userID, symbol)
 
-	// Add coins
-	if _, err := tx.Exec(`UPDATE users SET balance = balance + $1 WHERE id = $2`, payout, userID); err != nil {
+	// Add coins to guild_members
+	if _, err := tx.Exec(`INSERT INTO guild_members (guild_id, user_id, balance) VALUES ($1, $2, $3)
+		ON CONFLICT (guild_id, user_id) DO UPDATE SET balance = guild_members.balance + $3`, guildID, userID, payout); err != nil {
 		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Failed to add coins"})
 		return
 	}
@@ -341,7 +367,7 @@ func HandleSellCrypto(w http.ResponseWriter, r *http.Request) {
 	// Send webhook notification
 	webhook.SendCryptoNotification(userID, false, symbol, req.Coins, payout, price)
 
-	newBalance := database.GetBalance(userID)
+	newBalance := database.GetBalance(guildID, userID)
 
 	response := SellCryptoResponse{
 		Symbol:         symbol,

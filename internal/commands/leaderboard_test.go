@@ -59,7 +59,9 @@ func TestGetMedal(t *testing.T) {
 }
 
 func TestLeaderboardCacheLifecycle(t *testing.T) {
+	testGuild := "test_guild"
 	testCat := "test_category"
+	cacheKey := testGuild + ":" + testCat
 	users := []database.UserBalance{
 		{ID: "user_1", Balance: 5000, StockValue: 1000, CryptoValue: 500, TotalNetWorth: 6500},
 	}
@@ -69,20 +71,20 @@ func TestLeaderboardCacheLifecycle(t *testing.T) {
 
 	// Clean state
 	lbCacheMu.Lock()
-	delete(lbCache, testCat)
+	delete(lbCache, cacheKey)
 	lbCacheMu.Unlock()
 
 	// Initial check should miss
-	_, _, found := getCachedLeaderboard(testCat)
+	_, _, found := getCachedLeaderboard(testGuild, testCat)
 	if found {
 		t.Fatal("Expected cache miss before insertion")
 	}
 
 	// Insert into cache
-	setCachedLeaderboard(testCat, users, streaks)
+	setCachedLeaderboard(testGuild, testCat, users, streaks)
 
 	// Now check should hit
-	cachedUsers, cachedStreaks, found := getCachedLeaderboard(testCat)
+	cachedUsers, cachedStreaks, found := getCachedLeaderboard(testGuild, testCat)
 	if !found {
 		t.Fatal("Expected cache hit after insertion")
 	}
@@ -95,7 +97,7 @@ func TestLeaderboardCacheLifecycle(t *testing.T) {
 
 	// Manually age the cache entry beyond TTL
 	lbCacheMu.Lock()
-	lbCache[testCat] = leaderboardCacheEntry{
+	lbCache[cacheKey] = leaderboardCacheEntry{
 		timestamp: time.Now().Add(-2 * lbTTL),
 		users:     users,
 		streaks:   streaks,
@@ -103,7 +105,7 @@ func TestLeaderboardCacheLifecycle(t *testing.T) {
 	lbCacheMu.Unlock()
 
 	// Aged check should miss
-	_, _, foundAfterExpiry := getCachedLeaderboard(testCat)
+	_, _, foundAfterExpiry := getCachedLeaderboard(testGuild, testCat)
 	if foundAfterExpiry {
 		t.Fatal("Expected cache miss after entry expired")
 	}

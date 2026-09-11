@@ -212,9 +212,13 @@ func PlaceBichoBetDB(roundID int64, userID, guildID, betType, scope, target stri
 	}
 	defer tx.Rollback()
 
+	// Ensure user and guild member exist
+	_, _ = tx.Exec(`INSERT INTO users (id, balance) VALUES ($1, 0) ON CONFLICT (id) DO NOTHING`, userID)
+	_, _ = tx.Exec(`INSERT INTO guild_members (guild_id, user_id, balance) VALUES ($1, $2, 0) ON CONFLICT (guild_id, user_id) DO NOTHING`, guildID, userID)
+
 	// 1. Verify user balance and lock row
 	var currentBalance int64
-	err = tx.QueryRow(`SELECT balance FROM users WHERE id = $1 FOR UPDATE`, userID).Scan(&currentBalance)
+	err = tx.QueryRow(`SELECT balance FROM guild_members WHERE guild_id = $1 AND user_id = $2 FOR UPDATE`, guildID, userID).Scan(&currentBalance)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return fmt.Errorf("user not found")
@@ -237,7 +241,7 @@ func PlaceBichoBetDB(roundID int64, userID, guildID, betType, scope, target stri
 	}
 
 	// 3. Deduct user balance
-	_, err = tx.Exec(`UPDATE users SET balance = balance - $1 WHERE id = $2`, amount, userID)
+	_, err = tx.Exec(`UPDATE guild_members SET balance = balance - $1, updated_at = NOW() WHERE guild_id = $2 AND user_id = $3`, amount, guildID, userID)
 	if err != nil {
 		return fmt.Errorf("failed to deduct balance: %w", err)
 	}
@@ -324,7 +328,13 @@ func ResolveBichoRoundDB(roundID int64, prizes [5]int, winningPayouts map[int64]
 	}
 	defer tx.Rollback()
 
-	// 1. Update round status and record prizes
+	// 1. Fetch guild_id and update round status
+	var guildID string
+	err = tx.QueryRow(`SELECT guild_id FROM bicho_rounds WHERE id = $1`, roundID).Scan(&guildID)
+	if err != nil {
+		return fmt.Errorf("failed to fetch round guild: %w", err)
+	}
+
 	updateRound := `
 		UPDATE bicho_rounds
 		SET status = 'completed',
@@ -359,11 +369,11 @@ func ResolveBichoRoundDB(roundID int64, prizes [5]int, winningPayouts map[int64]
 		}
 	}
 
-	// 3. Credit users
+	// 3. Credit users in guild_members
 	for userID, totalPayout := range userCredits {
-		_, err := tx.Exec(`UPDATE users SET balance = balance + $1 WHERE id = $2`, totalPayout, userID)
+		_, err := tx.Exec(`UPDATE guild_members SET balance = balance + $1, updated_at = NOW() WHERE guild_id = $2 AND user_id = $3`, totalPayout, guildID, userID)
 		if err != nil {
-			return fmt.Errorf("failed to credit user %s: %w", userID, err)
+			return fmt.Errorf("failed to credit user %s in guild %s: %w", userID, guildID, err)
 		}
 	}
 

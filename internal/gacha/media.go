@@ -401,7 +401,7 @@ func (s *Store) addAsset(ctx context.Context, id int64, provider, externalID, wo
 		return 0, e
 	}
 	sum := hex.EncodeToString(h.Sum(nil))
-	rel := fmt.Sprintf("%s/%d-%s/foto-%s-%s/%s-v1%s", slug(work), id, slug(name), slug(provider), slug(externalID), sum, ext)
+	rel := fmt.Sprintf("%s/%d-%s/photo-%s-%s/%s-v1%s", slug(work), id, slug(name), slug(provider), slug(externalID), sum, ext)
 	dest := filepath.Join(s.Config.MediaDir, filepath.FromSlash(rel))
 	if e = os.MkdirAll(filepath.Dir(dest), 0750); e != nil {
 		return 0, e

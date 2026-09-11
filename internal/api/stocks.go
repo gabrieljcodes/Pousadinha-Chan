@@ -37,8 +37,9 @@ type PortfolioResponse struct {
 
 // BuyStockRequest represents a buy request
 type BuyStockRequest struct {
-	Ticker string `json:"ticker"`
-	Amount int    `json:"amount"`
+	GuildID string `json:"guild_id"`
+	Ticker  string `json:"ticker"`
+	Amount  int    `json:"amount"`
 }
 
 // BuyStockResponse represents a buy response
@@ -52,8 +53,9 @@ type BuyStockResponse struct {
 
 // SellStockRequest represents a sell request
 type SellStockRequest struct {
-	Ticker string  `json:"ticker"`
-	Shares float64 `json:"shares"`
+	GuildID string  `json:"guild_id"`
+	Ticker  string  `json:"ticker"`
+	Shares  float64 `json:"shares"`
 }
 
 // SellStockResponse represents a sell response
@@ -118,8 +120,13 @@ func HandlePortfolio(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userID := r.Header.Get("X-User-ID")
+	guildID := getGuildID(r)
+	if guildID == "" {
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Missing guild_id parameter or X-Guild-ID header"})
+		return
+	}
 
-	investments, err := database.GetAllInvestmentsByUser(userID)
+	investments, err := database.GetAllInvestmentsByUser(guildID, userID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Database error"})
 		return
@@ -187,6 +194,15 @@ func HandleBuyStock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	guildID := req.GuildID
+	if guildID == "" {
+		guildID = getGuildID(r)
+	}
+	if guildID == "" {
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Missing guild_id parameter or body field"})
+		return
+	}
+
 	// Validate ticker
 	ticker := strings.ToUpper(req.Ticker)
 	valid := false
@@ -208,7 +224,7 @@ func HandleBuyStock(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Initial balance check
-	balance := database.GetBalance(userID)
+	balance := database.GetBalance(guildID, userID)
 	if balance < req.Amount {
 		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Insufficient funds"})
 		return
@@ -237,7 +253,7 @@ func HandleBuyStock(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 
 	// Atomically remove coins ensuring balance >= amount
-	res, err := tx.Exec(`UPDATE users SET balance = balance - $1 WHERE id = $2 AND balance >= $1`, req.Amount, userID)
+	res, err := tx.Exec(`UPDATE guild_members SET balance = balance - $1 WHERE guild_id = $2 AND user_id = $3 AND balance >= $1`, req.Amount, guildID, userID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Transaction failed"})
 		return
@@ -249,12 +265,12 @@ func HandleBuyStock(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Add shares using upsert syntax
-	query := `INSERT INTO stock_investments (user_id, ticker, shares, total_invested) VALUES ($1, $2, $3, $4) 
-			  ON CONFLICT(user_id, ticker) DO UPDATE SET 
-			    shares = stock_investments.shares + $3,
-			    total_invested = stock_investments.total_invested + $4`
+	query := `INSERT INTO stock_investments (guild_id, user_id, ticker, shares, total_invested) VALUES ($1, $2, $3, $4, $5) 
+			  ON CONFLICT(guild_id, user_id, ticker) DO UPDATE SET 
+			    shares = stock_investments.shares + $4,
+			    total_invested = stock_investments.total_invested + $5`
 
-	_, err = tx.Exec(query, userID, ticker, shares, req.Amount)
+	_, err = tx.Exec(query, guildID, userID, ticker, shares, req.Amount)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Failed to add shares"})
 		return
@@ -268,7 +284,7 @@ func HandleBuyStock(w http.ResponseWriter, r *http.Request) {
 	// Send webhook notification
 	webhook.SendStockNotification(userID, true, ticker, shares, req.Amount, price)
 
-	newBalance := database.GetBalance(userID)
+	newBalance := database.GetBalance(guildID, userID)
 
 	response := BuyStockResponse{
 		Ticker:        ticker,
@@ -296,6 +312,15 @@ func HandleSellStock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	guildID := req.GuildID
+	if guildID == "" {
+		guildID = getGuildID(r)
+	}
+	if guildID == "" {
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Missing guild_id parameter or body field"})
+		return
+	}
+
 	// Validate ticker
 	ticker := strings.ToUpper(req.Ticker)
 	valid := false
@@ -317,7 +342,7 @@ func HandleSellStock(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check owned shares
-	ownedShares, err := database.GetInvestment(userID, ticker)
+	ownedShares, err := database.GetInvestment(guildID, userID, ticker)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Database error"})
 		return
@@ -357,7 +382,7 @@ func HandleSellStock(w http.ResponseWriter, r *http.Request) {
 	res, err := tx.Exec(`UPDATE stock_investments 
 		SET total_invested = CASE WHEN shares <= $1 THEN 0 ELSE total_invested * (1 - ($1 / shares)) END,
 		    shares = shares - $1 
-		WHERE user_id = $2 AND ticker = $3 AND shares >= $1`, req.Shares, userID, ticker)
+		WHERE guild_id = $2 AND user_id = $3 AND ticker = $4 AND shares >= $1`, req.Shares, guildID, userID, ticker)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Failed to remove shares"})
 		return
@@ -369,10 +394,11 @@ func HandleSellStock(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Clean up dust
-	_, _ = tx.Exec(`DELETE FROM stock_investments WHERE user_id = $1 AND ticker = $2 AND shares <= 0.000001`, userID, ticker)
+	_, _ = tx.Exec(`DELETE FROM stock_investments WHERE guild_id = $1 AND user_id = $2 AND ticker = $3 AND shares <= 0.000001`, guildID, userID, ticker)
 
-	// Add coins
-	if _, err := tx.Exec(`UPDATE users SET balance = balance + $1 WHERE id = $2`, payout, userID); err != nil {
+	// Add coins to guild_members
+	if _, err := tx.Exec(`INSERT INTO guild_members (guild_id, user_id, balance) VALUES ($1, $2, $3)
+		ON CONFLICT (guild_id, user_id) DO UPDATE SET balance = guild_members.balance + $3`, guildID, userID, payout); err != nil {
 		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Failed to add coins"})
 		return
 	}
@@ -385,7 +411,7 @@ func HandleSellStock(w http.ResponseWriter, r *http.Request) {
 	// Send webhook notification
 	webhook.SendStockNotification(userID, false, ticker, req.Shares, payout, price)
 
-	newBalance := database.GetBalance(userID)
+	newBalance := database.GetBalance(guildID, userID)
 
 	response := SellStockResponse{
 		Ticker:         ticker,

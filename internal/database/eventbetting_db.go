@@ -52,8 +52,9 @@ func CreateBettingEventDB(event *DBBettingEvent) error {
 		return fmt.Errorf("failed to marshal options: %w", err)
 	}
 
-	// Ensure creator exists in users table first
+	// Ensure creator exists in users table and guild_members first
 	_, _ = DB.Exec(`INSERT INTO users (id, balance) VALUES ($1, 0) ON CONFLICT (id) DO NOTHING`, event.CreatorID)
+	_, _ = DB.Exec(`INSERT INTO guild_members (guild_id, user_id, balance) VALUES ($1, $2, 0) ON CONFLICT (guild_id, user_id) DO NOTHING`, event.GuildID, event.CreatorID)
 
 	query := `
 		INSERT INTO betting_events (
@@ -160,6 +161,7 @@ func PlaceBetAtomic(eventID, userID, username, optionID string, amount int) (*DB
 
 	// 3. Ensure user exists and check for prior bet on this event
 	_, _ = tx.Exec(`INSERT INTO users (id, balance) VALUES ($1, 0) ON CONFLICT (id) DO NOTHING`, userID)
+	_, _ = tx.Exec(`INSERT INTO guild_members (guild_id, user_id, balance) VALUES ($1, $2, 0) ON CONFLICT (guild_id, user_id) DO NOTHING`, evt.GuildID, userID)
 
 	var existingBetsCount int
 	err = tx.QueryRow(`SELECT COUNT(*) FROM event_bets WHERE event_id = $1 AND user_id = $2`, eventID, userID).Scan(&existingBetsCount)
@@ -172,7 +174,7 @@ func PlaceBetAtomic(eventID, userID, username, optionID string, amount int) (*DB
 
 	// 4. Lock user row and verify balance
 	var balance int
-	err = tx.QueryRow(`SELECT balance FROM users WHERE id = $1 FOR UPDATE`, userID).Scan(&balance)
+	err = tx.QueryRow(`SELECT balance FROM guild_members WHERE guild_id = $1 AND user_id = $2 FOR UPDATE`, evt.GuildID, userID).Scan(&balance)
 	if err != nil {
 		return nil, err
 	}
@@ -181,7 +183,7 @@ func PlaceBetAtomic(eventID, userID, username, optionID string, amount int) (*DB
 	}
 
 	// 5. Deduct coins from user balance atomically
-	_, err = tx.Exec(`UPDATE users SET balance = balance - $1 WHERE id = $2`, amount, userID)
+	_, err = tx.Exec(`UPDATE guild_members SET balance = balance - $1, updated_at = NOW() WHERE guild_id = $2 AND user_id = $3`, amount, evt.GuildID, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to deduct balance: %w", err)
 	}
@@ -335,7 +337,8 @@ func ResolveBettingEventAtomic(eventID, winnerOptionID, houseUserID string, hous
 	if winnerOption.TotalAmount == 0 {
 		houseProfit = evt.TotalPool
 		if houseProfit > 0 && houseUserID != "" {
-			_, _ = tx.Exec(`INSERT INTO users (id, balance) VALUES ($1, $2) ON CONFLICT (id) DO UPDATE SET balance = users.balance + $2`, houseUserID, houseProfit)
+			_, _ = tx.Exec(`INSERT INTO users (id, balance) VALUES ($1, 0) ON CONFLICT (id) DO NOTHING`, houseUserID)
+			_, _ = tx.Exec(`INSERT INTO guild_members (guild_id, user_id, balance) VALUES ($1, $2, $3) ON CONFLICT (guild_id, user_id) DO UPDATE SET balance = guild_members.balance + $3, updated_at = NOW()`, evt.GuildID, houseUserID, houseProfit)
 		}
 		_, err = tx.Exec(`UPDATE betting_events SET status = 'resolved', winner_id = $1, resolved_at = NOW() WHERE id = $2`, winnerOptionID, eventID)
 		if err != nil {
@@ -360,7 +363,7 @@ func ResolveBettingEventAtomic(eventID, winnerOptionID, houseUserID string, hous
 			profit := bonus
 
 			// Credit winner balance atomically
-			_, err = tx.Exec(`UPDATE users SET balance = balance + $1 WHERE id = $2`, winnings, b.userID)
+			_, err = tx.Exec(`UPDATE guild_members SET balance = balance + $1, updated_at = NOW() WHERE guild_id = $2 AND user_id = $3`, winnings, evt.GuildID, b.userID)
 			if err != nil {
 				return nil, 0, 0, fmt.Errorf("failed to payout user %s: %w", b.userID, err)
 			}
@@ -375,7 +378,8 @@ func ResolveBettingEventAtomic(eventID, winnerOptionID, houseUserID string, hous
 	if residualHouseShare > 0 {
 		houseProfit = residualHouseShare
 		if houseUserID != "" {
-			_, _ = tx.Exec(`INSERT INTO users (id, balance) VALUES ($1, $2) ON CONFLICT (id) DO UPDATE SET balance = users.balance + $2`, houseUserID, houseProfit)
+			_, _ = tx.Exec(`INSERT INTO users (id, balance) VALUES ($1, 0) ON CONFLICT (id) DO NOTHING`, houseUserID)
+			_, _ = tx.Exec(`INSERT INTO guild_members (guild_id, user_id, balance) VALUES ($1, $2, $3) ON CONFLICT (guild_id, user_id) DO UPDATE SET balance = guild_members.balance + $3, updated_at = NOW()`, evt.GuildID, houseUserID, houseProfit)
 		}
 	}
 
@@ -429,7 +433,7 @@ func CancelBettingEventAtomic(eventID string) (refunds map[string]int, totalRefu
 		}
 
 		// Refund user balance
-		_, err = tx.Exec(`UPDATE users SET balance = balance + $1 WHERE id = $2`, amount, userID)
+		_, err = tx.Exec(`UPDATE guild_members SET balance = balance + $1, updated_at = NOW() WHERE guild_id = $2 AND user_id = $3`, amount, evt.GuildID, userID)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to refund user %s: %w", userID, err)
 		}

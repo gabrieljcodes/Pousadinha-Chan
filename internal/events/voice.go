@@ -143,7 +143,7 @@ func ProcessVoiceHeartbeat(s *discordgo.Session) {
 					minutes := int(elapsed.Minutes())
 					if minutes > 0 {
 						reward := minutes * coinsPerMinute
-						err := database.AddCoins(userID, reward)
+						err := database.AddCoins(state.GuildID, userID, reward)
 						if err != nil {
 							log.Printf("[VOICE ERROR] Failed to add %d coins to %s: %v", reward, userID, err)
 						} else {
@@ -247,7 +247,7 @@ func CloseAllVoiceSessions() {
 		minutes := int(elapsed.Minutes())
 		if minutes > 0 {
 			reward := minutes * coinsPerMinute
-			_ = database.AddCoins(userID, reward)
+			_ = database.AddCoins(state.GuildID, userID, reward)
 			log.Printf("[VOICE SHUTDOWN] Paid user %s %d coins for %d min", userID, reward, minutes)
 		}
 		delete(activeVoiceStates, userID)

@@ -60,61 +60,68 @@ func prepareQuery(query string) string {
 	return result
 }
 
-// GetBalance returns a user's balance with retry on error
-func GetBalance(userID string) int {
+// GetBalance returns a user's balance in a specific guild with retry on error
+func GetBalance(guildID, userID string) int {
+	if guildID == "" || userID == "" {
+		return 0
+	}
 	var balance int
-	// Ensure user exists atomically
+	// Ensure parent user exists
 	_, _ = DB.Exec(`INSERT INTO users (id, balance) VALUES ($1, 0) ON CONFLICT (id) DO NOTHING`, userID)
+	// Ensure guild_members exists atomically
+	_, _ = DB.Exec(`INSERT INTO guild_members (guild_id, user_id, balance) VALUES ($1, $2, 0) ON CONFLICT (guild_id, user_id) DO NOTHING`, guildID, userID)
 
 	// Retry up to 3 times with a short delay on transient error
 	for i := 0; i < 3; i++ {
-		err := DB.QueryRow(`SELECT balance FROM users WHERE id = $1`, userID).Scan(&balance)
+		err := DB.QueryRow(`SELECT balance FROM guild_members WHERE guild_id = $1 AND user_id = $2`, guildID, userID).Scan(&balance)
 		if err == nil {
 			return balance
 		}
-		log.Printf("[GetBalance] Error getting balance for %s: %v (attempt %d)", userID, err, i+1)
+		log.Printf("[GetBalance] Error getting balance for %s/%s: %v (attempt %d)", guildID, userID, err, i+1)
 		time.Sleep(100 * time.Millisecond)
 	}
 
-	log.Printf("[GetBalance] Failed to get balance for %s after 3 attempts, returning 0", userID)
+	log.Printf("[GetBalance] Failed to get balance for %s/%s after 3 attempts, returning 0", guildID, userID)
 	return 0
 }
 
-// GetLeaderboard returns the balance leaderboard (excluding the bot and including investments)
+// GetLeaderboard returns the balance leaderboard for a guild (excluding the bot and including investments)
 // using a single aggregated SQL query valuing wallet balance, stocks, and crypto portfolios.
-func GetLeaderboard(limit int) ([]UserBalance, error) {
+func GetLeaderboard(guildID string, limit int) ([]UserBalance, error) {
 	if limit <= 0 {
 		limit = 10
 	}
 
 	query := `
 		SELECT 
-			u.id, 
-			COALESCE(u.balance, 0) AS balance,
+			gm.user_id, 
+			COALESCE(gm.balance, 0) AS balance,
 			COALESCE(s.stock_val, 0) AS stock_value,
 			COALESCE(c.crypto_val, 0) AS crypto_value,
-			(COALESCE(u.balance, 0) + COALESCE(s.stock_val, 0) + COALESCE(c.crypto_val, 0)) AS total_net_worth
-		FROM users u
+			(COALESCE(gm.balance, 0) + COALESCE(s.stock_val, 0) + COALESCE(c.crypto_val, 0)) AS total_net_worth
+		FROM guild_members gm
 		LEFT JOIN (
 			SELECT si.user_id, FLOOR(SUM(si.shares * COALESCE(sp.last_price, 0)))::BIGINT AS stock_val
 			FROM stock_investments si
 			LEFT JOIN stock_prices sp ON sp.ticker = si.ticker
+			WHERE si.guild_id = $1
 			GROUP BY si.user_id
-		) s ON s.user_id = u.id
+		) s ON s.user_id = gm.user_id
 		LEFT JOIN (
 			SELECT ci.user_id, 
 				FLOOR(SUM(ci.coins * COALESCE(cp.last_price, CASE WHEN ci.coins > 0 THEN ci.total_invested / ci.coins ELSE 0 END, 0)))::BIGINT AS crypto_val
 			FROM crypto_investments ci
 			LEFT JOIN crypto_prices cp ON cp.symbol = ci.symbol
-			WHERE ci.coins > 0
+			WHERE ci.guild_id = $1 AND ci.coins > 0
 			GROUP BY ci.user_id
-		) c ON c.user_id = u.id
-		WHERE ($1 = '' OR u.id != $1)
-		  AND (COALESCE(u.balance, 0) + COALESCE(s.stock_val, 0) + COALESCE(c.crypto_val, 0)) > 0
+		) c ON c.user_id = gm.user_id
+		WHERE gm.guild_id = $1
+		  AND ($2 = '' OR gm.user_id != $2)
+		  AND (COALESCE(gm.balance, 0) + COALESCE(s.stock_val, 0) + COALESCE(c.crypto_val, 0)) > 0
 		ORDER BY total_net_worth DESC
-		LIMIT $2;`
+		LIMIT $3;`
 
-	rows, err := DB.Query(query, BotUserID, limit)
+	rows, err := DB.Query(query, guildID, BotUserID, limit)
 	if err != nil {
 		log.Printf("[LEADERBOARD ERROR] Query failed: %v", err)
 		return nil, err
@@ -137,40 +144,42 @@ func GetLeaderboard(limit int) ([]UserBalance, error) {
 	return users, nil
 }
 
-// GetWalletLeaderboard returns top users ordered strictly by wallet balance (liquid cash)
-func GetWalletLeaderboard(limit int) ([]UserBalance, error) {
+// GetWalletLeaderboard returns top users in a guild ordered strictly by wallet balance (liquid cash)
+func GetWalletLeaderboard(guildID string, limit int) ([]UserBalance, error) {
 	if limit <= 0 {
 		limit = 10
 	}
 
 	query := `
 		SELECT 
-			u.id, 
-			COALESCE(u.balance, 0) AS balance,
+			gm.user_id, 
+			COALESCE(gm.balance, 0) AS balance,
 			COALESCE(s.stock_val, 0) AS stock_value,
 			COALESCE(c.crypto_val, 0) AS crypto_value,
-			(COALESCE(u.balance, 0) + COALESCE(s.stock_val, 0) + COALESCE(c.crypto_val, 0)) AS total_net_worth
-		FROM users u
+			(COALESCE(gm.balance, 0) + COALESCE(s.stock_val, 0) + COALESCE(c.crypto_val, 0)) AS total_net_worth
+		FROM guild_members gm
 		LEFT JOIN (
 			SELECT si.user_id, FLOOR(SUM(si.shares * COALESCE(sp.last_price, 0)))::BIGINT AS stock_val
 			FROM stock_investments si
 			LEFT JOIN stock_prices sp ON sp.ticker = si.ticker
+			WHERE si.guild_id = $1
 			GROUP BY si.user_id
-		) s ON s.user_id = u.id
+		) s ON s.user_id = gm.user_id
 		LEFT JOIN (
 			SELECT ci.user_id, 
 				FLOOR(SUM(ci.coins * COALESCE(cp.last_price, CASE WHEN ci.coins > 0 THEN ci.total_invested / ci.coins ELSE 0 END, 0)))::BIGINT AS crypto_val
 			FROM crypto_investments ci
 			LEFT JOIN crypto_prices cp ON cp.symbol = ci.symbol
-			WHERE ci.coins > 0
+			WHERE ci.guild_id = $1 AND ci.coins > 0
 			GROUP BY ci.user_id
-		) c ON c.user_id = u.id
-		WHERE ($1 = '' OR u.id != $1)
-		  AND COALESCE(u.balance, 0) > 0
-		ORDER BY u.balance DESC
-		LIMIT $2;`
+		) c ON c.user_id = gm.user_id
+		WHERE gm.guild_id = $1
+		  AND ($2 = '' OR gm.user_id != $2)
+		  AND COALESCE(gm.balance, 0) > 0
+		ORDER BY gm.balance DESC
+		LIMIT $3;`
 
-	rows, err := DB.Query(query, BotUserID, limit)
+	rows, err := DB.Query(query, guildID, BotUserID, limit)
 	if err != nil {
 		log.Printf("[WALLET LEADERBOARD ERROR] Query failed: %v", err)
 		return nil, err
@@ -193,21 +202,22 @@ func GetWalletLeaderboard(limit int) ([]UserBalance, error) {
 	return users, nil
 }
 
-// GetStreakLeaderboard returns top daily streak ranks
-func GetStreakLeaderboard(limit int) ([]UserStreakRank, error) {
+// GetStreakLeaderboard returns top daily streak ranks in a guild
+func GetStreakLeaderboard(guildID string, limit int) ([]UserStreakRank, error) {
 	if limit <= 0 {
 		limit = 10
 	}
 
 	query := `
-		SELECT id, COALESCE(daily_streak, 0), COALESCE(max_daily_streak, 0)
-		FROM users
-		WHERE ($1 = '' OR id != $1)
+		SELECT user_id, COALESCE(daily_streak, 0), COALESCE(max_daily_streak, 0)
+		FROM guild_members
+		WHERE guild_id = $1
+		  AND ($2 = '' OR user_id != $2)
 		  AND COALESCE(daily_streak, 0) > 0
 		ORDER BY daily_streak DESC, max_daily_streak DESC
-		LIMIT $2;`
+		LIMIT $3;`
 
-	rows, err := DB.Query(query, BotUserID, limit)
+	rows, err := DB.Query(query, guildID, BotUserID, limit)
 	if err != nil {
 		log.Printf("[STREAK LEADERBOARD ERROR] Query failed: %v", err)
 		return nil, err
@@ -230,57 +240,58 @@ func GetStreakLeaderboard(limit int) ([]UserStreakRank, error) {
 	return streaks, nil
 }
 
-// GetUserNetWorthAndRank returns the rank and total net worth for a specific user
-func GetUserNetWorthAndRank(userID string) (rank int, netWorth int, err error) {
+// GetUserNetWorthAndRank returns the rank and total net worth for a specific user in a guild
+func GetUserNetWorthAndRank(guildID, userID string) (rank int, netWorth int, err error) {
 	query := `
 		WITH user_nw AS (
 			SELECT 
-				u.id,
-				(COALESCE(u.balance, 0) + COALESCE(s.stock_val, 0) + COALESCE(c.crypto_val, 0)) AS net_worth
-			FROM users u
+				gm.user_id,
+				(COALESCE(gm.balance, 0) + COALESCE(s.stock_val, 0) + COALESCE(c.crypto_val, 0)) AS net_worth
+			FROM guild_members gm
 			LEFT JOIN (
 				SELECT si.user_id, FLOOR(SUM(si.shares * COALESCE(sp.last_price, 0)))::BIGINT AS stock_val
 				FROM stock_investments si
 				LEFT JOIN stock_prices sp ON sp.ticker = si.ticker
+				WHERE si.guild_id = $1
 				GROUP BY si.user_id
-			) s ON s.user_id = u.id
+			) s ON s.user_id = gm.user_id
 			LEFT JOIN (
 				SELECT ci.user_id, 
 					FLOOR(SUM(ci.coins * COALESCE(cp.last_price, CASE WHEN ci.coins > 0 THEN ci.total_invested / ci.coins ELSE 0 END, 0)))::BIGINT AS crypto_val
 				FROM crypto_investments ci
 				LEFT JOIN crypto_prices cp ON cp.symbol = ci.symbol
-				WHERE ci.coins > 0
+				WHERE ci.guild_id = $1 AND ci.coins > 0
 				GROUP BY ci.user_id
-			) c ON c.user_id = u.id
-			WHERE ($1 = '' OR u.id != $1)
+			) c ON c.user_id = gm.user_id
+			WHERE gm.guild_id = $1 AND ($2 = '' OR gm.user_id != $2)
 		)
 		SELECT 
 			COALESCE(target.net_worth, 0) AS net_worth,
 			(SELECT COUNT(*) + 1 FROM user_nw WHERE net_worth > COALESCE(target.net_worth, 0)) AS rank
 		FROM (
-			SELECT net_worth FROM user_nw WHERE id = $2
+			SELECT net_worth FROM user_nw WHERE user_id = $3
 			UNION ALL
 			SELECT 0 AS net_worth
 			LIMIT 1
 		) target;`
 
-	err = DB.QueryRow(query, BotUserID, userID).Scan(&netWorth, &rank)
+	err = DB.QueryRow(query, guildID, BotUserID, userID).Scan(&netWorth, &rank)
 	if err != nil {
 		return 0, 0, err
 	}
 	return rank, netWorth, nil
 }
 
-// GetUserStreakRank returns the rank and current streak for a specific user
-func GetUserStreakRank(userID string) (rank int, streak int, err error) {
+// GetUserStreakRank returns the rank and current streak for a specific user in a guild
+func GetUserStreakRank(guildID, userID string) (rank int, streak int, err error) {
 	query := `
 		SELECT 
-			COALESCE(u.daily_streak, 0),
-			(SELECT COUNT(*) + 1 FROM users WHERE daily_streak > COALESCE(u.daily_streak, 0) AND ($1 = '' OR id != $1))
-		FROM users u
-		WHERE u.id = $2;`
+			COALESCE(gm.daily_streak, 0),
+			(SELECT COUNT(*) + 1 FROM guild_members WHERE guild_id = $1 AND daily_streak > COALESCE(gm.daily_streak, 0) AND ($2 = '' OR user_id != $2))
+		FROM guild_members gm
+		WHERE gm.guild_id = $1 AND gm.user_id = $3;`
 
-	err = DB.QueryRow(query, BotUserID, userID).Scan(&streak, &rank)
+	err = DB.QueryRow(query, guildID, BotUserID, userID).Scan(&streak, &rank)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return 0, 0, nil
@@ -290,20 +301,26 @@ func GetUserStreakRank(userID string) (rank int, streak int, err error) {
 	return rank, streak, nil
 }
 
-// AddCoins adds coins to a user
-func AddCoins(userID string, amount int) error {
-	query := `INSERT INTO users (id, balance) VALUES ($1, $2) 
-			  ON CONFLICT(id) DO UPDATE SET balance = users.balance + $2`
-	_, err := DB.Exec(query, userID, amount)
+// AddCoins adds coins to a user in a specific guild
+func AddCoins(guildID, userID string, amount int) error {
+	if guildID == "" || userID == "" || amount <= 0 {
+		return nil
+	}
+	// Ensure parent user exists
+	_, _ = DB.Exec(`INSERT INTO users (id, balance) VALUES ($1, 0) ON CONFLICT (id) DO NOTHING`, userID)
+
+	query := `INSERT INTO guild_members (guild_id, user_id, balance, updated_at) VALUES ($1, $2, $3, NOW()) 
+			  ON CONFLICT(guild_id, user_id) DO UPDATE SET balance = guild_members.balance + $3, updated_at = NOW()`
+	_, err := DB.Exec(query, guildID, userID, amount)
 	return err
 }
 
-// RemoveCoins removes coins from a user atomically, ensuring balance does not drop below zero
-func RemoveCoins(userID string, amount int) error {
-	if amount <= 0 {
+// RemoveCoins removes coins from a user in a specific guild atomically, ensuring balance does not drop below zero
+func RemoveCoins(guildID, userID string, amount int) error {
+	if guildID == "" || userID == "" || amount <= 0 {
 		return nil
 	}
-	res, err := DB.Exec(`UPDATE users SET balance = balance - $1 WHERE id = $2 AND balance >= $1`, amount, userID)
+	res, err := DB.Exec(`UPDATE guild_members SET balance = balance - $1, updated_at = NOW() WHERE guild_id = $2 AND user_id = $3 AND balance >= $1`, amount, guildID, userID)
 	if err != nil {
 		return err
 	}
@@ -320,20 +337,17 @@ func RemoveCoins(userID string, amount int) error {
 // BotUserID is the bot's user ID (must be set in main.go)
 var BotUserID string
 
-// CollectLostBet sends lost bet coins to the bot user profile
-func CollectLostBet(userID string, amount int) error {
+// CollectLostBet sends lost bet coins to the bot user profile in the specific guild
+func CollectLostBet(guildID, userID string, amount int) error {
 	if BotUserID == "" {
-		// If bot ID is not set, simply remove coins from user
-		return RemoveCoins(userID, amount)
+		return RemoveCoins(guildID, userID, amount)
 	}
-	
-	// Transfer from user to bot
-	return TransferCoins(userID, BotUserID, amount)
+	return TransferCoins(guildID, userID, BotUserID, amount)
 }
 
-// TransferCoins transfers coins between users atomically and without deadlock risks
-func TransferCoins(fromID, toID string, amount int) error {
-	if fromID == toID || amount <= 0 {
+// TransferCoins transfers coins between users within a guild atomically and without deadlock risks
+func TransferCoins(guildID, fromID, toID string, amount int) error {
+	if guildID == "" || fromID == toID || amount <= 0 {
 		return fmt.Errorf("invalid transfer parameters")
 	}
 
@@ -343,8 +357,18 @@ func TransferCoins(fromID, toID string, amount int) error {
 	}
 	defer tx.Rollback()
 
-	// 1. Ensure receiver exists first so row can be locked
+	// 1. Ensure parent users exist
+	_, err = tx.Exec(`INSERT INTO users (id, balance) VALUES ($1, 0) ON CONFLICT (id) DO NOTHING`, fromID)
+	if err != nil {
+		return err
+	}
 	_, err = tx.Exec(`INSERT INTO users (id, balance) VALUES ($1, 0) ON CONFLICT (id) DO NOTHING`, toID)
+	if err != nil {
+		return err
+	}
+
+	// Ensure recipient guild_members exists
+	_, err = tx.Exec(`INSERT INTO guild_members (guild_id, user_id, balance) VALUES ($1, $2, 0) ON CONFLICT (guild_id, user_id) DO NOTHING`, guildID, toID)
 	if err != nil {
 		return err
 	}
@@ -355,7 +379,7 @@ func TransferCoins(fromID, toID string, amount int) error {
 		firstID, secondID = secondID, firstID
 	}
 
-	rows, err := tx.Query(`SELECT id, balance FROM users WHERE id IN ($1, $2) ORDER BY id FOR UPDATE`, firstID, secondID)
+	rows, err := tx.Query(`SELECT user_id, balance FROM guild_members WHERE guild_id = $1 AND user_id IN ($2, $3) ORDER BY user_id FOR UPDATE`, guildID, firstID, secondID)
 	if err != nil {
 		return err
 	}
@@ -380,12 +404,12 @@ func TransferCoins(fromID, toID string, amount int) error {
 	}
 
 	// 3. Atomically update balances
-	_, err = tx.Exec(`UPDATE users SET balance = balance - $1 WHERE id = $2`, amount, fromID)
+	_, err = tx.Exec(`UPDATE guild_members SET balance = balance - $1, updated_at = NOW() WHERE guild_id = $2 AND user_id = $3`, amount, guildID, fromID)
 	if err != nil {
 		return err
 	}
 
-	_, err = tx.Exec(`UPDATE users SET balance = balance + $1 WHERE id = $2`, amount, toID)
+	_, err = tx.Exec(`UPDATE guild_members SET balance = balance + $1, updated_at = NOW() WHERE guild_id = $2 AND user_id = $3`, amount, guildID, toID)
 	if err != nil {
 		return err
 	}
@@ -420,8 +444,8 @@ func CalculateDailyReward(streak int) int {
 	return streak * baseReward
 }
 
-// GetDailyStreakInfo returns full information about a user's daily streak
-func GetDailyStreakInfo(userID string) *DailyStreakInfo {
+// GetDailyStreakInfo returns full information about a user's daily streak in a specific guild
+func GetDailyStreakInfo(guildID, userID string) *DailyStreakInfo {
 	info := &DailyStreakInfo{
 		Streak:    0,
 		MaxStreak: 0,
@@ -429,7 +453,7 @@ func GetDailyStreakInfo(userID string) *DailyStreakInfo {
 		NextDaily: time.Now(),
 	}
 
-	if DB == nil {
+	if DB == nil || guildID == "" || userID == "" {
 		info.Reward = CalculateDailyReward(1)
 		return info
 	}
@@ -438,8 +462,8 @@ func GetDailyStreakInfo(userID string) *DailyStreakInfo {
 	var streak sql.NullInt64
 	var maxStreak sql.NullInt64
 
-	query := `SELECT last_daily, daily_streak, max_daily_streak FROM users WHERE id = $1`
-	err := DB.QueryRow(query, userID).Scan(&lastDaily, &streak, &maxStreak)
+	query := `SELECT last_daily, daily_streak, max_daily_streak FROM guild_members WHERE guild_id = $1 AND user_id = $2`
+	err := DB.QueryRow(query, guildID, userID).Scan(&lastDaily, &streak, &maxStreak)
 
 	if err == nil {
 		if streak.Valid {
@@ -467,25 +491,28 @@ func GetDailyStreakInfo(userID string) *DailyStreakInfo {
 	return info
 }
 
-// CanDaily checks if the user can claim their daily reward
-func CanDaily(userID string) bool {
-	return GetDailyStreakInfo(userID).CanClaim
+// CanDaily checks if the user can claim their daily reward in a specific guild
+func CanDaily(guildID, userID string) bool {
+	return GetDailyStreakInfo(guildID, userID).CanClaim
 }
 
-// GetNextDailyTime returns when the next daily reward will be available
-func GetNextDailyTime(userID string) time.Time {
-	return GetDailyStreakInfo(userID).NextDaily
+// GetNextDailyTime returns when the next daily reward will be available in a specific guild
+func GetNextDailyTime(guildID, userID string) time.Time {
+	return GetDailyStreakInfo(guildID, userID).NextDaily
 }
 
-// GetDailyReward calculates the daily reward based on current streak
-func GetDailyReward(userID string) int {
-	return GetDailyStreakInfo(userID).Reward
+// GetDailyReward calculates the daily reward based on current streak in a specific guild
+func GetDailyReward(guildID, userID string) int {
+	return GetDailyStreakInfo(guildID, userID).Reward
 }
 
-// ClaimDaily atomically claims the daily reward, credits balance, and updates streak
-func ClaimDaily(userID string) (*DailyStreakInfo, error) {
+// ClaimDaily atomically claims the daily reward, credits balance, and updates streak in a specific guild
+func ClaimDaily(guildID, userID string) (*DailyStreakInfo, error) {
 	if DB == nil {
 		return nil, fmt.Errorf("database not initialized")
+	}
+	if guildID == "" || userID == "" {
+		return nil, fmt.Errorf("guild and user ID required")
 	}
 
 	tx, err := DB.Begin()
@@ -494,20 +521,26 @@ func ClaimDaily(userID string) (*DailyStreakInfo, error) {
 	}
 	defer tx.Rollback()
 
-	// Ensure user exists
-	_, err = tx.Exec(`INSERT INTO users (id, balance, daily_streak, max_daily_streak) 
-		VALUES ($1, 0, 0, 0) ON CONFLICT (id) DO NOTHING`, userID)
+	// Ensure parent user exists
+	_, err = tx.Exec(`INSERT INTO users (id, balance) VALUES ($1, 0) ON CONFLICT (id) DO NOTHING`, userID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Lock the user row for update to prevent concurrent double-claim race conditions
+	// Ensure guild_members exists
+	_, err = tx.Exec(`INSERT INTO guild_members (guild_id, user_id, balance, daily_streak, max_daily_streak) 
+		VALUES ($1, $2, 0, 0, 0) ON CONFLICT (guild_id, user_id) DO NOTHING`, guildID, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Lock the guild_members row for update to prevent concurrent double-claim race conditions
 	var lastDaily sql.NullTime
 	var currentStreak int
 	var maxStreak int
 
 	err = tx.QueryRow(`SELECT last_daily, COALESCE(daily_streak, 0), COALESCE(max_daily_streak, 0) 
-		FROM users WHERE id = $1 FOR UPDATE`, userID).Scan(&lastDaily, &currentStreak, &maxStreak)
+		FROM guild_members WHERE guild_id = $1 AND user_id = $2 FOR UPDATE`, guildID, userID).Scan(&lastDaily, &currentStreak, &maxStreak)
 	if err != nil {
 		return nil, err
 	}
@@ -555,12 +588,13 @@ func ClaimDaily(userID string) (*DailyStreakInfo, error) {
 	info.NextDaily = now.Add(24 * time.Hour)
 
 	// Atomically add reward to balance and update daily streak/timestamps in single step
-	_, err = tx.Exec(`UPDATE users 
+	_, err = tx.Exec(`UPDATE guild_members 
 		SET balance = balance + $1, 
 		    last_daily = $2, 
 		    daily_streak = $3, 
-		    max_daily_streak = $4 
-		WHERE id = $5`, info.Reward, now, info.Streak, info.MaxStreak, userID)
+		    max_daily_streak = $4,
+		    updated_at = NOW() 
+		WHERE guild_id = $5 AND user_id = $6`, info.Reward, now, info.Streak, info.MaxStreak, guildID, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -726,10 +760,14 @@ func AcceptLoanAtomic(loan *Loan) error {
 	if err != nil {
 		return err
 	}
+	_, err = tx.Exec(`INSERT INTO guild_members (guild_id, user_id, balance) VALUES ($1, $2, 0) ON CONFLICT (guild_id, user_id) DO NOTHING`, loan.GuildID, loan.BorrowerID)
+	if err != nil {
+		return err
+	}
 
 	// 2. Lock and verify lender balance
 	var lenderBalance int
-	err = tx.QueryRow(`SELECT balance FROM users WHERE id = $1 FOR UPDATE`, loan.LenderID).Scan(&lenderBalance)
+	err = tx.QueryRow(`SELECT balance FROM guild_members WHERE guild_id = $1 AND user_id = $2 FOR UPDATE`, loan.GuildID, loan.LenderID).Scan(&lenderBalance)
 	if err != nil {
 		return err
 	}
@@ -738,11 +776,11 @@ func AcceptLoanAtomic(loan *Loan) error {
 	}
 
 	// 3. Deduct from lender and credit borrower
-	_, err = tx.Exec(`UPDATE users SET balance = balance - $1 WHERE id = $2`, loan.Amount, loan.LenderID)
+	_, err = tx.Exec(`UPDATE guild_members SET balance = balance - $1, updated_at = NOW() WHERE guild_id = $2 AND user_id = $3`, loan.Amount, loan.GuildID, loan.LenderID)
 	if err != nil {
 		return err
 	}
-	_, err = tx.Exec(`UPDATE users SET balance = balance + $1 WHERE id = $2`, loan.Amount, loan.BorrowerID)
+	_, err = tx.Exec(`UPDATE guild_members SET balance = balance + $1, updated_at = NOW() WHERE guild_id = $2 AND user_id = $3`, loan.Amount, loan.GuildID, loan.BorrowerID)
 	if err != nil {
 		return err
 	}
@@ -790,7 +828,7 @@ func PayLoanAtomic(loanID, payerID string) (*Loan, error) {
 
 	// 2. Lock borrower row and verify balance
 	var borrowerBalance int
-	err = tx.QueryRow(`SELECT balance FROM users WHERE id = $1 FOR UPDATE`, loan.BorrowerID).Scan(&borrowerBalance)
+	err = tx.QueryRow(`SELECT balance FROM guild_members WHERE guild_id = $1 AND user_id = $2 FOR UPDATE`, loan.GuildID, loan.BorrowerID).Scan(&borrowerBalance)
 	if err != nil {
 		return nil, err
 	}
@@ -799,11 +837,11 @@ func PayLoanAtomic(loanID, payerID string) (*Loan, error) {
 	}
 
 	// 3. Deduct from borrower and credit lender
-	_, err = tx.Exec(`UPDATE users SET balance = balance - $1 WHERE id = $2`, loan.TotalOwed, loan.BorrowerID)
+	_, err = tx.Exec(`UPDATE guild_members SET balance = balance - $1, updated_at = NOW() WHERE guild_id = $2 AND user_id = $3`, loan.TotalOwed, loan.GuildID, loan.BorrowerID)
 	if err != nil {
 		return nil, err
 	}
-	_, err = tx.Exec(`UPDATE users SET balance = balance + $1 WHERE id = $2`, loan.TotalOwed, loan.LenderID)
+	_, err = tx.Exec(`UPDATE guild_members SET balance = balance + $1, updated_at = NOW() WHERE guild_id = $2 AND user_id = $3`, loan.TotalOwed, loan.GuildID, loan.LenderID)
 	if err != nil {
 		return nil, err
 	}
@@ -847,7 +885,7 @@ func AutoCollectDueLoan(loanID string) (*Loan, int, int, bool, error) {
 
 	// 2. Lock borrower balance
 	var borrowerBalance int
-	err = tx.QueryRow(`SELECT balance FROM users WHERE id = $1 FOR UPDATE`, loan.BorrowerID).Scan(&borrowerBalance)
+	err = tx.QueryRow(`SELECT balance FROM guild_members WHERE guild_id = $1 AND user_id = $2 FOR UPDATE`, loan.GuildID, loan.BorrowerID).Scan(&borrowerBalance)
 	if err != nil {
 		return nil, 0, 0, false, err
 	}
@@ -855,11 +893,11 @@ func AutoCollectDueLoan(loanID string) (*Loan, int, int, bool, error) {
 	if borrowerBalance >= loan.TotalOwed {
 		// Full collection
 		collected := loan.TotalOwed
-		_, err = tx.Exec(`UPDATE users SET balance = balance - $1 WHERE id = $2`, collected, loan.BorrowerID)
+		_, err = tx.Exec(`UPDATE guild_members SET balance = balance - $1, updated_at = NOW() WHERE guild_id = $2 AND user_id = $3`, collected, loan.GuildID, loan.BorrowerID)
 		if err != nil {
 			return nil, 0, 0, false, err
 		}
-		_, err = tx.Exec(`UPDATE users SET balance = balance + $1 WHERE id = $2`, collected, loan.LenderID)
+		_, err = tx.Exec(`UPDATE guild_members SET balance = balance + $1, updated_at = NOW() WHERE guild_id = $2 AND user_id = $3`, collected, loan.GuildID, loan.LenderID)
 		if err != nil {
 			return nil, 0, 0, false, err
 		}
@@ -874,11 +912,11 @@ func AutoCollectDueLoan(loanID string) (*Loan, int, int, bool, error) {
 	// Partial collection (collect whatever is available > 0, do NOT negative balance)
 	collected := borrowerBalance
 	if collected > 0 {
-		_, err = tx.Exec(`UPDATE users SET balance = balance - $1 WHERE id = $2`, collected, loan.BorrowerID)
+		_, err = tx.Exec(`UPDATE guild_members SET balance = balance - $1, updated_at = NOW() WHERE guild_id = $2 AND user_id = $3`, collected, loan.GuildID, loan.BorrowerID)
 		if err != nil {
 			return nil, 0, 0, false, err
 		}
-		_, err = tx.Exec(`UPDATE users SET balance = balance + $1 WHERE id = $2`, collected, loan.LenderID)
+		_, err = tx.Exec(`UPDATE guild_members SET balance = balance + $1, updated_at = NOW() WHERE guild_id = $2 AND user_id = $3`, collected, loan.GuildID, loan.LenderID)
 		if err != nil {
 			return nil, 0, 0, false, err
 		}

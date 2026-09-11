@@ -129,7 +129,7 @@ func TestDailyRecordAndFormatting(t *testing.T) {
 
 func TestDailyEmbedGeneration(t *testing.T) {
 	// Verify ExecuteDaily behavior when daily cannot be claimed or database is offline
-	embed := ExecuteDaily("nonexistent_mock_user_id_12345")
+	embed := ExecuteDaily("mock_guild_123", "nonexistent_mock_user_id_12345")
 	if embed == nil {
 		t.Fatal("Expected embed to not be nil")
 	}

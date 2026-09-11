@@ -29,6 +29,7 @@ const (
 )
 
 type AviatorSession struct {
+	GuildID     string
 	UserID      string
 	Bet         int
 	AutoCashout float64
@@ -44,9 +45,14 @@ type MessageUpdater func(embed *discordgo.MessageEmbed, finished bool)
 // --- INTERACTION (SLASH) START ---
 
 func StartAviatorInteraction(s *discordgo.Session, i *discordgo.InteractionCreate, bet int, autoCashout float64) {
+	if i.GuildID == "" {
+		respondPrivate(s, i, utils.ErrorEmbed("This game can only be played within a server."))
+		return
+	}
+	guildID := i.GuildID
 	userID := i.Member.User.ID
 
-	if !validatePreGame(userID, bet) {
+	if !validatePreGame(guildID, userID, bet) {
 		respondPrivate(s, i, utils.ErrorEmbed(fmt.Sprintf("Cannot start game. Min bet: **%d %s**, check your balance or finish your active game.", MinBet, config.Bot.CurrencySymbol)))
 		return
 	}
@@ -67,18 +73,18 @@ func StartAviatorInteraction(s *discordgo.Session, i *discordgo.InteractionCreat
 			defer close(finishChan)
 
 			// Validate balance
-			if database.GetBalance(userID) < bet {
+			if database.GetBalance(guildID, userID) < bet {
 				respondPrivate(s, i, utils.ErrorEmbed("You ran out of coins before takeoff!"))
 				return
 			}
 
 			// Deduct bet atomically
-			if err := database.CollectLostBet(userID, bet); err != nil {
+			if err := database.CollectLostBet(guildID, userID, bet); err != nil {
 				respondPrivate(s, i, utils.ErrorEmbed("Failed to deduct bet."))
 				return
 			}
 
-			session := setupGame(userID, bet, autoCashout)
+			session := setupGame(guildID, userID, bet, autoCashout)
 			embed, btn := getInitialState(bet, autoCashout, userID)
 
 			// Send game board message
@@ -92,7 +98,7 @@ func StartAviatorInteraction(s *discordgo.Session, i *discordgo.InteractionCreat
 
 			if err != nil {
 				// Refund immediately if message delivery failed
-				_ = database.AddCoins(userID, bet)
+				_ = database.AddCoins(guildID, userID, bet)
 				cleanup(userID)
 				return
 			}
@@ -140,9 +146,14 @@ func StartAviatorInteraction(s *discordgo.Session, i *discordgo.InteractionCreat
 // --- TEXT COMMAND START ---
 
 func StartAviatorText(s *discordgo.Session, m *discordgo.MessageCreate, bet int, autoCashout float64) {
+	if m.GuildID == "" {
+		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("This game can only be played within a server."))
+		return
+	}
+	guildID := m.GuildID
 	userID := m.Author.ID
 
-	if !validatePreGame(userID, bet) {
+	if !validatePreGame(guildID, userID, bet) {
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(fmt.Sprintf("Cannot start game. Min bet: **%d %s**, check your balance or finish your active game.", MinBet, config.Bot.CurrencySymbol)))
 		return
 	}
@@ -162,18 +173,18 @@ func StartAviatorText(s *discordgo.Session, m *discordgo.MessageCreate, bet int,
 		Run: func(finishChan chan struct{}) {
 			defer close(finishChan)
 
-			if database.GetBalance(userID) < bet {
+			if database.GetBalance(guildID, userID) < bet {
 				s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(fmt.Sprintf("<@%s> You don't have enough coins.", userID)))
 				return
 			}
 
 			// Deduct bet atomically
-			if err := database.CollectLostBet(userID, bet); err != nil {
+			if err := database.CollectLostBet(guildID, userID, bet); err != nil {
 				s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Error deducting bet."))
 				return
 			}
 
-			session := setupGame(userID, bet, autoCashout)
+			session := setupGame(guildID, userID, bet, autoCashout)
 			embed, btn := getInitialState(bet, autoCashout, userID)
 
 			msg, err := s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
@@ -186,7 +197,7 @@ func StartAviatorText(s *discordgo.Session, m *discordgo.MessageCreate, bet int,
 
 			if err != nil {
 				// Refund immediately if message delivery failed
-				_ = database.AddCoins(userID, bet)
+				_ = database.AddCoins(guildID, userID, bet)
 				cleanup(userID)
 				return
 			}
@@ -224,11 +235,11 @@ func StartAviatorText(s *discordgo.Session, m *discordgo.MessageCreate, bet int,
 
 // --- CORE GAME HELPERS ---
 
-func validatePreGame(userID string, bet int) bool {
+func validatePreGame(guildID, userID string, bet int) bool {
 	if bet < MinBet {
 		return false
 	}
-	if database.GetBalance(userID) < bet {
+	if database.GetBalance(guildID, userID) < bet {
 		return false
 	}
 	if IsUserInGame(userID) {
@@ -237,8 +248,9 @@ func validatePreGame(userID string, bet int) bool {
 	return true
 }
 
-func setupGame(userID string, bet int, autoCashout float64) *AviatorSession {
+func setupGame(guildID, userID string, bet int, autoCashout float64) *AviatorSession {
 	session := &AviatorSession{
+		GuildID:     guildID,
 		UserID:      userID,
 		Bet:         bet,
 		AutoCashout: autoCashout,
@@ -337,7 +349,7 @@ func runGameLoop(session *AviatorSession, update MessageUpdater) {
 
 			totalPayout := int(float64(session.Bet) * multiplier)
 			netProfit := totalPayout - session.Bet
-			_ = database.AddCoins(session.UserID, totalPayout)
+			_ = database.AddCoins(session.GuildID, session.UserID, totalPayout)
 
 			log.Printf("[AVIATOR WIN] User %s cashed out at x%.2f (bet: %d, payout: %d, profit: %d)",
 				session.UserID, multiplier, session.Bet, totalPayout, netProfit)
@@ -358,7 +370,7 @@ func runGameLoop(session *AviatorSession, update MessageUpdater) {
 					multiplier = session.AutoCashout
 					totalPayout := int(float64(session.Bet) * multiplier)
 					netProfit := totalPayout - session.Bet
-					_ = database.AddCoins(session.UserID, totalPayout)
+					_ = database.AddCoins(session.GuildID, session.UserID, totalPayout)
 
 					log.Printf("[AVIATOR AUTO-WIN] User %s auto-cashed out at x%.2f (bet: %d, payout: %d)",
 						session.UserID, multiplier, session.Bet, totalPayout)

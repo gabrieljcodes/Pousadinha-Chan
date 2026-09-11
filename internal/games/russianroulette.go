@@ -21,6 +21,7 @@ const (
 )
 
 type RussianRouletteChallenge struct {
+	GuildID      string
 	ChallengerID string
 	ChallengedID string
 	Bet          int
@@ -30,6 +31,7 @@ type RussianRouletteChallenge struct {
 }
 
 type RussianRouletteGame struct {
+	GuildID     string
 	Player1ID   string
 	Player2ID   string
 	Player1Name string
@@ -84,6 +86,12 @@ func isPlayerInGame(playerID string) bool {
 
 // CmdRussianRoulette handles text challenge: !roulette @user <amount>
 func CmdRussianRoulette(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
+	if m.GuildID == "" {
+		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("This command can only be used within a server."))
+		return
+	}
+	guildID := m.GuildID
+
 	if len(args) < 2 {
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("🔫 Russian Roulette",
 			"Usage: `!roulette @user <amount>`\n\nChallenge another user to a game of Russian Roulette. Winner takes all!"))
@@ -120,7 +128,7 @@ func CmdRussianRoulette(s *discordgo.Session, m *discordgo.MessageCreate, args [
 		return
 	}
 
-	challengedMember, err := s.GuildMember(m.GuildID, challengedID)
+	challengedMember, err := s.GuildMember(guildID, challengedID)
 	if err != nil || challengedMember.User.Bot {
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Invalid user or bot."))
 		return
@@ -149,14 +157,14 @@ func CmdRussianRoulette(s *discordgo.Session, m *discordgo.MessageCreate, args [
 		return
 	}
 
-	challengerBalance := database.GetBalance(challengerID)
+	challengerBalance := database.GetBalance(guildID, challengerID)
 	if challengerBalance < amount {
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(fmt.Sprintf("Insufficient balance! You have %d %s", challengerBalance, config.Bot.CurrencySymbol)))
 		return
 	}
 
 	// Atomically reserve challenger's bet
-	if err := database.CollectLostBet(challengerID, amount); err != nil {
+	if err := database.CollectLostBet(guildID, challengerID, amount); err != nil {
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Error reserving bet coins."))
 		return
 	}
@@ -207,13 +215,14 @@ func CmdRussianRoulette(s *discordgo.Session, m *discordgo.MessageCreate, args [
 	})
 
 	if err != nil || msg == nil {
-		_ = database.AddCoins(challengerID, amount)
+		_ = database.AddCoins(guildID, challengerID, amount)
 		UnregisterActivePlayer(challengerID)
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Failed to send challenge message."))
 		return
 	}
 
 	challenge := &RussianRouletteChallenge{
+		GuildID:      guildID,
 		ChallengerID: challengerID,
 		ChallengedID: challengedID,
 		Bet:          amount,
@@ -233,6 +242,11 @@ func CmdRussianRoulette(s *discordgo.Session, m *discordgo.MessageCreate, args [
 
 // StartRussianRouletteInteraction handles slash command /roulette challenge @user amount
 func StartRussianRouletteInteraction(s *discordgo.Session, i *discordgo.InteractionCreate, challenged *discordgo.User, amount int) {
+	if i.GuildID == "" {
+		respondPrivate(s, i, utils.ErrorEmbed("This command can only be used within a server."))
+		return
+	}
+	guildID := i.GuildID
 	challengerID := i.Member.User.ID
 	challengedID := challenged.ID
 
@@ -273,14 +287,14 @@ func StartRussianRouletteInteraction(s *discordgo.Session, i *discordgo.Interact
 		return
 	}
 
-	challengerBalance := database.GetBalance(challengerID)
+	challengerBalance := database.GetBalance(guildID, challengerID)
 	if challengerBalance < amount {
 		respondPrivate(s, i, utils.ErrorEmbed(fmt.Sprintf("Insufficient balance! You have %d %s", challengerBalance, config.Bot.CurrencySymbol)))
 		return
 	}
 
 	// Reserve coins in escrow
-	if err := database.CollectLostBet(challengerID, amount); err != nil {
+	if err := database.CollectLostBet(guildID, challengerID, amount); err != nil {
 		respondPrivate(s, i, utils.ErrorEmbed("Error reserving bet coins."))
 		return
 	}
@@ -334,7 +348,7 @@ func StartRussianRouletteInteraction(s *discordgo.Session, i *discordgo.Interact
 	})
 
 	if err != nil {
-		_ = database.AddCoins(challengerID, amount)
+		_ = database.AddCoins(guildID, challengerID, amount)
 		UnregisterActivePlayer(challengerID)
 		return
 	}
@@ -346,6 +360,7 @@ func StartRussianRouletteInteraction(s *discordgo.Session, i *discordgo.Interact
 	}
 
 	challenge := &RussianRouletteChallenge{
+		GuildID:      guildID,
 		ChallengerID: challengerID,
 		ChallengedID: challengedID,
 		Bet:          amount,
@@ -400,10 +415,10 @@ func handleAccept(s *discordgo.Session, i *discordgo.InteractionCreate, userID s
 	pendingMu.Unlock()
 
 	// Verify challenged player's balance
-	challengedBalance := database.GetBalance(challenge.ChallengedID)
+	challengedBalance := database.GetBalance(challenge.GuildID, challenge.ChallengedID)
 	if challengedBalance < challenge.Bet {
 		// Refund challenger
-		_ = database.AddCoins(challenge.ChallengerID, challenge.Bet)
+		_ = database.AddCoins(challenge.GuildID, challenge.ChallengerID, challenge.Bet)
 		UnregisterActivePlayer(challenge.ChallengerID)
 
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
@@ -418,8 +433,8 @@ func handleAccept(s *discordgo.Session, i *discordgo.InteractionCreate, userID s
 	}
 
 	// Atomically deduct challenged player's bet
-	if err := database.CollectLostBet(challenge.ChallengedID, challenge.Bet); err != nil {
-		_ = database.AddCoins(challenge.ChallengerID, challenge.Bet)
+	if err := database.CollectLostBet(challenge.GuildID, challenge.ChallengedID, challenge.Bet); err != nil {
+		_ = database.AddCoins(challenge.GuildID, challenge.ChallengerID, challenge.Bet)
 		UnregisterActivePlayer(challenge.ChallengerID)
 
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
@@ -451,6 +466,7 @@ func handleAccept(s *discordgo.Session, i *discordgo.InteractionCreate, userID s
 	}
 
 	game := &RussianRouletteGame{
+		GuildID:     challenge.GuildID,
 		Player1ID:   challenge.ChallengerID,
 		Player2ID:   challenge.ChallengedID,
 		Player1Name: challengerName,
@@ -515,7 +531,7 @@ func handleDecline(s *discordgo.Session, i *discordgo.InteractionCreate, userID 
 	pendingMu.Unlock()
 
 	// Refund challenger
-	_ = database.AddCoins(challenge.ChallengerID, challenge.Bet)
+	_ = database.AddCoins(challenge.GuildID, challenge.ChallengerID, challenge.Bet)
 	UnregisterActivePlayer(challenge.ChallengerID)
 
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
@@ -594,7 +610,7 @@ func handleShoot(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		cleanupGame(game)
 
 		if database.DB != nil {
-			_ = database.AddCoins(survivorID, totalPot)
+			_ = database.AddCoins(game.GuildID, survivorID, totalPot)
 		}
 
 		embed := &discordgo.MessageEmbed{
@@ -718,7 +734,7 @@ func handleTurnTimeout(s *discordgo.Session, game *RussianRouletteGame) {
 	cleanupGame(game)
 
 	if database.DB != nil {
-		_ = database.AddCoins(winnerID, totalPot)
+		_ = database.AddCoins(game.GuildID, winnerID, totalPot)
 	}
 
 	embed := &discordgo.MessageEmbed{
@@ -826,7 +842,7 @@ func expireChallenge(s *discordgo.Session, challengedID string) {
 	pendingMu.Unlock()
 
 	// Refund challenger
-	_ = database.AddCoins(challenge.ChallengerID, challenge.Bet)
+	_ = database.AddCoins(challenge.GuildID, challenge.ChallengerID, challenge.Bet)
 	UnregisterActivePlayer(challenge.ChallengerID)
 
 	s.ChannelMessageSend(challenge.ChannelID,

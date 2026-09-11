@@ -217,9 +217,18 @@ func ExecuteBuySharesTransaction(marketID, userID, outcome string, shares int64,
 	}
 	defer tx.Rollback()
 
-	// 1. Check user balance and lock row
+	// 1. Fetch guild_id, ensure member exists, check balance and lock row
+	var guildID string
+	err = tx.QueryRow(`SELECT guild_id FROM polymarket_markets WHERE id = $1`, marketID).Scan(&guildID)
+	if err != nil {
+		return fmt.Errorf("market not found: %w", err)
+	}
+
+	_, _ = tx.Exec(`INSERT INTO users (id, balance) VALUES ($1, 0) ON CONFLICT (id) DO NOTHING`, userID)
+	_, _ = tx.Exec(`INSERT INTO guild_members (guild_id, user_id, balance) VALUES ($1, $2, 0) ON CONFLICT (guild_id, user_id) DO NOTHING`, guildID, userID)
+
 	var currentBalance int64
-	err = tx.QueryRow(`SELECT balance FROM users WHERE id = $1 FOR UPDATE`, userID).Scan(&currentBalance)
+	err = tx.QueryRow(`SELECT balance FROM guild_members WHERE guild_id = $1 AND user_id = $2 FOR UPDATE`, guildID, userID).Scan(&currentBalance)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return fmt.Errorf("user not found")
@@ -232,7 +241,7 @@ func ExecuteBuySharesTransaction(marketID, userID, outcome string, shares int64,
 	}
 
 	// 2. Deduct balance
-	_, err = tx.Exec(`UPDATE users SET balance = balance - $1 WHERE id = $2`, totalCost, userID)
+	_, err = tx.Exec(`UPDATE guild_members SET balance = balance - $1, updated_at = NOW() WHERE guild_id = $2 AND user_id = $3`, totalCost, guildID, userID)
 	if err != nil {
 		return fmt.Errorf("failed to deduct balance: %w", err)
 	}
@@ -363,9 +372,16 @@ func ResolvePolymarketMarketDB(marketID, winner string) (map[string]int64, error
 		payouts[userID] = shares * 100
 	}
 
+	// 1b. Fetch guild_id
+	var guildID string
+	err = tx.QueryRow(`SELECT guild_id FROM polymarket_markets WHERE id = $1`, marketID).Scan(&guildID)
+	if err != nil {
+		return nil, fmt.Errorf("market not found: %w", err)
+	}
+
 	// 3. Credit winners
 	for userID, payout := range payouts {
-		_, err := tx.Exec(`UPDATE users SET balance = balance + $1 WHERE id = $2`, payout, userID)
+		_, err := tx.Exec(`UPDATE guild_members SET balance = balance + $1, updated_at = NOW() WHERE guild_id = $2 AND user_id = $3`, payout, guildID, userID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to credit winner %s: %w", userID, err)
 		}
@@ -423,9 +439,16 @@ func CancelAndRefundPolymarketMarketDB(marketID string) (map[string]int64, error
 		refunds[userID] = refundAmount
 	}
 
+	// Fetch guild_id
+	var guildID string
+	err = tx.QueryRow(`SELECT guild_id FROM polymarket_markets WHERE id = $1`, marketID).Scan(&guildID)
+	if err != nil {
+		return nil, fmt.Errorf("market not found: %w", err)
+	}
+
 	// Credit refunds
 	for userID, amount := range refunds {
-		_, err := tx.Exec(`UPDATE users SET balance = balance + $1 WHERE id = $2`, amount, userID)
+		_, err := tx.Exec(`UPDATE guild_members SET balance = balance + $1, updated_at = NOW() WHERE guild_id = $2 AND user_id = $3`, amount, guildID, userID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to refund user %s: %w", userID, err)
 		}

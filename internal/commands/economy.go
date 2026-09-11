@@ -16,8 +16,11 @@ import (
 )
 
 // ExecuteDaily processes a daily claim and returns a formatted Discord embed
-func ExecuteDaily(userID string) *discordgo.MessageEmbed {
-	info, err := database.ClaimDaily(userID)
+func ExecuteDaily(guildID, userID string) *discordgo.MessageEmbed {
+	if guildID == "" {
+		return utils.ErrorEmbed("This command can only be used within a server.")
+	}
+	info, err := database.ClaimDaily(guildID, userID)
 	if err != nil {
 		if info != nil && !info.CanClaim {
 			discordTime := fmt.Sprintf("<t:%d:R>", info.NextDaily.Unix())
@@ -49,24 +52,36 @@ func ExecuteDaily(userID string) *discordgo.MessageEmbed {
 }
 
 func CmdDaily(s *discordgo.Session, m *discordgo.MessageCreate) {
-	s.ChannelMessageSendEmbed(m.ChannelID, ExecuteDaily(m.Author.ID))
+	if m.GuildID == "" {
+		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("This command can only be used within a server."))
+		return
+	}
+	s.ChannelMessageSendEmbed(m.ChannelID, ExecuteDaily(m.GuildID, m.Author.ID))
 }
 
 func CmdBalance(s *discordgo.Session, m *discordgo.MessageCreate) {
+	if m.GuildID == "" {
+		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("This command can only be used within a server."))
+		return
+	}
 	targetUser := m.Author
 	if len(m.Mentions) > 0 {
 		targetUser = m.Mentions[0]
 	}
 
-	balance := database.GetBalance(targetUser.ID)
+	balance := database.GetBalance(m.GuildID, targetUser.ID)
 	
 	// Debug log
-	log.Printf("[BALANCE] User: %s (ID: %s), Balance: %d", targetUser.Username, targetUser.ID, balance)
+	log.Printf("[BALANCE] Guild: %s, User: %s (ID: %s), Balance: %d", m.GuildID, targetUser.Username, targetUser.ID, balance)
 	
 	s.ChannelMessageSendEmbed(m.ChannelID, utils.GoldEmbed("Balance", fmt.Sprintf("**%s** has **%d %s**.", targetUser.Username, balance, config.Bot.CurrencyName)))
 }
 
 func CmdPay(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
+	if m.GuildID == "" {
+		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("This command can only be used within a server."))
+		return
+	}
 	if len(m.Mentions) == 0 || len(args) < 2 {
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("Usage", "!pay @user <amount>"))
 		return
@@ -95,7 +110,7 @@ func CmdPay(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
 		return
 	}
 
-	err := database.TransferCoins(m.Author.ID, toUser.ID, amount)
+	err := database.TransferCoins(m.GuildID, m.Author.ID, toUser.ID, amount)
 	if err != nil {
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Insufficient funds or transaction error."))
 		return
@@ -119,20 +134,22 @@ var (
 	lbTTL     = 30 * time.Second
 )
 
-func getCachedLeaderboard(category string) ([]database.UserBalance, []database.UserStreakRank, bool) {
+func getCachedLeaderboard(guildID, category string) ([]database.UserBalance, []database.UserStreakRank, bool) {
 	lbCacheMu.RLock()
 	defer lbCacheMu.RUnlock()
-	entry, found := lbCache[category]
+	key := guildID + ":" + category
+	entry, found := lbCache[key]
 	if found && time.Since(entry.timestamp) < lbTTL {
 		return entry.users, entry.streaks, true
 	}
 	return nil, nil, false
 }
 
-func setCachedLeaderboard(category string, users []database.UserBalance, streaks []database.UserStreakRank) {
+func setCachedLeaderboard(guildID, category string, users []database.UserBalance, streaks []database.UserStreakRank) {
 	lbCacheMu.Lock()
 	defer lbCacheMu.Unlock()
-	lbCache[category] = leaderboardCacheEntry{
+	key := guildID + ":" + category
+	lbCache[key] = leaderboardCacheEntry{
 		timestamp: time.Now(),
 		users:     users,
 		streaks:   streaks,
@@ -187,8 +204,12 @@ func getMedal(rank int) string {
 	}
 }
 
-// ExecuteLeaderboard returns a formatted leaderboard embed for net worth, wallet, or streak
+// ExecuteLeaderboard returns a formatted leaderboard embed for net worth, wallet, or streak in a guild
 func ExecuteLeaderboard(s *discordgo.Session, guildID, callerID, category string) *discordgo.MessageEmbed {
+	if guildID == "" {
+		return utils.ErrorEmbed("This command can only be used within a server.")
+	}
+
 	category = strings.ToLower(strings.TrimSpace(category))
 	if category == "" || category == "networth" || category == "total" || category == "patrimonio" {
 		category = "networth"
@@ -205,17 +226,17 @@ func ExecuteLeaderboard(s *discordgo.Session, guildID, callerID, category string
 	switch category {
 	case "streak":
 		title = "🔥 Daily Streak Leaderboard"
-		cachedUsers, cachedStreaks, found := getCachedLeaderboard(category)
+		cachedUsers, cachedStreaks, found := getCachedLeaderboard(guildID, category)
 		var streaks []database.UserStreakRank
 		var err error
 		if found {
 			streaks = cachedStreaks
 		} else {
-			streaks, err = database.GetStreakLeaderboard(10)
+			streaks, err = database.GetStreakLeaderboard(guildID, 10)
 			if err != nil {
 				return utils.ErrorEmbed("Could not retrieve streak leaderboard.")
 			}
-			setCachedLeaderboard(category, cachedUsers, streaks)
+			setCachedLeaderboard(guildID, category, cachedUsers, streaks)
 		}
 
 		if len(streaks) == 0 {
@@ -230,7 +251,7 @@ func ExecuteLeaderboard(s *discordgo.Session, guildID, callerID, category string
 
 		embed := utils.GoldEmbed(title, description.String())
 		if callerID != "" {
-			rank, streak, err := database.GetUserStreakRank(callerID)
+			rank, streak, err := database.GetUserStreakRank(guildID, callerID)
 			if err == nil && rank > 0 {
 				embed.Footer = &discordgo.MessageEmbedFooter{
 					Text: fmt.Sprintf("Your Rank: #%d • Active Streak: 🔥 %d days", rank, streak),
@@ -241,17 +262,17 @@ func ExecuteLeaderboard(s *discordgo.Session, guildID, callerID, category string
 
 	case "wallet":
 		title = "🪙 Wallet Balance Leaderboard"
-		cachedUsers, _, found := getCachedLeaderboard(category)
+		cachedUsers, _, found := getCachedLeaderboard(guildID, category)
 		var users []database.UserBalance
 		var err error
 		if found {
 			users = cachedUsers
 		} else {
-			users, err = database.GetWalletLeaderboard(10)
+			users, err = database.GetWalletLeaderboard(guildID, 10)
 			if err != nil {
 				return utils.ErrorEmbed("Could not retrieve wallet leaderboard.")
 			}
-			setCachedLeaderboard(category, users, nil)
+			setCachedLeaderboard(guildID, category, users, nil)
 		}
 
 		if len(users) == 0 {
@@ -266,7 +287,7 @@ func ExecuteLeaderboard(s *discordgo.Session, guildID, callerID, category string
 
 		embed := utils.GoldEmbed(title, description.String())
 		if callerID != "" {
-			rank, nw, err := database.GetUserNetWorthAndRank(callerID)
+			rank, nw, err := database.GetUserNetWorthAndRank(guildID, callerID)
 			if err == nil && rank > 0 {
 				embed.Footer = &discordgo.MessageEmbedFooter{
 					Text: fmt.Sprintf("Your Rank: #%d • Net Worth: %s %s", rank, formatNumber(nw), sym),
@@ -277,17 +298,17 @@ func ExecuteLeaderboard(s *discordgo.Session, guildID, callerID, category string
 
 	default: // "networth"
 		title = "🏆 Richest Users (Net Worth)"
-		cachedUsers, _, found := getCachedLeaderboard("networth")
+		cachedUsers, _, found := getCachedLeaderboard(guildID, "networth")
 		var users []database.UserBalance
 		var err error
 		if found {
 			users = cachedUsers
 		} else {
-			users, err = database.GetLeaderboard(10)
+			users, err = database.GetLeaderboard(guildID, 10)
 			if err != nil {
 				return utils.ErrorEmbed("Could not retrieve leaderboard.")
 			}
-			setCachedLeaderboard("networth", users, nil)
+			setCachedLeaderboard(guildID, "networth", users, nil)
 		}
 
 		if len(users) == 0 {
@@ -305,7 +326,7 @@ func ExecuteLeaderboard(s *discordgo.Session, guildID, callerID, category string
 		description.WriteString("🪙 = Wallet | 📈 = Stocks | 💎 = Crypto")
 		embed := utils.GoldEmbed(title, description.String())
 		if callerID != "" {
-			rank, nw, err := database.GetUserNetWorthAndRank(callerID)
+			rank, nw, err := database.GetUserNetWorthAndRank(guildID, callerID)
 			if err == nil && rank > 0 {
 				embed.Footer = &discordgo.MessageEmbedFooter{
 					Text: fmt.Sprintf("Your Rank: #%d • Net Worth: %s %s", rank, formatNumber(nw), sym),
@@ -318,6 +339,10 @@ func ExecuteLeaderboard(s *discordgo.Session, guildID, callerID, category string
 
 // CmdLeaderboard displays the leaderboard
 func CmdLeaderboard(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
+	if m.GuildID == "" {
+		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("This command can only be used within a server."))
+		return
+	}
 	category := "networth"
 	if len(args) > 0 {
 		category = args[0]

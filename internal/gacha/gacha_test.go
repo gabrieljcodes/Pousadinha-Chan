@@ -195,7 +195,7 @@ func TestPostgresGame(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	_, e = db.Exec(`INSERT INTO gacha_assets(character_id,provider,external_id,source_url,sha256,path,media_type,status) VALUES($1,'test','1','https://example.com','hash','work/hero/foto1/hash.png','image/png','approved')`, id)
+	_, e = db.Exec(`INSERT INTO gacha_assets(character_id,provider,external_id,source_url,sha256,path,media_type,status) VALUES($1,'test','1','https://example.com','hash','work/hero/photo1/hash.png','image/png','approved')`, id)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -307,10 +307,10 @@ func TestPostgresGame(t *testing.T) {
 		t.Fatalf("parallel roll quota: %d", wins)
 	}
 	// Approved assets only, even when a pending asset physically exists on disk.
-	path := filepath.Join(store.Config.MediaDir, "work/hero/foto1")
+	path := filepath.Join(store.Config.MediaDir, "work/hero/photo1")
 	os.MkdirAll(path, 0750)
 	os.WriteFile(filepath.Join(path, "hash.png"), []byte("image"), 0600)
-	request := httptest.NewRequest("GET", "/work/hero/foto1/hash.png", nil)
+	request := httptest.NewRequest("GET", "/work/hero/photo1/hash.png", nil)
 	rec := httptest.NewRecorder()
 	store.ServeHTTP(rec, request)
 	if rec.Code != 200 {

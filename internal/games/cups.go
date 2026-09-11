@@ -33,13 +33,18 @@ func pickWinningCup(totalCups int) int {
 // --- ENTRY POINTS ---
 
 func StartCupGameInteraction(s *discordgo.Session, i *discordgo.InteractionCreate, bet int) {
+	if i.GuildID == "" {
+		respondPrivate(s, i, utils.ErrorEmbed("This game can only be played within a server."))
+		return
+	}
+	guildID := i.GuildID
 	userID := i.Member.User.ID
 
 	if bet < MinCupBet {
 		respondPrivate(s, i, utils.ErrorEmbed(fmt.Sprintf("Minimum bet is %d %s", MinCupBet, config.Bot.CurrencySymbol)))
 		return
 	}
-	if database.GetBalance(userID) < bet {
+	if database.GetBalance(guildID, userID) < bet {
 		respondPrivate(s, i, utils.ErrorEmbed("Insufficient funds."))
 		return
 	}
@@ -59,13 +64,13 @@ func StartCupGameInteraction(s *discordgo.Session, i *discordgo.InteractionCreat
 			defer close(finishChan)
 			defer cleanupCup(userID)
 
-			if database.GetBalance(userID) < bet {
+			if database.GetBalance(guildID, userID) < bet {
 				respondPrivate(s, i, utils.ErrorEmbed("You ran out of funds before starting."))
 				return
 			}
 
 			// Deduct initial bet atomically
-			if err := database.CollectLostBet(userID, bet); err != nil {
+			if err := database.CollectLostBet(guildID, userID, bet); err != nil {
 				respondPrivate(s, i, utils.ErrorEmbed("Error processing bet."))
 				return
 			}
@@ -82,17 +87,17 @@ func StartCupGameInteraction(s *discordgo.Session, i *discordgo.InteractionCreat
 
 			if err != nil {
 				// Refund immediately on failure
-				_ = database.AddCoins(userID, bet)
+				_ = database.AddCoins(guildID, userID, bet)
 				return
 			}
 
 			msg, err := s.InteractionResponse(i.Interaction)
 			if err != nil || msg == nil {
-				_ = database.AddCoins(userID, bet)
+				_ = database.AddCoins(guildID, userID, bet)
 				return
 			}
 
-			runCupGameLoop(s, userID, bet, i.ChannelID, msg.ID)
+			runCupGameLoop(s, guildID, userID, bet, i.ChannelID, msg.ID)
 		},
 	}
 
@@ -100,13 +105,18 @@ func StartCupGameInteraction(s *discordgo.Session, i *discordgo.InteractionCreat
 }
 
 func StartCupGameText(s *discordgo.Session, m *discordgo.MessageCreate, bet int) {
+	if m.GuildID == "" {
+		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("This game can only be played within a server."))
+		return
+	}
+	guildID := m.GuildID
 	userID := m.Author.ID
 
 	if bet < MinCupBet {
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(fmt.Sprintf("Minimum bet is %d %s", MinCupBet, config.Bot.CurrencySymbol)))
 		return
 	}
-	if database.GetBalance(userID) < bet {
+	if database.GetBalance(guildID, userID) < bet {
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Insufficient funds."))
 		return
 	}
@@ -126,13 +136,13 @@ func StartCupGameText(s *discordgo.Session, m *discordgo.MessageCreate, bet int)
 			defer close(finishChan)
 			defer cleanupCup(userID)
 
-			if database.GetBalance(userID) < bet {
+			if database.GetBalance(guildID, userID) < bet {
 				s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(fmt.Sprintf("<@%s> You ran out of funds.", userID)))
 				return
 			}
 
 			// Deduct initial bet atomically
-			if err := database.CollectLostBet(userID, bet); err != nil {
+			if err := database.CollectLostBet(guildID, userID, bet); err != nil {
 				s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Error processing bet."))
 				return
 			}
@@ -145,11 +155,11 @@ func StartCupGameText(s *discordgo.Session, m *discordgo.MessageCreate, bet int)
 			})
 
 			if err != nil {
-				_ = database.AddCoins(userID, bet)
+				_ = database.AddCoins(guildID, userID, bet)
 				return
 			}
 
-			runCupGameLoop(s, userID, bet, m.ChannelID, msg.ID)
+			runCupGameLoop(s, guildID, userID, bet, m.ChannelID, msg.ID)
 		},
 	}
 
@@ -189,7 +199,7 @@ func buildCupRoundUI(round int, currentPot int, numCups int, userID string) (*di
 	return embed, rows
 }
 
-func runCupGameLoop(s *discordgo.Session, userID string, bet int, channelID string, gameMsgID string) {
+func runCupGameLoop(s *discordgo.Session, guildID, userID string, bet int, channelID string, gameMsgID string) {
 	// Buffered channel to prevent dropped button clicks
 	gameChan := make(chan *discordgo.InteractionCreate, 2)
 	cupMutex.Lock()
@@ -287,7 +297,7 @@ func runCupGameLoop(s *discordgo.Session, userID string, bet int, channelID stri
 
 				if strings.Contains(id, "cashout") {
 					// Cash Out
-					_ = database.AddCoins(userID, currentPot)
+					_ = database.AddCoins(guildID, userID, currentPot)
 					winEmbed := utils.SuccessEmbed("CASHED OUT!",
 						fmt.Sprintf("🎉 **Congratulations!**\n<@%s> walked away with **%d %s**! *(Net Profit: +%d %s)*",
 							userID, currentPot, config.Bot.CurrencySymbol, netProfit, config.Bot.CurrencySymbol))
@@ -313,7 +323,7 @@ func runCupGameLoop(s *discordgo.Session, userID string, bet int, channelID stri
 
 			case <-time.After(1 * time.Minute):
 				// Auto Cashout on timeout
-				_ = database.AddCoins(userID, currentPot)
+				_ = database.AddCoins(guildID, userID, currentPot)
 				autoEmbed := utils.SuccessEmbed("AUTO CASH-OUT",
 					fmt.Sprintf("⏰ Time expired! Automatically cashed out **%d %s** for <@%s>.",
 						currentPot, config.Bot.CurrencySymbol, userID))

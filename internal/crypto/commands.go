@@ -13,6 +13,11 @@ import (
 )
 
 func CmdCrypto(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
+	if m.GuildID == "" {
+		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("This command can only be used within a server."))
+		return
+	}
+
 	if len(args) == 0 {
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("Crypto Market", "Usage: `!crypto <market|buy|sell|portfolio>`"))
 		return
@@ -33,15 +38,15 @@ func CmdCrypto(s *discordgo.Session, m *discordgo.MessageCreate, args []string) 
 			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Invalid amount."))
 			return
 		}
-		s.ChannelMessageSendEmbed(m.ChannelID, ExecuteCryptoBuy(m.Author.ID, args[1], amount))
+		s.ChannelMessageSendEmbed(m.ChannelID, ExecuteCryptoBuy(m.GuildID, m.Author.ID, args[1], amount))
 	case "sell":
 		if len(args) < 3 {
 			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Usage: `!crypto sell <SYMBOL> <amount|all>`\nExample: `!crypto sell BTC all` or `!crypto sell BTC 0.5`"))
 			return
 		}
-		s.ChannelMessageSendEmbed(m.ChannelID, ExecuteCryptoSell(m.Author.ID, args[1], args[2]))
+		s.ChannelMessageSendEmbed(m.ChannelID, ExecuteCryptoSell(m.GuildID, m.Author.ID, args[1], args[2]))
 	case "portfolio", "p":
-		s.ChannelMessageSendEmbed(m.ChannelID, ExecuteCryptoPortfolio(m.Author.ID))
+		s.ChannelMessageSendEmbed(m.ChannelID, ExecuteCryptoPortfolio(m.GuildID, m.Author.ID))
 	default:
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Unknown subcommand. Use `market`, `buy`, `sell`, or `portfolio`."))
 	}
@@ -94,7 +99,7 @@ func formatPrice(price float64) string {
 }
 
 // ExecuteCryptoBuy processes a cryptocurrency purchase and returns an embed response
-func ExecuteCryptoBuy(userID, symbol string, amount int) *discordgo.MessageEmbed {
+func ExecuteCryptoBuy(guildID, userID, symbol string, amount int) *discordgo.MessageEmbed {
 	symbol = strings.ToUpper(strings.TrimSpace(symbol))
 	if amount <= 0 {
 		return utils.ErrorEmbed("Invalid amount.")
@@ -107,7 +112,7 @@ func ExecuteCryptoBuy(userID, symbol string, amount int) *discordgo.MessageEmbed
 	}
 
 	// Check balance
-	balance := database.GetBalance(userID)
+	balance := database.GetBalance(guildID, userID)
 	if balance < amount {
 		return utils.ErrorEmbed("Insufficient funds.")
 	}
@@ -122,13 +127,13 @@ func ExecuteCryptoBuy(userID, symbol string, amount int) *discordgo.MessageEmbed
 	coins := float64(amount) / price
 
 	// Transaction
-	if err := database.RemoveCoins(userID, amount); err != nil {
+	if err := database.RemoveCoins(guildID, userID, amount); err != nil {
 		return utils.ErrorEmbed("Transaction failed.")
 	}
 
-	if err := database.AddCryptoShares(userID, symbol, coins, amount); err != nil {
+	if err := database.AddCryptoShares(guildID, userID, symbol, coins, amount); err != nil {
 		// Refund
-		_ = database.AddCoins(userID, amount)
+		_ = database.AddCoins(guildID, userID, amount)
 		return utils.ErrorEmbed("Database error. Refunded.")
 	}
 
@@ -146,7 +151,7 @@ func ExecuteCryptoBuy(userID, symbol string, amount int) *discordgo.MessageEmbed
 }
 
 // ExecuteCryptoSell processes a cryptocurrency sale and returns an embed response
-func ExecuteCryptoSell(userID, symbol, amountStr string) *discordgo.MessageEmbed {
+func ExecuteCryptoSell(guildID, userID, symbol, amountStr string) *discordgo.MessageEmbed {
 	symbol = strings.ToUpper(strings.TrimSpace(symbol))
 
 	// Check if crypto exists
@@ -156,7 +161,7 @@ func ExecuteCryptoSell(userID, symbol, amountStr string) *discordgo.MessageEmbed
 	}
 
 	// Check owned amount
-	ownedCoins, _ := database.GetCryptoInvestment(userID, symbol)
+	ownedCoins, _ := database.GetCryptoInvestment(guildID, userID, symbol)
 	if ownedCoins <= 0 {
 		return utils.ErrorEmbed(fmt.Sprintf("You don't own any %s.", symbol))
 	}
@@ -185,11 +190,11 @@ func ExecuteCryptoSell(userID, symbol, amountStr string) *discordgo.MessageEmbed
 
 	payout := int(math.Round(coinsToSell * price))
 
-	if err := database.RemoveCryptoShares(userID, symbol, coinsToSell); err != nil {
+	if err := database.RemoveCryptoShares(guildID, userID, symbol, coinsToSell); err != nil {
 		return utils.ErrorEmbed("Database error.")
 	}
 
-	_ = database.AddCoins(userID, payout)
+	_ = database.AddCoins(guildID, userID, payout)
 
 	emoji := "💰"
 	if c.Type == "meme" {
@@ -202,8 +207,8 @@ func ExecuteCryptoSell(userID, symbol, amountStr string) *discordgo.MessageEmbed
 }
 
 // ExecuteCryptoPortfolio generates a user's crypto portfolio embed
-func ExecuteCryptoPortfolio(userID string) *discordgo.MessageEmbed {
-	investments, err := database.GetAllCryptoInvestmentsByUser(userID)
+func ExecuteCryptoPortfolio(guildID, userID string) *discordgo.MessageEmbed {
+	investments, err := database.GetAllCryptoInvestmentsByUser(guildID, userID)
 	if err != nil {
 		return utils.ErrorEmbed("Database error.")
 	}

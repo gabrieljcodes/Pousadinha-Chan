@@ -111,7 +111,7 @@ func ExecuteLoanOffer(s *discordgo.Session, channelID, guildID string, lender *d
 	pendingMu.Unlock()
 
 	// Check lender balance
-	lenderBalance := database.GetBalance(lender.ID)
+	lenderBalance := database.GetBalance(guildID, lender.ID)
 	if lenderBalance < amount {
 		sendLoanResponse(s, channelID, i, utils.ErrorEmbed(fmt.Sprintf("Insufficient balance! You have %d %s", lenderBalance, config.Bot.CurrencySymbol)))
 		return

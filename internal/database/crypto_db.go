@@ -7,6 +7,7 @@ import (
 
 // CryptoInvestment represents a cryptocurrency investment
 type CryptoInvestment struct {
+	GuildID       string
 	UserID        string
 	Symbol        string
 	Coins         float64
@@ -16,11 +17,12 @@ type CryptoInvestment struct {
 // CreateCryptoTables creates the necessary tables for cryptocurrencies
 func (p *PostgresDatabase) CreateCryptoTables() error {
 	createCryptoInvestmentsSQL := `CREATE TABLE IF NOT EXISTS crypto_investments (
+		"guild_id" TEXT NOT NULL DEFAULT '',
 		"user_id" TEXT NOT NULL,
 		"symbol" TEXT NOT NULL,
 		"coins" NUMERIC(28, 12) DEFAULT 0,
 		"total_invested" NUMERIC(28, 4) DEFAULT 0,
-		PRIMARY KEY (user_id, symbol)
+		PRIMARY KEY (guild_id, user_id, symbol)
 	);`
 	if _, err := p.db.Exec(createCryptoInvestmentsSQL); err != nil {
 		return err
@@ -37,11 +39,11 @@ func (p *PostgresDatabase) CreateCryptoTables() error {
 	return nil
 }
 
-// GetCryptoInvestment returns the amount of coins a user holds for a crypto
-func GetCryptoInvestment(userID, symbol string) (float64, error) {
+// GetCryptoInvestment returns the amount of coins a user holds for a crypto in a guild
+func GetCryptoInvestment(guildID, userID, symbol string) (float64, error) {
 	var coins float64
-	query := prepareQuery("SELECT coins FROM crypto_investments WHERE user_id = ? AND symbol = ?")
-	err := DB.QueryRow(query, userID, symbol).Scan(&coins)
+	query := prepareQuery("SELECT coins FROM crypto_investments WHERE guild_id = ? AND user_id = ? AND symbol = ?")
+	err := DB.QueryRow(query, guildID, userID, symbol).Scan(&coins)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return 0, nil
@@ -51,17 +53,17 @@ func GetCryptoInvestment(userID, symbol string) (float64, error) {
 	return coins, nil
 }
 
-func AddCryptoShares(userID, symbol string, coins float64, cost int) error {
-	query := `INSERT INTO crypto_investments (user_id, symbol, coins, total_invested) VALUES ($1, $2, $3, $4) 
-			  ON CONFLICT(user_id, symbol) DO UPDATE SET 
-			    coins = crypto_investments.coins + $3,
-			    total_invested = crypto_investments.total_invested + $4`
-	_, err := DB.Exec(query, userID, symbol, coins, cost)
+func AddCryptoShares(guildID, userID, symbol string, coins float64, cost int) error {
+	query := `INSERT INTO crypto_investments (guild_id, user_id, symbol, coins, total_invested) VALUES ($1, $2, $3, $4, $5) 
+			  ON CONFLICT(guild_id, user_id, symbol) DO UPDATE SET 
+			    coins = crypto_investments.coins + $4,
+			    total_invested = crypto_investments.total_invested + $5`
+	_, err := DB.Exec(query, guildID, userID, symbol, coins, cost)
 	return err
 }
 
 // RemoveCryptoShares removes coins from a user atomically and proportionally reduces cost basis
-func RemoveCryptoShares(userID, symbol string, coins float64) error {
+func RemoveCryptoShares(guildID, userID, symbol string, coins float64) error {
 	if coins <= 0 {
 		return nil
 	}
@@ -69,7 +71,7 @@ func RemoveCryptoShares(userID, symbol string, coins float64) error {
 	res, err := DB.Exec(`UPDATE crypto_investments 
 		SET total_invested = CASE WHEN coins <= $1 THEN 0 ELSE total_invested * (1 - ($1 / coins)) END,
 		    coins = coins - $1 
-		WHERE user_id = $2 AND symbol = $3 AND coins >= $1`, coins, userID, symbol)
+		WHERE guild_id = $2 AND user_id = $3 AND symbol = $4 AND coins >= $1`, coins, guildID, userID, symbol)
 	if err != nil {
 		return err
 	}
@@ -82,14 +84,14 @@ func RemoveCryptoShares(userID, symbol string, coins float64) error {
 	}
 
 	// Clean up dust or zero coins
-	_, _ = DB.Exec(`DELETE FROM crypto_investments WHERE user_id = $1 AND symbol = $2 AND coins <= 0.00000001`, userID, symbol)
+	_, _ = DB.Exec(`DELETE FROM crypto_investments WHERE guild_id = $1 AND user_id = $2 AND symbol = $3 AND coins <= 0.00000001`, guildID, userID, symbol)
 	return nil
 }
 
-// GetAllCryptoInvestmentsByUser returns all crypto investments for a user
-func GetAllCryptoInvestmentsByUser(userID string) ([]CryptoInvestment, error) {
-	query := `SELECT symbol, coins, COALESCE(total_invested, 0) FROM crypto_investments WHERE user_id = $1`
-	rows, err := DB.Query(query, userID)
+// GetAllCryptoInvestmentsByUser returns all crypto investments for a user in a guild
+func GetAllCryptoInvestmentsByUser(guildID, userID string) ([]CryptoInvestment, error) {
+	query := `SELECT symbol, coins, COALESCE(total_invested, 0) FROM crypto_investments WHERE guild_id = $1 AND user_id = $2`
+	rows, err := DB.Query(query, guildID, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -98,6 +100,7 @@ func GetAllCryptoInvestmentsByUser(userID string) ([]CryptoInvestment, error) {
 	var investments []CryptoInvestment
 	for rows.Next() {
 		var i CryptoInvestment
+		i.GuildID = guildID
 		i.UserID = userID
 		if err := rows.Scan(&i.Symbol, &i.Coins, &i.TotalInvested); err != nil {
 			continue

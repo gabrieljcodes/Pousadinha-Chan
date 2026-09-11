@@ -13,3 +13,6 @@ var GachaImportPayload string
 
 //go:embed 007_gacha_assets_extra.sql
 var GachaAssetsExtra string
+
+//go:embed 008_guild_economy.sql
+var GuildEconomy string

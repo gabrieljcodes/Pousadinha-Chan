@@ -52,6 +52,7 @@ type APIKeyStruct struct {
 
 // Investment represents a stock investment
 type Investment struct {
+	GuildID       string
 	UserID        string
 	Ticker        string
 	Shares        float64

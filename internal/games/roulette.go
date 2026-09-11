@@ -42,6 +42,7 @@ const (
 )
 
 type RouletteBet struct {
+	GuildID  string
 	UserID   string
 	Username string
 	BetType  BetType
@@ -65,6 +66,7 @@ type RouletteHistoryItem struct {
 }
 
 type UserRoundStats struct {
+	GuildID      string
 	TotalWagered int
 	TotalPayout  int
 	NetProfit    int
@@ -138,7 +140,7 @@ func StopRoulette() {
 		currentRound.mu.Lock()
 		if !currentRound.Spinning && len(currentRound.Bets) > 0 {
 			for _, bet := range currentRound.Bets {
-				_ = database.AddCoins(bet.UserID, bet.Amount)
+				_ = database.AddCoins(bet.GuildID, bet.UserID, bet.Amount)
 			}
 			log.Printf("Refunded %d bets on roulette shutdown", len(currentRound.Bets))
 			currentRound.Bets = nil
@@ -225,7 +227,9 @@ func calculatePayouts(round *RouletteRound) map[string]*UserRoundStats {
 	// Step 1: Accumulate total wagered per player
 	for _, bet := range round.Bets {
 		if _, exists := stats[bet.UserID]; !exists {
-			stats[bet.UserID] = &UserRoundStats{}
+			stats[bet.UserID] = &UserRoundStats{
+				GuildID: bet.GuildID,
+			}
 		}
 		stats[bet.UserID].TotalWagered += bet.Amount
 	}
@@ -303,7 +307,7 @@ func processPayouts(round *RouletteRound) map[string]*UserRoundStats {
 	if database.DB != nil {
 		for userID, s := range stats {
 			if s.TotalPayout > 0 {
-				_ = database.AddCoins(userID, s.TotalPayout)
+				_ = database.AddCoins(s.GuildID, userID, s.TotalPayout)
 			}
 		}
 	}
@@ -311,7 +315,11 @@ func processPayouts(round *RouletteRound) map[string]*UserRoundStats {
 	return stats
 }
 
-func PlaceRouletteBet(userID, username string, betType BetType, value string, amount int) (bool, string) {
+func PlaceRouletteBet(guildID, userID, username string, betType BetType, value string, amount int) (bool, string) {
+	if guildID == "" {
+		return false, "This command can only be used within a server."
+	}
+
 	wheelMu.RLock()
 	round := currentRound
 	wheelMu.RUnlock()
@@ -328,7 +336,7 @@ func PlaceRouletteBet(userID, username string, betType BetType, value string, am
 		return false, "Invalid bet type or value. Use `!wheel` to see valid options."
 	}
 
-	balance := database.GetBalance(userID)
+	balance := database.GetBalance(guildID, userID)
 	if balance < amount {
 		return false, fmt.Sprintf("Insufficient balance! You have %d %s", balance, config.Bot.CurrencySymbol)
 	}
@@ -340,11 +348,12 @@ func PlaceRouletteBet(userID, username string, betType BetType, value string, am
 		return false, "Too late! The wheel is already spinning for this round."
 	}
 
-	if err := database.CollectLostBet(userID, amount); err != nil {
+	if err := database.CollectLostBet(guildID, userID, amount); err != nil {
 		return false, "Error deducting bet coins."
 	}
 
 	round.Bets = append(round.Bets, RouletteBet{
+		GuildID:  guildID,
 		UserID:   userID,
 		Username: username,
 		BetType:  betType,
@@ -545,6 +554,11 @@ func GetCurrentRoundInfo() (time.Time, bool, int, int) {
 
 // CmdRoulette processes text commands (!wheel and !roleta-cassino)
 func CmdRoulette(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
+	if m.GuildID == "" {
+		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("This command can only be used within a server."))
+		return
+	}
+
 	if len(args) == 0 {
 		sendRouletteHelp(s, m.ChannelID)
 		return
@@ -655,7 +669,7 @@ func CmdRoulette(s *discordgo.Session, m *discordgo.MessageCreate, args []string
 		return
 	}
 
-	success, msg := PlaceRouletteBet(m.Author.ID, m.Author.Username, betType, value, amount)
+	success, msg := PlaceRouletteBet(m.GuildID, m.Author.ID, m.Author.Username, betType, value, amount)
 	if !success {
 		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(msg))
 		return
