@@ -6,6 +6,7 @@ import (
 	"bot/internal/gacha"
 	"bot/pkg/config"
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"github.com/joho/godotenv"
@@ -24,7 +25,7 @@ func main() {
 func run() error {
 	_ = godotenv.Load()
 	if len(os.Args) < 2 {
-		return fmt.Errorf("usage: gacha booru-top [--limit 5] [--auto-approve] <character ID> [tag] | delete-extra <character ID | all> | assets <character ID> | import-batch [--force] --job initial-10k --limit 10000 --auto-approve | clear-lease | batch-status <job> | migrate | import <AniList ID> | tag <character ID> <tag> | image <character ID> <Gelbooru post ID> | pending | approve/reject <asset ID> <reviewer> | enable/disable <character ID>")
+		return fmt.Errorf("usage: gacha booru-mass [--limit 5] [--max 0] [--auto-approve] [--skip-existing] [--min-favs 0] [IDs...] | booru-top [--limit 5] [--auto-approve] <character ID> [tag] | delete-extra <character ID | all> | assets <character ID> | import-batch [--force] --job initial-10k --limit 10000 --auto-approve | clear-lease | batch-status <job> | migrate | import <AniList ID> | tag <character ID> <tag> | image <character ID> <Gelbooru post ID> | pending | approve/reject <asset ID> <reviewer> | enable/disable <character ID>")
 	}
 	config.Load()
 	cfg, e := gacha.LoadConfig()
@@ -44,7 +45,7 @@ func run() error {
 	}
 	args := os.Args[2:]
 	id := int64(0)
-	if len(args) > 0 && os.Args[1] != "import-batch" && os.Args[1] != "batch-status" && os.Args[1] != "clear-lease" && os.Args[1] != "delete-extra" && os.Args[1] != "booru-top" && os.Args[1] != "assets" {
+	if len(args) > 0 && os.Args[1] != "import-batch" && os.Args[1] != "batch-status" && os.Args[1] != "clear-lease" && os.Args[1] != "delete-extra" && os.Args[1] != "booru-top" && os.Args[1] != "booru-mass" && os.Args[1] != "assets" {
 		id, e = strconv.ParseInt(args[0], 10, 64)
 		if e != nil || id <= 0 {
 			return fmt.Errorf("positive numeric ID required")
@@ -56,6 +57,35 @@ func run() error {
 		if e == nil {
 			fmt.Println("AniList import lease cleared.")
 		}
+	case "booru-mass":
+		flags := flag.NewFlagSet("booru-mass", flag.ContinueOnError)
+		limit := flags.Int("limit", 5, "Number of top images to import per character")
+		maxChars := flags.Int("max", 0, "Maximum characters to process (0 = all)")
+		auto := flags.Bool("auto-approve", true, "Approve imported images immediately")
+		skip := flags.Bool("skip-existing", true, "Skip characters that already have extra images")
+		minFavs := flags.Int("min-favs", 0, "Only process characters with at least this many favorites")
+		if e = flags.Parse(args); e != nil {
+			return e
+		}
+		var charIDs []int64
+		for _, arg := range flags.Args() {
+			cid, err := strconv.ParseInt(arg, 10, 64)
+			if err == nil && cid > 0 {
+				charIDs = append(charIDs, cid)
+			}
+		}
+		_, err := s.RunBooruMass(ctx, gacha.BooruMassOptions{
+			LimitPerChar: *limit,
+			MaxChars:     *maxChars,
+			AutoApprove:  *auto,
+			SkipExisting: *skip,
+			MinFavs:      *minFavs,
+			CharacterIDs: charIDs,
+		}, os.Stdout)
+		if err != nil && !errors.Is(err, context.Canceled) {
+			return err
+		}
+		return nil
 	case "booru-top":
 		flags := flag.NewFlagSet("booru-top", flag.ContinueOnError)
 		limit := flags.Int("limit", 5, "Number of top images to import")

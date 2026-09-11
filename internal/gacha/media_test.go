@@ -15,8 +15,9 @@ func TestGuessBooruTag(t *testing.T) {
 	}{
 		{"Naruto Uzumaki", []string{"uzumaki_naruto", "naruto_uzumaki"}},
 		{"Levi", []string{"levi"}},
-		{"Satoru Gojou", []string{"gojou_satoru", "satoru_gojou"}},
+		{"Satoru Gojou", []string{"gojou_satoru", "satoru_gojou", "gojo_satoru", "satoru_gojo"}},
 		{"Spike Spiegel", []string{"spiegel_spike", "spike_spiegel"}},
+		{"Monkey D. Luffy", []string{"luffy_monkey_d", "monkey_d_luffy", "monkey_d._luffy"}},
 	}
 	for _, c := range cases {
 		got := GuessBooruTag(c.name)
