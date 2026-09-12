@@ -187,23 +187,6 @@ func (p *PostgresDatabase) CreateTables() error {
 			daily_streak INTEGER DEFAULT 0,
 			max_daily_streak INTEGER DEFAULT 0
 		);`,
-		`CREATE TABLE IF NOT EXISTS guild_members (
-			guild_id TEXT NOT NULL,
-			user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-			balance BIGINT NOT NULL DEFAULT 0,
-			last_daily TIMESTAMPTZ,
-			daily_streak INTEGER NOT NULL DEFAULT 0,
-			max_daily_streak INTEGER NOT NULL DEFAULT 0,
-			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			CONSTRAINT pk_guild_members PRIMARY KEY (guild_id, user_id),
-			CONSTRAINT chk_guild_members_balance CHECK (balance >= 0),
-			CONSTRAINT chk_guild_members_daily_streak CHECK (daily_streak >= 0),
-			CONSTRAINT chk_guild_members_max_daily_streak CHECK (max_daily_streak >= 0)
-		);`,
-		`CREATE INDEX IF NOT EXISTS idx_guild_members_leaderboard ON guild_members (guild_id, balance DESC);`,
-		`CREATE INDEX IF NOT EXISTS idx_guild_members_streak ON guild_members (guild_id, daily_streak DESC);`,
-		`CREATE INDEX IF NOT EXISTS idx_guild_members_user ON guild_members (user_id);`,
 		`CREATE TABLE IF NOT EXISTS api_keys (
 			key TEXT PRIMARY KEY,
 			key_prefix TEXT,
@@ -370,9 +353,9 @@ func (p *PostgresDatabase) CreateTables() error {
 		log.Printf("Warning: error creating crypto tables: %v", err)
 	}
 
-	// Apply guild economy schema and migration
-	if _, err := p.db.Exec(migrations.GuildEconomy); err != nil {
-		log.Printf("Notice: guild economy migration: %v", err)
+	// Apply the guild schema without copying legacy wallet balances.
+	if err := p.migrateGuildEconomy(); err != nil {
+		return fmt.Errorf("guild economy migration: %w", err)
 	}
 
 	// 2. Safe Schema Type Migrations (for existing databases)
@@ -586,4 +569,19 @@ func (p *PostgresDatabase) CreateTables() error {
 
 	log.Println("Table creation, migrations, indexing, and security policies completed successfully")
 	return nil
+}
+
+func (p *PostgresDatabase) migrateGuildEconomy() error {
+	tx, err := p.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err = tx.Exec(`SET LOCAL lock_timeout = '5s'; SELECT pg_advisory_xact_lock(72410814)`); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(migrations.GuildEconomy); err != nil {
+		return err
+	}
+	return tx.Commit()
 }

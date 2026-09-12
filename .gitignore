@@ -7,3 +7,5 @@ config.json
 skills-lock.json
 # Downloaded gacha media
 /data/gacha/
+mywaifulist-database/
+codex-session-*.md

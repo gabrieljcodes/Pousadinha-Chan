@@ -21,15 +21,16 @@ type HelpSection struct {
 // getHelpSections returns the help sections at runtime (to use loaded config)
 func getHelpSections() []HelpSection {
 	return []HelpSection{
+		{ID: "gacha", Name: "Character Gacha", Emoji: "✨", Value: "`!wa` / `!ha` / `!ma` — female / male / all anime\n`!wg` / `!hg` / `!mg` — female / male / all games\n`!w` / `!h` — female / male across all sources\n\n`!harem [@member] [page]` — collection and value\n`!keys <ID>` / `/keys` — keys and value bonuses\n`!divorce <ID>` — confirm a release for server coins\n`!trade @member <your ID> <their ID>` — offer an exchange\n`!gift @member <ID>` — offer a gift\n\n`!gacha help` / `/gacha action:Help` — all commands, wishlist, gallery and limits"},
 		{
 			ID:    "economy",
 			Name:  "Economy",
 			Emoji: "💰",
-			Value: "`!daily` / `/daily`\nCollect your daily reward (**100-5000**).\n"+
-				"🔥 **Streak System:** Day 1 = 100, Day 2 = 200... up to 5000!\n"+
-				"⚠️ Skip a day = streak resets to 100.\n\n"+
-				"`!balance` / `/balance [user]`\nCheck your wallet or someone else's.\n\n"+
-				"`!leaderboard` / `/leaderboard`\nSee the richest users.\n\n"+
+			Value: "`!daily` / `/daily`\nCollect your daily reward (**100-5000**).\n" +
+				"🔥 **Streak System:** Day 1 = 100, Day 2 = 200... up to 5000!\n" +
+				"⚠️ Skip a day = streak resets to 100.\n\n" +
+				"`!balance` / `/balance [user]`\nCheck your wallet or someone else's.\n\n" +
+				"`!leaderboard` / `/leaderboard`\nSee the richest users.\n\n" +
 				"`!pay` / `/pay <user> <amount>`\nTransfer coins to another user.",
 		},
 		{
@@ -130,20 +131,20 @@ func getHelpSections() []HelpSection {
 			ID:    "loans",
 			Name:  "Loans",
 			Emoji: "💳",
-			Value: "`!loan offer @user <amount> <interest> <days>` / `/loan offer`\n"+
-				"Offer a loan to another user. They have 1 minute to accept.\n\n"+
-				"`!loan pay [loan_id]` / `/loan pay`\n"+
-				"Pay an active loan (pays oldest if no ID specified).\n\n"+
-				"`!loan list [@user]` / `/loan list`\n"+
-				"View active loans.\n\n"+
+			Value: "`!loan offer @user <amount> <interest> <days>` / `/loan offer`\n" +
+				"Offer a loan to another user. They have 1 minute to accept.\n\n" +
+				"`!loan pay [loan_id]` / `/loan pay`\n" +
+				"Pay an active loan (pays oldest if no ID specified).\n\n" +
+				"`!loan list [@user]` / `/loan list`\n" +
+				"View active loans.\n\n" +
 				"⚠️ **Auto-collection:** If not paid by due date, funds are automatically deducted!",
 		},
 		{
 			ID:    "api",
 			Name:  "Developer & API",
 			Emoji: "🔧",
-			Value: "`/apikey create` - Generate API key\n"+
-				"`/apikey list` - View keys\n"+
+			Value: "`/apikey create` - Generate API key\n" +
+				"`/apikey list` - View keys\n" +
 				"`/webhook set <url>` - Coin notifications",
 		},
 	}
@@ -151,7 +152,7 @@ func getHelpSections() []HelpSection {
 
 func getHelpEmbed(sectionIdx int) *discordgo.MessageEmbed {
 	sections := getHelpSections()
-	
+
 	if sectionIdx < 0 {
 		sectionIdx = len(sections) - 1
 	}
@@ -206,7 +207,7 @@ func findSectionIndex(sectionID string) int {
 
 func CmdHelp(s *discordgo.Session, m *discordgo.MessageCreate) {
 	args := strings.Fields(m.Content)
-	
+
 	// Check if user specified a section
 	sectionIdx := 0
 	if len(args) > 1 {

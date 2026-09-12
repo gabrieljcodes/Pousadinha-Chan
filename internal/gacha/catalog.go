@@ -34,6 +34,15 @@ func (s *Store) Migrate(ctx context.Context) error {
 	if _, e = tx.ExecContext(ctx, migrations.GachaAssetsExtra); e != nil {
 		return e
 	}
+	if _, e = tx.ExecContext(ctx, migrations.GachaSocial); e != nil {
+		return e
+	}
+	if _, e = tx.ExecContext(ctx, migrations.GachaProgression); e != nil {
+		return e
+	}
+	if _, e = tx.ExecContext(ctx, migrations.CatalogAdmin); e != nil {
+		return e
+	}
 	return tx.Commit()
 }
 

@@ -23,6 +23,8 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
 
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o /app/gacha ./cmd/gacha
 
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o /app/catalog ./cmd/catalog
+
 RUN test -f config.json || cp config.example.json config.json
 
 # ============================================
@@ -42,6 +44,7 @@ WORKDIR /app
 # Copy binary from builder
 COPY --from=builder /app/bot /app/bot
 COPY --from=builder /app/gacha /app/gacha
+COPY --from=builder /app/catalog /app/catalog
 
 # Copy configurations; builder supplies the example when config.json is absent.
 COPY economy.json ./

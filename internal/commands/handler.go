@@ -20,7 +20,12 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
-	if !strings.HasPrefix(m.Content, "!") {
+	prefix := ""
+	if strings.HasPrefix(m.Content, "!") {
+		prefix = "!"
+	} else if strings.HasPrefix(m.Content, "$") {
+		prefix = "$"
+	} else {
 		return
 	}
 
@@ -28,19 +33,20 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if len(args) == 0 {
 		return
 	}
-	command := strings.ToLower(args[0])
+	rawCmd := strings.ToLower(args[0])
+	command := strings.TrimPrefix(rawCmd, prefix)
 	args = args[1:]
 
 	// Check if channel is allowed
 	if !config.Bot.IsChannelAllowed(m.ChannelID) {
 		allowedInSpecial := false
-		if strings.HasPrefix(command, "!poly") && m.GuildID != "" {
+		if (strings.HasPrefix(command, "poly") || command == "polymarket") && m.GuildID != "" {
 			settings, _ := database.GetGuildPolymarketSettings(m.GuildID)
 			if settings != nil && settings.ChannelID == m.ChannelID {
 				allowedInSpecial = true
 			}
 		}
-		if (strings.HasPrefix(command, "!bicho") || command == "!jb" || command == "!jogodobicho") && m.GuildID != "" {
+		if (strings.HasPrefix(command, "bicho") || command == "jb" || command == "jogodobicho") && m.GuildID != "" {
 			bichoSettings, _ := database.GetBichoSettings(m.GuildID)
 			if bichoSettings != nil && bichoSettings.ChannelID == m.ChannelID {
 				allowedInSpecial = true
@@ -52,26 +58,34 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		}
 	}
 
+	// Route $top directly to gacha character leaderboard, while !top can be coins leaderboard unless topchar is used
+	if prefix == "$" && command == "top" {
+		gacha.Text(s, m, append([]string{"topchar"}, args...))
+		return
+	}
+
 	switch command {
-	case "!gacha":
+	case "keys", "wa", "ha", "ma", "wg", "hg", "mg", "w", "h", "harem", "mm", "mmi", "im", "char", "info", "tu", "status", "topchar", "topc", "topu", "topw", "toph", "divorce", "trade", "gift":
+		gacha.Text(s, m, append([]string{command}, args...))
+	case "gacha":
 		gacha.Text(s, m, args)
-	case "!help", "!ajuda":
+	case "help", "ajuda":
 		CmdHelp(s, m)
-	case "!daily":
+	case "daily":
 		CmdDaily(s, m)
-	case "!balance", "!saldo", "!coins", "!money":
+	case "balance", "saldo", "coins", "money":
 		CmdBalance(s, m)
-	case "!leaderboard", "!top", "!rank":
+	case "leaderboard", "rank", "top":
 		CmdLeaderboard(s, m, args)
-	case "!pay", "!transfer", "!pagar":
+	case "pay", "transfer", "pagar":
 		CmdPay(s, m, args)
-	case "!shop", "!store", "!loja":
+	case "shop", "store", "loja":
 		CmdShop(s, m)
-	case "!buy", "!purchase", "!comprar":
+	case "buy", "purchase", "comprar":
 		CmdBuy(s, m, args)
-	case "!bet", "!apostar":
+	case "bet", "apostar":
 		CmdBet(s, m, args)
-	case "!bj", "!blackjack":
+	case "bj", "blackjack":
 		if len(args) == 0 {
 			s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("Blackjack",
 				"**Commands:**\n"+
@@ -105,9 +119,9 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			}
 			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Invalid command. Use `!bj <amount>` or `!bj <hit|stand|double|split|insurance|surrender>`"))
 		}
-	case "!roulette", "!roleta":
+	case "roulette", "roleta":
 		games.CmdRussianRoulette(s, m, args)
-	case "!slots", "!slot":
+	case "slots", "slot":
 		if len(args) < 1 {
 			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Usage: `!slots <amount>`"))
 			return
@@ -119,7 +133,7 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		}
 		games.StartSlotsText(s, m, amount)
 		return
-	case "!mines", "!mina", "!campo-minado":
+	case "mines", "mina", "campo-minado":
 		if len(args) < 1 {
 			s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("💣 Mines (Campo Minado)", "Uso: `!mines <aposta> [minas]`\nExemplo: `!mines 100 3` (Padrão: 3 minas)"))
 			return
@@ -140,31 +154,31 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		}
 		games.StartMinesText(s, m, amount, minesCount)
 		return
-	case "!stock", "!mercado", "!market":
+	case "stock", "mercado", "market":
 		stockmarket.CmdStock(s, m, args)
-	case "!crypto":
+	case "crypto":
 		crypto.CmdCrypto(s, m, args)
-	case "!wheel", "!roleta-cassino":
+	case "wheel", "roleta-cassino":
 		games.CmdRoulette(s, m, args)
-	case "!createevent":
+	case "createevent":
 		games.CmdCreateEvent(s, m, args)
-	case "!betevent":
+	case "betevent":
 		games.CmdPlaceBet(s, m, args)
-	case "!result":
+	case "result":
 		games.CmdSetResult(s, m, args)
-	case "!events":
+	case "events":
 		games.CmdListEvents(s, m, args)
-	case "!event":
+	case "event":
 		games.CmdViewEvent(s, m, args)
-	case "!closeevent":
+	case "closeevent":
 		games.CmdCloseEvent(s, m, args)
-	case "!cancelevent":
+	case "cancelevent":
 		games.CmdCancelEvent(s, m, args)
-	case "!poly", "!polymarket":
+	case "poly", "polymarket":
 		CmdPolymarket(s, m, args)
-	case "!bicho", "!jb", "!jogodobicho":
+	case "bicho", "jb", "jogodobicho":
 		CmdBicho(s, m, args)
-	case "!loan":
+	case "loan":
 		if len(args) < 1 {
 			s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("Loan System",
 				"**Commands:**\n"+

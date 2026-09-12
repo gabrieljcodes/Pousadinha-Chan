@@ -8,26 +8,42 @@ services:
     env_file:
       - .env
     environment:
-      # Default to internal postgres service when running inside compose network.
-      # Overridden automatically if DATABASE_URL or other values are set in .env.
-      - DB_HOST=${DB_HOST:-postgres}
-      - DB_PORT=${DB_PORT:-5432}
+      - DISCORD_TOKEN=${DISCORD_TOKEN:-MTMzOTIwNDEwNzM5ODkzODYyNA.G_zg28.5IC_q7NnPVC4Zdg3xGgvdbiJHXn4xWw34He81I}
+      - DATABASE_URL=postgres://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/${DB_NAME:-pousadinha}?sslmode=disable
+      - DB_HOST=postgres
+      - DB_PORT=5432
       - DB_USER=${DB_USER:-postgres}
       - DB_PASSWORD=${DB_PASSWORD:-postgres}
       - DB_NAME=${DB_NAME:-pousadinha}
-      - DB_SSLMODE=${DB_SSLMODE:-disable}
-      - API_PORT=${API_PORT:-:8080}
+      - DB_SSLMODE=disable
+      - API_PORT=:8080
+      - GACHA_ENABLED=true
+      - GACHA_PUBLIC_URL=https://gachatest.pousada.space
+      - GACHA_MEDIA_DIR=/app/data/gacha
+      - CATALOG_ADMIN_PASSWORD=${CATALOG_ADMIN_PASSWORD:-RCpfWGsExAlP-xPLmvhV--S1113mvIlO}
     volumes:
-      - gacha_media:/app/data/gacha
+      - ./data/gacha:/app/data/gacha
+      - ./config.json:/app/config.json
     ports:
-      - "${HOST_API_PORT:-8080}:8080"
+      - "${HOST_API_PORT:-8085}:8080"
     depends_on:
       postgres:
         condition: service_healthy
-        # If user is using external Supabase via DATABASE_URL, set COMPOSE_PROFILES or run without postgres
-        required: false
+        required: true
     networks:
       - pousadinha_network
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: pousadinha_tunnel
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN:-eyJhIjoiMDhkZDg4YTEyOGVkYjMyN2Q3YWIwOGU2OTdjNWFhYWMiLCJ0IjoiZmFjMjdjMGMtYmUyZC00YzBkLWJkMjQtYWFhOTJlNTA5MTNmIiwicyI6Ik1qVmxaV1ppTjJRdE5ERTFaUzAwTTJFM0xUZzNPV0l0TUdReFl6ZzBNamxqTlRoaCJ9}
+    networks:
+      - pousadinha_network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - bot
 
   postgres:
     image: postgres:16-alpine
@@ -38,7 +54,7 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
       POSTGRES_DB: ${DB_NAME:-pousadinha}
     ports:
-      - "${HOST_DB_PORT:-5432}:5432"
+      - "${HOST_DB_PORT:-5435}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -51,8 +67,6 @@ services:
       - pousadinha_network
 
 volumes:
-  gacha_media:
-    name: pousadinha_gacha_media
   postgres_data:
     name: pousadinha_postgres_data
 

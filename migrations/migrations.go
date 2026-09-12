@@ -16,3 +16,12 @@ var GachaAssetsExtra string
 
 //go:embed 008_guild_economy.sql
 var GuildEconomy string
+
+//go:embed 009_gacha_social.sql
+var GachaSocial string
+
+//go:embed 010_gacha_progression.sql
+var GachaProgression string
+
+//go:embed 011_catalog_admin.sql
+var CatalogAdmin string

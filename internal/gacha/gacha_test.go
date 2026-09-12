@@ -167,6 +167,9 @@ func TestPostgresGame(t *testing.T) {
 	if _, e = scoped.Exec(`CREATE TABLE users(id TEXT PRIMARY KEY,balance BIGINT DEFAULT 0)`); e != nil {
 		t.Fatal(e)
 	}
+	if _, e = scoped.Exec(`CREATE TABLE guild_members(guild_id TEXT NOT NULL,user_id TEXT NOT NULL REFERENCES users(id),balance BIGINT NOT NULL DEFAULT 0 CHECK(balance>=0),updated_at TIMESTAMPTZ DEFAULT now(),PRIMARY KEY(guild_id,user_id))`); e != nil {
+		t.Fatal(e)
+	}
 	db = scoped
 	store := &Store{DB: db, Config: Config{RollsPerHour: 2, ClaimHours: 3, MediaDir: t.TempDir(), PublicURL: "https://example.com"}}
 	if e = store.Migrate(ctx); e != nil {
@@ -322,6 +325,8 @@ func TestPostgresGame(t *testing.T) {
 	if rec.Code != 404 {
 		t.Fatal("rejected asset served")
 	}
+	t.Run("social", func(t *testing.T) { testSocial(t, store) })
+	t.Run("progression", func(t *testing.T) { testProgression(t, store) })
 	t.Run("batch", func(t *testing.T) { testBatch(t, store); testBatchCache(t, store) })
 
 }

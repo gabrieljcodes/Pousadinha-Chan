@@ -38,9 +38,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if gachaConfig.Enabled {
+	if gachaConfig.Enabled || os.Getenv("CATALOG_ADMIN_PASSWORD") != "" {
 		if !config.Bot.EnableAPI {
-			log.Fatal("GACHA_ENABLED requires ENABLE_API=true to serve local media")
+			log.Fatal("Gacha and the catalog editor require ENABLE_API=true")
 		}
 		store := &gacha.Store{DB: database.DB.GetDB(), Config: gachaConfig}
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -49,7 +49,10 @@ func main() {
 		if err != nil {
 			log.Fatalf("Gacha migration failed: %v", err)
 		}
-		gacha.Default = store
+		api.CatalogStore = store
+		if gachaConfig.Enabled {
+			gacha.Default = store
+		}
 	}
 
 	// Start API Server
@@ -106,15 +109,13 @@ func main() {
 	// Start loan overdue collector background worker
 	commands.StartLoanWorker(dg)
 
-	// Register Slash Commands
+	// Register Slash Commands in a single bulk request to avoid Discord rate limits
 	log.Println("Registering slash commands...")
-	registeredCommands := make([]*discordgo.ApplicationCommand, len(commands.SlashCommands))
-	for i, v := range commands.SlashCommands {
-		cmd, err := dg.ApplicationCommandCreate(dg.State.User.ID, "", v)
-		if err != nil {
-			log.Panicf("Cannot create '%v' command: %v", v.Name, err)
-		}
-		registeredCommands[i] = cmd
+	_, err = dg.ApplicationCommandBulkOverwrite(dg.State.User.ID, "", commands.SlashCommands)
+	if err != nil {
+		log.Printf("Warning: cannot bulk overwrite slash commands: %v", err)
+	} else {
+		log.Printf("Successfully registered %d slash commands.", len(commands.SlashCommands))
 	}
 
 	log.Println("Bot is now running. Press CTRL-C to exit.")

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bot/internal/catalogweb"
 	"bot/internal/database"
 	"bot/internal/gacha"
 	"bot/internal/webhook"
@@ -8,6 +9,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
@@ -143,10 +145,26 @@ func HandleTransfer(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "success"})
 }
 
+// CatalogStore is initialized at startup, independently of Discord gacha commands.
+var CatalogStore *gacha.Store
+
 func Start() {
 	mux := http.NewServeMux()
 	if gacha.Default != nil {
 		mux.Handle("/", gacha.Default)
+	}
+
+	// The catalog is mounted outside public CORS and uses its own admin session.
+	var catalog http.Handler
+	if password := os.Getenv("CATALOG_ADMIN_PASSWORD"); password != "" {
+		if CatalogStore == nil {
+			log.Fatal("Catalog requires the catalog store to be initialized")
+		}
+		editor, err := catalogweb.New(CatalogStore, password, os.Getenv("CATALOG_SECURE_COOKIES") == "true")
+		if err != nil {
+			log.Fatal(err)
+		}
+		catalog = editor.Handler()
 	}
 
 	// User endpoints
@@ -172,12 +190,29 @@ func Start() {
 		port = ":" + port
 	}
 
+	publicHandler := CORSMiddleware(mux)
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/catalog" {
+			http.Redirect(w, r, "/catalog/", http.StatusTemporaryRedirect)
+			return
+		}
+		if strings.HasPrefix(r.URL.Path, "/catalog/") {
+			if catalog == nil {
+				http.NotFound(w, r)
+				return
+			}
+			catalog.ServeHTTP(w, r)
+			return
+		}
+		publicHandler.ServeHTTP(w, r)
+	})
 	server := &http.Server{
-		Addr:         port,
-		Handler:      CORSMiddleware(mux),
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		Addr:              port,
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       60 * time.Second,
+		WriteTimeout:      180 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 
 	log.Printf("Starting API Server on %s", port)

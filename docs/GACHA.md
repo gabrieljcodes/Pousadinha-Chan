@@ -1,5 +1,7 @@
 # Gacha Pousadinha
 
+Updated player commands, roll pools, divorce payouts and trades: [English command guide](GACHA_COMMANDS.md).
+
 Gacha com catálogo global e coleções exclusivas por servidor. Integração em Go/PostgreSQL, comandos de texto e slash, sem dependência das APIs externas durante o jogo. O recurso começa **desabilitado**, com catálogo vazio. Não altera saldos existentes.
 
 ## Jogabilidade implementada
@@ -13,7 +15,7 @@ Gacha com catálogo global e coleções exclusivas por servidor. Integração em
 - `!gacha status`: sorteios restantes e disponibilidade da reserva.
 - `/gacha` oferece as mesmas operações, com `busca` para nome/ID e `pagina` para paginação.
 
-Sorteios têm chances uniformes entre personagens habilitados com ao menos uma imagem aprovada. Personagens já possuídos continuam no sorteio, mas não podem ser reservados de novo. Favoritos são metadados de popularidade, não um valor monetário. Não há cobrança, venda, troca, casamento, divórcio ou sistema de raridade nesta versão.
+Sorteios têm chances uniformes entre personagens habilitados com ao menos uma imagem aprovada. Personagens já possuídos continuam no sorteio, mas não podem ser reservados de novo. Favoritos são metadados de popularidade, não um valor monetário. Sorteios não cobram moedas. Agora há divórcio com pagamento, trocas e presentes com aceite; veja o guia de comandos acima.
 
 Reservas, cotas e deduplicação de eventos ficam no banco. Transações, bloqueios por jogador e restrição única por servidor/personagem protegem operações concorrentes, inclusive com mais de uma instância. Rejeição HTTP explícita pelo Discord estorna o sorteio; timeout de transporte é ambíguo e não estorna automaticamente. Expiração é aplicada no banco mesmo quando um botão antigo ainda aparece habilitado.
 

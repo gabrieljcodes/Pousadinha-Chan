@@ -1,0 +1,292 @@
+<!doctype html>
+<!-- Direction: a curator's contact sheet. Warm paper, ink, forest selection; art is the dense working surface.
+     First viewport: permanent narrow navigation, compact search controls, five portrait columns; no promotional hero.
+     Signature: move from a contact sheet into the same character's photo workspace without losing filters.
+     Candidate 7 / seed c89d6989, code-led; delegated interface choice. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>Character catalog · Pousadinha</title>
+    <link rel="icon" href="/catalog/mark.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/catalog/styles.css" />
+    <script type="module" src="/catalog/app.js"></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to catalog</a>
+    <section id="login" class="login-screen" hidden>
+      <div class="login-panel">
+        <img src="/catalog/mark.svg" width="48" height="48" alt="" />
+        <h1>A home for<br />every character.</h1>
+        <p>Sign in to curate your Pousadinha catalog.</p>
+        <form id="login-form">
+          <label for="password">Administrator password</label
+          ><input
+            id="password"
+            type="password"
+            autocomplete="current-password"
+            required
+            minlength="16"
+          />
+          <p id="login-error" class="error" role="alert"></p>
+          <button class="primary" type="submit">
+            Open catalog <span aria-hidden="true">→</span>
+          </button>
+        </form>
+        <p class="fine">Private workspace · Pousadinha</p>
+      </div>
+    </section>
+    <div id="app" class="app" hidden>
+      <aside class="sidebar">
+        <a class="brand" href="#catalog"
+          ><img src="/catalog/mark.svg" width="32" height="32" alt="" /><span
+            >Pousadinha<small>Catalog studio</small></span
+          ></a
+        >
+        <nav aria-label="Catalog navigation">
+          <a href="#catalog" data-nav="catalog"
+            ><span data-icon="grid"></span>All characters
+            <span id="count-all" class="nav-count"></span></a
+          ><a href="#favorites" data-nav="favorites"
+            ><span data-icon="star"></span>Favorites
+            <span id="count-favorites" class="nav-count"></span></a
+          ><a href="#review" data-nav="review"
+            ><span data-icon="image"></span>Photo review
+            <span id="count-pending" class="nav-count"></span></a
+          ><a href="#archived" data-nav="archived"
+            ><span data-icon="archive"></span>Archive</a
+          >
+        </nav>
+        <div class="sidebar-note">
+          <span data-icon="layers"></span>
+          <p>One catalog.<br />Every universe.</p>
+          <small>Anime, manga, games & more.</small>
+        </div>
+        <div class="sidebar-bottom">
+          <span class="status-dot"></span><span>Private workspace</span
+          ><button
+            id="logout"
+            class="icon-button"
+            aria-label="Sign out"
+            title="Sign out"
+          >
+            <span data-icon="logout"></span>
+          </button>
+        </div>
+      </aside>
+      <div class="shell">
+        <header class="topbar">
+          <div class="breadcrumb">
+            <span>Library</span><span aria-hidden="true">/</span
+            ><strong id="breadcrumb">Characters</strong>
+          </div>
+          <div class="admin-label">
+            <span class="avatar">P</span> Administrator<button
+              id="logout-mobile"
+              class="icon-button"
+              aria-label="Sign out"
+              title="Sign out"
+            >
+              <span data-icon="logout"></span>
+            </button>
+          </div>
+        </header>
+        <main id="main" tabindex="-1">
+          <section id="catalog-view">
+            <div class="page-heading">
+              <div>
+                <h1 id="page-title">Character catalog</h1>
+                <p id="page-description">
+                  Discover, organize, and make the collection your own.
+                </p>
+              </div>
+              <div class="heading-actions">
+                <button id="import-open">
+                  <span data-icon="download"></span>Import AniList</button
+                ><button id="create-open" class="primary">
+                  <span data-icon="plus"></span>Add character
+                </button>
+              </div>
+            </div>
+            <form id="filters" class="filters" role="search">
+              <div class="search">
+                <span data-icon="search"></span
+                ><input
+                  name="q"
+                  id="search"
+                  type="search"
+                  placeholder="Search characters, aliases, or works…"
+                  aria-label="Search characters, aliases, or works"
+                />
+              </div>
+              <label class="select-filter"
+                ><span>Universe</span
+                ><select name="kind" aria-label="Filter by universe">
+                  <option value="">All universes</option>
+                  <option value="anime">Anime</option>
+                  <option value="manga">Manga</option>
+                  <option value="game">Games</option>
+                  <option value="other">Other</option>
+                </select></label
+              ><label class="select-filter"
+                ><span>Gender</span
+                ><select name="gender" aria-label="Filter by gender">
+                  <option value="">All genders</option>
+                  <option value="female">Female</option>
+                  <option value="male">Male</option>
+                  <option value="non-binary">Non-binary</option>
+                  <option value="other">Other</option>
+                </select></label
+              ><label class="select-filter"
+                ><span>Status</span
+                ><select name="status" aria-label="Filter by status">
+                  <option value="">All statuses</option>
+                  <option value="enabled">Available in rolls</option>
+                  <option value="disabled">Disabled</option>
+                  <option value="missing">Missing portrait</option>
+                  <option value="pending">Pending photos</option>
+                </select></label
+              >
+            </form>
+            <div class="results-bar">
+              <p id="result-count" aria-live="polite">Loading catalog…</p>
+              <div class="results-options">
+                <button id="reset-filters" class="text-button">
+                  Clear filters</button
+                ><label
+                  >Sort by
+                  <select id="sort" aria-label="Sort characters">
+                    <option value="likes">Most liked</option>
+                    <option value="name">Name A–Z</option>
+                    <option value="newest">Recently added</option>
+                    <option value="photos">Most photos</option>
+                  </select></label
+                ><button
+                  id="layout-toggle"
+                  class="icon-button"
+                  aria-label="Switch to list view"
+                  title="Switch layout"
+                >
+                  <span data-icon="list"></span>
+                </button>
+              </div>
+            </div>
+            <div
+              id="catalog-error"
+              class="error-panel"
+              hidden
+              role="alert"
+            ></div>
+            <div id="characters" class="character-grid" aria-busy="true"></div>
+            <div id="pagination" class="pagination"></div>
+          </section>
+          <section id="detail-view" hidden></section>
+        </main>
+        <footer class="footer">
+          <span>Pousadinha · Character catalog</span
+          ><span id="library-summary"></span>
+        </footer>
+      </div>
+    </div>
+    <dialog id="create-dialog" aria-labelledby="create-title">
+      <form id="create-form">
+        <div class="dialog-heading">
+          <h2 id="create-title">Add a character</h2>
+          <button
+            type="button"
+            data-close
+            class="icon-button"
+            aria-label="Close"
+          >
+            <span data-icon="close"></span>
+          </button>
+        </div>
+        <p>
+          Create a catalog entry, then add a portrait to make it available in
+          rolls.
+        </p>
+        <label
+          >Name<input name="name" required maxlength="250" autofocus
+        /></label>
+        <div class="field-row">
+          <label>Native name<input name="native_name" maxlength="250" /></label
+          ><label
+            >Gender<select name="gender">
+              <option value="">Unspecified</option>
+              <option>Female</option>
+              <option>Male</option>
+              <option>Non-binary</option>
+              <option>Other</option>
+            </select></label
+          >
+        </div>
+        <label
+          >Work title <span class="optional">optional</span
+          ><input
+            name="work"
+            maxlength="250"
+            placeholder="Anime, manga, or game title" /></label
+        ><label
+          >Universe<select name="kind">
+            <option value="anime">Anime</option>
+            <option value="manga">Manga</option>
+            <option value="game">Game</option>
+            <option value="other">Other</option>
+          </select></label
+        >
+        <p class="form-error error" role="alert"></p>
+        <div class="dialog-actions">
+          <button type="button" data-close>Cancel</button
+          ><button class="primary" type="submit">Create character</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="import-dialog" aria-labelledby="import-title">
+      <form id="import-form">
+        <div class="dialog-heading">
+          <h2 id="import-title">Import from AniList</h2>
+          <button
+            type="button"
+            data-close
+            class="icon-button"
+            aria-label="Close"
+          >
+            <span data-icon="close"></span>
+          </button>
+        </div>
+        <p>
+          Bring in a character, their works, likes, and official portrait.
+          Existing AniList metadata will be refreshed.
+        </p>
+        <label
+          >Character ID or AniList URL<input
+            name="source"
+            required
+            placeholder="17 or https://anilist.co/character/17"
+            autofocus
+        /></label>
+        <div class="notice">
+          The official portrait is approved automatically. Imports respect the
+          AniList rate limit and can take a few minutes.
+        </div>
+        <p class="form-error error" role="alert"></p>
+        <div class="dialog-actions">
+          <button type="button" data-close>Cancel</button
+          ><button class="primary" type="submit">Import character</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="confirm-dialog" aria-labelledby="confirm-title">
+      <form method="dialog">
+        <h2 id="confirm-title">Archive character?</h2>
+        <p id="confirm-message"></p>
+        <div class="dialog-actions">
+          <button value="cancel">Keep it</button
+          ><button value="confirm" class="danger">Archive</button>
+        </div>
+      </form>
+    </dialog>
+    <div id="toast" class="toast" role="status" hidden></div>
+  </body>
+</html>
