@@ -23,8 +23,8 @@ func (s *Server) assetFile(w http.ResponseWriter, r *http.Request) {
 	if id == 0 {
 		return
 	}
-	var path, mime string
-	if e := s.Store.DB.QueryRowContext(r.Context(), `SELECT path,media_type FROM gacha_assets WHERE id=$1`, id).Scan(&path, &mime); e != nil {
+	var path, mime, sourceURL sql.NullString
+	if e := s.Store.DB.QueryRowContext(r.Context(), `SELECT path,media_type,source_url FROM gacha_assets WHERE id=$1`, id).Scan(&path, &mime, &sourceURL); e != nil {
 		if e == sql.ErrNoRows {
 			failure(w, 404, "Photo not found.")
 		} else {
@@ -32,26 +32,28 @@ func (s *Server) assetFile(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	// os.Root prevents traversal through path components or symlinks.
-	root, e := os.OpenRoot(s.Store.Config.MediaDir)
-	if e != nil {
-		failure(w, 404, "The photo file is unavailable on this server.")
+	if path.Valid && path.String != "" {
+		root, e := os.OpenRoot(s.Store.Config.MediaDir)
+		if e == nil {
+			defer root.Close()
+			f, e := root.Open(filepath.FromSlash(path.String))
+			if e == nil {
+				defer f.Close()
+				info, e := f.Stat()
+				if e == nil && info.Mode().IsRegular() {
+					w.Header().Set("Content-Type", mime.String)
+					w.Header().Set("Cache-Control", "public, max-age=604800, immutable")
+					http.ServeContent(w, r, filepath.Base(path.String), info.ModTime(), f)
+					return
+				}
+			}
+		}
+	}
+	if sourceURL.Valid && (strings.HasPrefix(sourceURL.String, "http://") || strings.HasPrefix(sourceURL.String, "https://")) {
+		http.Redirect(w, r, sourceURL.String, http.StatusFound)
 		return
 	}
-	defer root.Close()
-	f, e := root.Open(filepath.FromSlash(path))
-	if e != nil {
-		failure(w, 404, "The photo file is unavailable on this server.")
-		return
-	}
-	defer f.Close()
-	info, e := f.Stat()
-	if e != nil || !info.Mode().IsRegular() {
-		failure(w, 404, "Photo not found.")
-		return
-	}
-	w.Header().Set("Content-Type", mime)
-	http.ServeContent(w, r, info.Name(), info.ModTime(), f)
+	failure(w, 404, "The photo file is unavailable on this server.")
 }
 
 func (s *Server) assetAction(w http.ResponseWriter, r *http.Request) {

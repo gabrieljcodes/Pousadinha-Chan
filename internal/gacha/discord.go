@@ -52,8 +52,16 @@ func (s *Store) cardEmbed(c Card) *discordgo.MessageEmbed {
 		Color:       0xe67e22,
 		Footer:      &discordgo.MessageEmbedFooter{Text: footerText},
 	}
-	if c.Image != "" {
-		e.Image = &discordgo.MessageEmbedImage{URL: s.Config.PublicURL + "/" + c.Image}
+	var imgURL string
+	if strings.HasPrefix(c.Image, "http://") || strings.HasPrefix(c.Image, "https://") {
+		imgURL = c.Image
+	} else if c.Image != "" {
+		imgURL = s.Config.PublicURL + "/" + c.Image
+	} else if strings.HasPrefix(c.Source, "http://") || strings.HasPrefix(c.Source, "https://") {
+		imgURL = c.Source
+	}
+	if imgURL != "" {
+		e.Image = &discordgo.MessageEmbedImage{URL: imgURL}
 	}
 	return e
 }

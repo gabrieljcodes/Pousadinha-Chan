@@ -31,7 +31,7 @@ func (s *Server) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	filter := ` WHERE ($1='' OR c.name ILIKE '%'||$1||'%' OR c.native_name ILIKE '%'||$1||'%' OR c.aliases::text ILIKE '%'||$1||'%' OR c.id::text=$1 OR EXISTS(SELECT 1 FROM gacha_character_works cw JOIN gacha_works w ON w.id=cw.work_id WHERE cw.character_id=c.id AND w.title ILIKE '%'||$1||'%'))
- AND ($2='' OR lower(c.gender)=$2)
+ AND ($2='' OR ($2='other' AND lower(c.gender) IN ('other','unknown','')) OR ($2='unknown' AND lower(c.gender) IN ('other','unknown','')) OR lower(c.gender)=$2)
  AND ($3='' OR EXISTS(SELECT 1 FROM gacha_character_works cw JOIN gacha_works w ON w.id=cw.work_id WHERE cw.character_id=c.id AND w.kind=$3))
  AND ($4<>'favorites' OR c.editorial_favorite)
  AND (($4='archived' AND c.archived_at IS NOT NULL) OR ($4<>'archived' AND c.archived_at IS NULL))
@@ -49,7 +49,8 @@ func (s *Server) list(w http.ResponseWriter, r *http.Request) {
 		internal(w, e)
 		return
 	}
-	respond(w, 200, raw)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(raw)
 }
 func (s *Server) detail(w http.ResponseWriter, r *http.Request) {
 	id := pathID(w, r)

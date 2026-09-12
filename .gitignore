@@ -8,4 +8,7 @@ skills-lock.json
 # Downloaded gacha media
 /data/gacha/
 mywaifulist-database/
+characters-database/
+backups/
+*.bak
 codex-session-*.md

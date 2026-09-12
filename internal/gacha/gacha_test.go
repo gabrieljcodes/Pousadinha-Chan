@@ -330,3 +330,35 @@ func TestPostgresGame(t *testing.T) {
 	t.Run("batch", func(t *testing.T) { testBatch(t, store); testBatchCache(t, store) })
 
 }
+
+func TestCardEmbedImageResolution(t *testing.T) {
+	s := &Store{Config: Config{PublicURL: "https://gachatest.pousada.space"}}
+
+	// 1. Local path
+	cLocal := Card{Name: "Spike", Image: "work/hero/photo.png"}
+	eLocal := s.cardEmbed(cLocal)
+	if eLocal.Image == nil || eLocal.Image.URL != "https://gachatest.pousada.space/work/hero/photo.png" {
+		t.Fatalf("unexpected local image URL: %+v", eLocal.Image)
+	}
+
+	// 2. Direct external image in Image field
+	cExt := Card{Name: "Lelouch", Image: "https://cdn.myanimelist.net/images/characters/8/406163.jpg"}
+	eExt := s.cardEmbed(cExt)
+	if eExt.Image == nil || eExt.Image.URL != "https://cdn.myanimelist.net/images/characters/8/406163.jpg" {
+		t.Fatalf("unexpected direct external image URL: %+v", eExt.Image)
+	}
+
+	// 3. Fallback to Source field when Image is empty
+	cSourceFallback := Card{Name: "Levi", Image: "", Source: "https://cdn.myanimelist.net/images/characters/2/241413.jpg"}
+	eFallback := s.cardEmbed(cSourceFallback)
+	if eFallback.Image == nil || eFallback.Image.URL != "https://cdn.myanimelist.net/images/characters/2/241413.jpg" {
+		t.Fatalf("unexpected fallback image URL: %+v", eFallback.Image)
+	}
+
+	// 4. No image
+	cEmpty := Card{Name: "Unknown"}
+	eEmpty := s.cardEmbed(cEmpty)
+	if eEmpty.Image != nil {
+		t.Fatalf("expected nil image, got %+v", eEmpty.Image)
+	}
+}
