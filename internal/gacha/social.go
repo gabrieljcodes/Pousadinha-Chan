@@ -271,7 +271,7 @@ func (s *Store) Offers(ctx context.Context, guild, user string) ([]Action, error
 }
 
 const characterValueSQL = `gacha_character_value(c.favourites,pop.claimed,col.keys)`
-const populationSQL = `WITH pop AS (SELECT count(*) AS claimed FROM gacha_collection WHERE guild_id=$1) `
+const populationSQL = `WITH pop AS (SELECT gacha_claimed_count($1) AS claimed) `
 
 func (s *Store) HaremSummary(ctx context.Context, guild, user string) (int, int64, error) {
 	var count int

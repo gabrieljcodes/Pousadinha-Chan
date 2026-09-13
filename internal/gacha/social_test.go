@@ -372,4 +372,35 @@ func testSocial(t *testing.T, s *Store) {
 	if len(topwPage2Msg.Embeds) == 0 || !strings.Contains(topwPage2Msg.Embeds[0].Title, "Waifus • Página 2") {
 		t.Fatalf("expected Waifus • Página 2 in title, got %q", topwPage2Msg.Embeds[0].Title)
 	}
+
+	// Test navigationTopChar interactive components
+	topComponents := navigationTopChar("unclaimed", "female", 1, true)
+	if len(topComponents) != 2 {
+		t.Fatalf("expected 2 component rows in topchar navigation, got %d", len(topComponents))
+	}
+
+	// Test navigation harem list toggle
+	haremVisualComponents := navigation("harem_visual", "alice", 1, true)
+	if len(haremVisualComponents) == 0 {
+		t.Fatal("expected components in harem_visual navigation")
+	}
+
+	// Test wishlist Execution
+	wishMsg, e := s.Execute(ctx, "social", "channel", "social-alice", "wish-test", "wish", fmt.Sprintf("%d", ids[1]), 1)
+	must(e)
+	if !strings.Contains(wishMsg.Content, "adicionado à sua lista de desejos") {
+		t.Fatalf("unexpected wishMsg: %q", wishMsg.Content)
+	}
+
+	wishesListMsg, e := s.Execute(ctx, "social", "channel", "social-alice", "wishes-test", "wishes", "", 1)
+	must(e)
+	if len(wishesListMsg.Embeds) == 0 || !strings.Contains(wishesListMsg.Embeds[0].Title, "Lista de Desejos") {
+		t.Fatalf("unexpected wishes embed title: %v", wishesListMsg.Embeds)
+	}
+
+	unwishMsg, e := s.Execute(ctx, "social", "channel", "social-alice", "unwish-test", "unwish", fmt.Sprintf("%d", ids[1]), 1)
+	must(e)
+	if !strings.Contains(unwishMsg.Content, "removido da sua lista de desejos") {
+		t.Fatalf("unexpected unwishMsg: %q", unwishMsg.Content)
+	}
 }

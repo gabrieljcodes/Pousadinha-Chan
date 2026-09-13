@@ -328,6 +328,7 @@ func TestPostgresGame(t *testing.T) {
 	t.Run("social", func(t *testing.T) { testSocial(t, store) })
 	t.Run("progression", func(t *testing.T) { testProgression(t, store) })
 	t.Run("batch", func(t *testing.T) { testBatch(t, store); testBatchCache(t, store) })
+	t.Run("runtime", func(t *testing.T) { testRuntime(t, store) })
 
 }
 

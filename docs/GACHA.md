@@ -141,3 +141,5 @@ As tabelas `gacha_import_jobs`, `gacha_import_items` e `gacha_import_leases` gua
 `--auto-approve` aprova somente retratos identificados como AniList, após download, renderização e verificação do arquivo local, registra `auto:anilist-portrait:v1` e habilita o personagem. Não aprova booru nem revoga rejeições manuais. `disable` agora grava uma trava editorial para impedir reativação automática; `enable` a remove. Personagens desabilitados antes dessa migration precisam receber `disable` novamente para registrar essa trava. Autoaprovação não é análise do conteúdo da imagem: origem AniList não garante que toda imagem seja adequada a todo servidor.
 
 **Rate limit e permissão de coleta são condições diferentes.** Os termos do AniList proíbem coleta massiva, mesmo em baixa taxa; o importador não transforma um lote de 10 mil em uso autorizado pelo provedor. Essa restrição permanece aplicável: [termos](https://docs.anilist.co/guide/terms-of-use).
+
+Arquitetura de execução, Valkey opcional e benchmarks: [Gacha runtime](GACHA_RUNTIME.md).

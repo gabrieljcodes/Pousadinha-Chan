@@ -3,7 +3,6 @@ package commands
 import (
 	"bot/internal/crypto"
 	"bot/internal/database"
-	"bot/internal/gacha"
 	"bot/internal/games"
 	"bot/internal/stockmarket"
 	"bot/pkg/config"
@@ -58,17 +57,30 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		}
 	}
 
-	// Route $top directly to gacha character leaderboard, while !top can be coins leaderboard unless topchar is used
 	if prefix == "$" && command == "top" {
-		gacha.Text(s, m, append([]string{"topchar"}, args...))
+		s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed(
+			"✨ Comandos de Gacha Atualizados!",
+			"O comando `$top` agora é **`/top`**!\nUse `/top` para ver o ranking dos personagens com botões interativos de filtro (Waifus, Husbandos e Livres).",
+		))
 		return
 	}
 
 	switch command {
-	case "keys", "wa", "ha", "ma", "wg", "hg", "mg", "w", "h", "harem", "mm", "mmi", "im", "char", "info", "tu", "status", "topchar", "topc", "topu", "topw", "toph", "divorce", "trade", "gift":
-		gacha.Text(s, m, append([]string{command}, args...))
-	case "gacha":
-		gacha.Text(s, m, args)
+	case "keys", "wa", "ha", "ma", "wg", "hg", "mg", "w", "h", "harem", "mm", "mmi", "im", "char", "info", "tu", "status", "topchar", "topc", "topu", "topw", "toph", "divorce", "divorcio", "trade", "troca", "gift", "presente", "gacha":
+		s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed(
+			"✨ Comandos de Gacha Atualizados!",
+			"O sistema de Gacha foi 100% migrado para **Slash Commands (`/`)** do Discord!\n\n"+
+				"• Sortear personagens: `/roll`\n"+
+				"• Ver ranking de popularidade: `/top`\n"+
+				"• Ver seu harém / coleção: `/harem`\n"+
+				"• Informações do personagem: `/info`\n"+
+				"• Rolls e status do jogador: `/perfil`\n"+
+				"• Navegar por fotos: `/galeria`\n"+
+				"• Lista de desejos: `/wishlist`\n"+
+				"• Trocas e presentes: `/troca` e `/presente`\n\n"+
+				"*Comandos de texto com `!` ou `$` foram descontinuados para o Gacha.*",
+		))
+		return
 	case "help", "ajuda":
 		CmdHelp(s, m)
 	case "daily":

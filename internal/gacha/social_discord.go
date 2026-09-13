@@ -196,6 +196,10 @@ func navigation(action, subject string, page int, next bool) []discordgo.Message
 		visualBtn := discordgo.Button{Label: "📷 Ver Fotos", Style: discordgo.PrimaryButton, CustomID: fmt.Sprintf("gacha_page_haremvisual_%s_1", subject)}
 		return []discordgo.MessageComponent{discordgo.ActionsRow{Components: []discordgo.MessageComponent{prev, visualBtn, nextBtn}}}
 	}
+	if action == "harem_visual" {
+		listBtn := discordgo.Button{Label: "📋 Ver Lista", Style: discordgo.PrimaryButton, CustomID: fmt.Sprintf("gacha_page_haremlist_%s_1", subject)}
+		return []discordgo.MessageComponent{discordgo.ActionsRow{Components: []discordgo.MessageComponent{prev, listBtn, nextBtn}}}
+	}
 	return []discordgo.MessageComponent{discordgo.ActionsRow{Components: []discordgo.MessageComponent{prev, nextBtn}}}
 }
 
@@ -206,9 +210,59 @@ func navigationTopChar(claim, gender string, page int, next bool) []discordgo.Me
 	if gender == "" {
 		gender = "all"
 	}
+
+	allBtn := discordgo.Button{
+		Label:    "👑 Todos",
+		Style:    discordgo.SecondaryButton,
+		CustomID: fmt.Sprintf("gacha_page_topchar_%s_all_1", claim),
+	}
+	if gender == "all" {
+		allBtn.Style = discordgo.PrimaryButton
+	}
+
+	waifuBtn := discordgo.Button{
+		Label:    "🌸 Waifus",
+		Style:    discordgo.SecondaryButton,
+		CustomID: fmt.Sprintf("gacha_page_topchar_%s_female_1", claim),
+	}
+	if gender == "female" {
+		waifuBtn.Style = discordgo.PrimaryButton
+	}
+
+	husbandoBtn := discordgo.Button{
+		Label:    "⚔️ Husbandos",
+		Style:    discordgo.SecondaryButton,
+		CustomID: fmt.Sprintf("gacha_page_topchar_%s_male_1", claim),
+	}
+	if gender == "male" {
+		husbandoBtn.Style = discordgo.PrimaryButton
+	}
+
+	nextClaim := "unclaimed"
+	claimLabel := "🔓 Apenas Livres"
+	claimStyle := discordgo.SecondaryButton
+	if claim == "unclaimed" {
+		nextClaim = "all"
+		claimLabel = "✨ Mostrar Todos"
+		claimStyle = discordgo.SuccessButton
+	}
+	claimBtn := discordgo.Button{
+		Label:    claimLabel,
+		Style:    claimStyle,
+		CustomID: fmt.Sprintf("gacha_page_topchar_%s_%s_1", nextClaim, gender),
+	}
+
+	filterRow := discordgo.ActionsRow{
+		Components: []discordgo.MessageComponent{allBtn, waifuBtn, husbandoBtn, claimBtn},
+	}
+
 	prev := discordgo.Button{Label: "◀ Anterior", Style: discordgo.SecondaryButton, CustomID: fmt.Sprintf("gacha_page_topchar_%s_%s_%d", claim, gender, max(1, page-1)), Disabled: page <= 1}
 	nextBtn := discordgo.Button{Label: "Próximo ▶", Style: discordgo.SecondaryButton, CustomID: fmt.Sprintf("gacha_page_topchar_%s_%s_%d", claim, gender, page+1), Disabled: !next || page >= 100000}
-	return []discordgo.MessageComponent{discordgo.ActionsRow{Components: []discordgo.MessageComponent{prev, nextBtn}}}
+	navRow := discordgo.ActionsRow{
+		Components: []discordgo.MessageComponent{prev, nextBtn},
+	}
+
+	return []discordgo.MessageComponent{filterRow, navRow}
 }
 
 func HandlePage(s *discordgo.Session, i *discordgo.InteractionCreate) {

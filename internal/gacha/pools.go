@@ -32,12 +32,14 @@ func poolFor(code string) (Pool, error) {
 func normalizeAction(action string) string {
 	action = strings.ToLower(action)
 	aliases := map[string]string{
-		"sortear": "roll", "collection": "harem", "colecao": "harem", "mm": "harem",
+		"sortear": "roll", "collection": "harem", "colecao": "harem", "inventario": "harem", "mm": "harem",
 		"mmi": "harem_visual", "buscar": "search", "personagem": "character",
 		"im": "character", "char": "character", "info": "character",
 		"galeria": "gallery", "desejar": "wish", "remover": "unwish",
-		"desejos": "wishes", "tu": "status", "divorciar": "divorce",
-		"topchar": "topchar", "topc": "topchar", "topu": "topchar_unclaimed",
+		"desejos": "wishes", "wishlist": "wishes", "tu": "status", "perfil": "status",
+		"divorciar": "divorce", "divorcio": "divorce",
+		"troca": "trade", "presente": "gift",
+		"top": "topchar", "topchar": "topchar", "topc": "topchar", "topu": "topchar_unclaimed",
 		"topw": "topchar_waifu", "toph": "topchar_husbando",
 	}
 	if a, ok := aliases[action]; ok {

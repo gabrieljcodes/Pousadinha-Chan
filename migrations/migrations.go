@@ -28,3 +28,6 @@ var CatalogAdmin string
 
 //go:embed 012_remote_assets.sql
 var RemoteAssets string
+
+//go:embed 013_gacha_runtime.sql
+var GachaRuntime string

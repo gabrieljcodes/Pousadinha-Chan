@@ -8,7 +8,7 @@ services:
     env_file:
       - .env
     environment:
-      - DISCORD_TOKEN=${DISCORD_TOKEN:-MTMzOTIwNDEwNzM5ODkzODYyNA.G_zg28.5IC_q7NnPVC4Zdg3xGgvdbiJHXn4xWw34He81I}
+      - DISCORD_TOKEN=${DISCORD_TOKEN:-}
       - DATABASE_URL=postgres://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/${DB_NAME:-pousadinha}?sslmode=disable
       - DB_HOST=postgres
       - DB_PORT=5432
@@ -20,13 +20,17 @@ services:
       - GACHA_ENABLED=true
       - GACHA_PUBLIC_URL=https://gachatest.pousada.space
       - GACHA_MEDIA_DIR=/app/data/gacha
-      - CATALOG_ADMIN_PASSWORD=${CATALOG_ADMIN_PASSWORD:-RCpfWGsExAlP-xPLmvhV--S1113mvIlO}
+      - VALKEY_URL=${VALKEY_URL-redis://valkey:6379}
+      - CATALOG_ADMIN_PASSWORD=${CATALOG_ADMIN_PASSWORD:-}
     volumes:
       - ./data/gacha:/app/data/gacha
       - ./config.json:/app/config.json
     ports:
       - "${HOST_API_PORT:-8085}:8080"
     depends_on:
+      valkey:
+        condition: service_healthy
+        required: false
       postgres:
         condition: service_healthy
         required: true
@@ -37,13 +41,25 @@ services:
     image: cloudflare/cloudflared:latest
     container_name: pousadinha_tunnel
     restart: unless-stopped
-    command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN:-eyJhIjoiMDhkZDg4YTEyOGVkYjMyN2Q3YWIwOGU2OTdjNWFhYWMiLCJ0IjoiZmFjMjdjMGMtYmUyZC00YzBkLWJkMjQtYWFhOTJlNTA5MTNmIiwicyI6Ik1qVmxaV1ppTjJRdE5ERTFaUzAwTTJFM0xUZzNPV0l0TUdReFl6ZzBNamxqTlRoaCJ9}
+    command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN:-}
     networks:
       - pousadinha_network
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
       - bot
+
+  valkey:
+    image: valkey/valkey:8.1-alpine
+    restart: unless-stopped
+    command: ["valkey-server", "--save", "", "--appendonly", "no", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    networks:
+      - pousadinha_network
 
   postgres:
     image: postgres:16-alpine

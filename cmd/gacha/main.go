@@ -63,6 +63,7 @@ func run() error {
 		maxChars := flags.Int("max", 0, "Maximum characters to process (0 = all)")
 		auto := flags.Bool("auto-approve", true, "Approve imported images immediately")
 		skip := flags.Bool("skip-existing", true, "Skip characters that already have extra images")
+		tagged := flags.Bool("only-tagged", true, "Only process characters with a registered Gelbooru tag")
 		minFavs := flags.Int("min-favs", 0, "Only process characters with at least this many favorites")
 		if e = flags.Parse(args); e != nil {
 			return e
@@ -79,6 +80,7 @@ func run() error {
 			MaxChars:     *maxChars,
 			AutoApprove:  *auto,
 			SkipExisting: *skip,
+			OnlyTagged:   *tagged,
 			MinFavs:      *minFavs,
 			CharacterIDs: charIDs,
 		}, os.Stdout)

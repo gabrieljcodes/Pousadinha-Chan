@@ -216,10 +216,11 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 	token := uuid.NewString()
 	rel := fmt.Sprintf("manual/%d/photo-%s/card%s", id, token, ext)
 	dest := filepath.Join(s.Store.Config.MediaDir, filepath.FromSlash(rel))
-	if e = os.MkdirAll(filepath.Dir(dest), 0750); e != nil {
+	if e = os.MkdirAll(filepath.Dir(dest), 0755); e != nil {
 		internal(w, e)
 		return
 	}
+	_ = os.Chmod(output, 0644)
 	if e = os.Rename(output, dest); e != nil {
 		internal(w, e)
 		return

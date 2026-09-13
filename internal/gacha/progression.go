@@ -43,7 +43,7 @@ func priceCards(ctx context.Context, q rowQuerier, guild string, cards ...*Card)
 		ids = append(ids, c.ID)
 		byID[c.ID] = append(byID[c.ID], c)
 	}
-	rows, e := q.QueryContext(ctx, `WITH population AS (SELECT count(*) AS claimed FROM gacha_collection WHERE guild_id=$1)
+	rows, e := q.QueryContext(ctx, `WITH population AS (SELECT gacha_claimed_count($1) AS claimed)
  SELECT c.id,COALESCE(col.user_id,''),COALESCE(col.keys,0),population.claimed,
  gacha_character_value(c.favourites,population.claimed,COALESCE(col.keys,0))::bigint
  FROM gacha_characters c CROSS JOIN population LEFT JOIN gacha_collection col ON col.character_id=c.id AND col.guild_id=$1

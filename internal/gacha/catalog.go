@@ -9,8 +9,9 @@ import (
 )
 
 type Store struct {
-	DB     *sql.DB
-	Config Config
+	DB      *sql.DB
+	Config  Config
+	runtime poolRuntime
 }
 
 func (s *Store) Migrate(ctx context.Context) error {
@@ -44,6 +45,9 @@ func (s *Store) Migrate(ctx context.Context) error {
 		return e
 	}
 	if _, e = tx.ExecContext(ctx, migrations.RemoteAssets); e != nil {
+		return e
+	}
+	if _, e = tx.ExecContext(ctx, migrations.GachaRuntime); e != nil {
 		return e
 	}
 	return tx.Commit()

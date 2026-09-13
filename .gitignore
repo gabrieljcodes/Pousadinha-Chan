@@ -11,4 +11,11 @@ mywaifulist-database/
 characters-database/
 backups/
 *.bak
+.venv*
+models/
 codex-session-*.md
+.impeccable/
+context.txt
+DESIGN.md
+*.sqlite
+*.sqlite3

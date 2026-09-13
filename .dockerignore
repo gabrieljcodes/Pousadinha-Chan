@@ -46,5 +46,10 @@ scratch/
 # Persistent gacha downloads must not be baked into the image
 data/gacha/
 mywaifulist-database/
+characters-database/
+backups/
+models/
+.venv_tagger/
 *.tar.gz
 codex-session-*.md
+

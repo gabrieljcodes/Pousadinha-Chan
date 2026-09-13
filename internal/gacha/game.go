@@ -2,11 +2,9 @@ package gacha
 
 import (
 	"context"
-	"crypto/rand"
 	"database/sql"
 	"errors"
 	"github.com/google/uuid"
-	"math/big"
 	"strconv"
 	"strings"
 	"time"
@@ -60,6 +58,20 @@ func (s *Store) RollPool(ctx context.Context, guild, channel, user, request, cod
 	if e != nil {
 		return r, e
 	}
+	// Build/refresh outside the player transaction, before acquiring its lock.
+	// Replay handling still runs if the cache cannot load or the pool is empty.
+	for attempt := 0; attempt < 2; attempt++ {
+		snapshot, cacheErr := s.catalogPools(ctx, attempt > 0)
+		r, e = s.rollPoolSnapshot(ctx, guild, channel, user, request, pool, snapshot, cacheErr)
+		if !errors.Is(e, errStalePool) {
+			return r, e
+		}
+	}
+	return r, ErrEmpty
+}
+
+func (s *Store) rollPoolSnapshot(ctx context.Context, guild, channel, user, request string, pool Pool, snapshot *poolSnapshot, cacheErr error) (Roll, error) {
+	var r Roll
 	tx, e := s.DB.BeginTx(ctx, nil)
 	if e != nil {
 		return r, e
@@ -97,23 +109,33 @@ func (s *Store) RollPool(ctx context.Context, guild, channel, user, request, cod
 	if e != nil {
 		return r, e
 	}
-	// Uniform selection: indexed stable order + cryptographic random offset. No popularity-based pay advantage.
-	var count int64
-	const eligible = `c.enabled AND EXISTS(SELECT 1 FROM gacha_assets a WHERE a.character_id=c.id AND a.status='approved') AND ($1='' OR lower(trim(c.gender))=$1) AND ($2='' OR EXISTS(SELECT 1 FROM gacha_character_works cw JOIN gacha_works w ON w.id=cw.work_id WHERE cw.character_id=c.id AND w.kind=$2))`
-	e = tx.QueryRowContext(ctx, `SELECT count(*) FROM gacha_characters c WHERE `+eligible, pool.Gender, pool.Kind).Scan(&count)
-	if e != nil {
-		return r, e
+	if cacheErr != nil {
+		return r, cacheErr
 	}
-	if count == 0 {
-		return r, ErrEmpty
+	const eligible = `c.id=$3 AND c.enabled AND EXISTS(SELECT 1 FROM gacha_assets a WHERE a.character_id=c.id AND a.status='approved') AND ($1='' OR lower(trim(c.gender))=$1) AND ($2='' OR EXISTS(SELECT 1 FROM gacha_character_works cw JOIN gacha_works w ON w.id=cw.work_id WHERE cw.character_id=c.id AND w.kind=$2))`
+	// Rejection sampling handles a snapshot racing an editorial change. Each
+	// attempt validates current eligibility using a primary-key lookup.
+	found := false
+	for attempt := 0; attempt < 8; attempt++ {
+		id, sampleErr := sampleID(snapshot.IDs[pool.Code])
+		if sampleErr == ErrEmpty {
+			return r, errStalePool
+		}
+		if sampleErr != nil {
+			return r, sampleErr
+		}
+		r.Card, e = scanCard(tx.QueryRowContext(ctx, cardSelect+` WHERE `+eligible, pool.Gender, pool.Kind, id))
+		if e == sql.ErrNoRows {
+			continue
+		}
+		if e != nil {
+			return r, e
+		}
+		found = true
+		break
 	}
-	n, e := rand.Int(rand.Reader, big.NewInt(count))
-	if e != nil {
-		return r, e
-	}
-	r.Card, e = scanCard(tx.QueryRowContext(ctx, cardSelect+` WHERE `+eligible+` ORDER BY c.id OFFSET $3 LIMIT 1`, pool.Gender, pool.Kind, n.Int64()))
-	if e != nil {
-		return r, e
+	if !found {
+		return r, errStalePool
 	}
 	r.ID = uuid.NewString()
 	e = tx.QueryRowContext(ctx, `INSERT INTO gacha_rolls(id,guild_id,channel_id,user_id,character_id,expires_at,request_id) VALUES($1,$2,$3,$4,$5,now()+interval '45 seconds',$6) RETURNING expires_at`, r.ID, guild, channel, user, r.Card.ID, request).Scan(&r.Expires)
@@ -174,7 +196,7 @@ func (s *Store) Cards(ctx context.Context, guild, user, search string, page int)
 	if page < 1 || page > 100000 {
 		return nil, userError("Invalid page.")
 	}
-	rows, e := s.DB.QueryContext(ctx, cardSelect+` LEFT JOIN gacha_collection valued ON valued.character_id=c.id AND valued.guild_id=$2 CROSS JOIN (SELECT count(*) AS claimed FROM gacha_collection WHERE guild_id=$2) population WHERE ($1='' OR EXISTS(SELECT 1 FROM gacha_collection col WHERE col.character_id=c.id AND col.guild_id=$2 AND col.user_id=$1)) AND ($3='' OR c.name ILIKE '%'||$3||'%' OR c.id::text=$3 OR c.native_name ILIKE '%'||$3||'%' OR EXISTS(SELECT 1 FROM jsonb_array_elements_text(c.aliases) alias WHERE alias ILIKE '%'||$3||'%')) ORDER BY gacha_character_value(c.favourites,population.claimed,COALESCE(valued.keys,0)) DESC,c.id LIMIT 10 OFFSET $4`, user, guild, search, (page-1)*10)
+	rows, e := s.DB.QueryContext(ctx, cardSelect+` LEFT JOIN gacha_collection valued ON valued.character_id=c.id AND valued.guild_id=$2 CROSS JOIN (SELECT gacha_claimed_count($2) AS claimed) population WHERE ($1='' OR EXISTS(SELECT 1 FROM gacha_collection col WHERE col.character_id=c.id AND col.guild_id=$2 AND col.user_id=$1)) AND ($3='' OR c.name ILIKE '%'||$3||'%' OR c.id::text=$3 OR c.native_name ILIKE '%'||$3||'%' OR EXISTS(SELECT 1 FROM jsonb_array_elements_text(c.aliases) alias WHERE alias ILIKE '%'||$3||'%')) ORDER BY gacha_character_value(c.favourites,population.claimed,COALESCE(valued.keys,0)) DESC,c.id LIMIT 10 OFFSET $4`, user, guild, search, (page-1)*10)
 	if e != nil {
 		return nil, e
 	}
@@ -410,7 +432,7 @@ SELECT c.id, c.name, c.favourites, c.gender,
        COALESCE(col.user_id, '') AS owner,
        gacha_character_value(c.favourites, pop.claimed, COALESCE(col.keys, 0)) AS value
 FROM gacha_characters c
-CROSS JOIN (SELECT count(*) AS claimed FROM gacha_collection WHERE guild_id=$1) pop
+CROSS JOIN (SELECT gacha_claimed_count($1) AS claimed) pop
 LEFT JOIN gacha_collection col ON col.character_id=c.id AND col.guild_id=$1
 WHERE c.enabled AND EXISTS(SELECT 1 FROM gacha_assets a WHERE a.character_id=c.id AND a.status='approved')
   AND ($2 = '' OR lower(trim(c.gender)) LIKE $2 || '%')
@@ -458,7 +480,7 @@ func (s *Store) HaremCardAt(ctx context.Context, guild, user string, index int) 
 SELECT col.character_id
 FROM gacha_collection col
 JOIN gacha_characters c ON c.id=col.character_id
-CROSS JOIN (SELECT count(*) AS claimed FROM gacha_collection WHERE guild_id=$1) pop
+CROSS JOIN (SELECT gacha_claimed_count($1) AS claimed) pop
 WHERE col.guild_id=$1 AND col.user_id=$2
 ORDER BY gacha_character_value(c.favourites, pop.claimed, col.keys) DESC, c.id ASC
 LIMIT 1 OFFSET $3`

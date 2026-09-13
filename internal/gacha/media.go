@@ -76,14 +76,15 @@ func mediaClient() *http.Client {
 }
 
 type BooruPost struct {
-	ID      int64  `json:"id"`
-	FileURL string `json:"file_url"`
-	Rating  string `json:"rating"`
-	Tags    string `json:"tags"`
-	Source  string `json:"source"`
-	Width   int    `json:"width"`
-	Height  int    `json:"height"`
-	Score   int    `json:"score"`
+	ID        int64  `json:"id"`
+	FileURL   string `json:"file_url"`
+	SampleURL string `json:"sample_url"`
+	Rating    string `json:"rating"`
+	Tags      string `json:"tags"`
+	Source    string `json:"source"`
+	Width     int    `json:"width"`
+	Height    int    `json:"height"`
+	Score     int    `json:"score"`
 }
 
 // GuessBooruTag derives candidate Gelbooru tags from character name.
@@ -372,7 +373,7 @@ func (s *Store) addAsset(ctx context.Context, id int64, provider, externalID, wo
 		return 0, e
 	}
 	h := sha256.New()
-	n, e := io.Copy(io.MultiWriter(f, h), io.LimitReader(resp.Body, (12<<20)+1))
+	n, e := io.Copy(io.MultiWriter(f, h), io.LimitReader(resp.Body, (25<<20)+1))
 	ce := f.Close()
 	if e != nil {
 		return 0, e
@@ -380,8 +381,8 @@ func (s *Store) addAsset(ctx context.Context, id int64, provider, externalID, wo
 	if ce != nil {
 		return 0, ce
 	}
-	if n > 12<<20 {
-		return 0, fmt.Errorf("download exceeds 12 MiB")
+	if n > 25<<20 {
+		return 0, fmt.Errorf("download exceeds 25 MiB")
 	}
 	f, e = os.Open(input)
 	if e != nil {
@@ -403,7 +404,7 @@ func (s *Store) addAsset(ctx context.Context, id int64, provider, externalID, wo
 	sum := hex.EncodeToString(h.Sum(nil))
 	rel := fmt.Sprintf("%s/%d-%s/photo-%s-%s/%s-v1%s", slug(work), id, slug(name), slug(provider), slug(externalID), sum, ext)
 	dest := filepath.Join(s.Config.MediaDir, filepath.FromSlash(rel))
-	if e = os.MkdirAll(filepath.Dir(dest), 0750); e != nil {
+	if e = os.MkdirAll(filepath.Dir(dest), 0755); e != nil {
 		return 0, e
 	}
 	// Atomic publication in the destination filesystem. DB approval is required to serve it.
@@ -425,6 +426,7 @@ func (s *Store) addAsset(ctx context.Context, id int64, provider, externalID, wo
 	if closeErr != nil {
 		return 0, closeErr
 	}
+	_ = os.Chmod(dst.Name(), 0644)
 	if e = os.Rename(dst.Name(), dest); e != nil {
 		return 0, e
 	}
@@ -525,7 +527,11 @@ func (s *Store) AddBooruTop(ctx context.Context, id int64, tag string, limit int
 	}
 	var assetIDs []int64
 	for _, p := range posts {
-		aid, err := s.addAsset(ctx, id, "gelbooru", strconv.FormatInt(p.ID, 10), work, name, p.FileURL, fmt.Sprintf("https://gelbooru.com/index.php?page=post&s=view&id=%d", p.ID), p.Source, true)
+		imageURL := p.FileURL
+		if p.SampleURL != "" && p.SampleURL != "false" {
+			imageURL = p.SampleURL
+		}
+		aid, err := s.addAsset(ctx, id, "gelbooru", strconv.FormatInt(p.ID, 10), work, name, imageURL, fmt.Sprintf("https://gelbooru.com/index.php?page=post&s=view&id=%d", p.ID), p.Source, true)
 		if err != nil {
 			log.Printf("[booru-top] failed to process post %d: %v", p.ID, err)
 			continue
@@ -617,6 +623,7 @@ type BooruMassOptions struct {
 	MaxChars     int
 	AutoApprove  bool
 	SkipExisting bool
+	OnlyTagged   bool
 	MinFavs      int
 	CharacterIDs []int64
 }
@@ -656,6 +663,9 @@ func (s *Store) RunBooruMass(ctx context.Context, opt BooruMassOptions, out io.W
 		query := `SELECT c.id, c.name, c.favourites FROM gacha_characters c WHERE c.enabled = true`
 		var args []any
 		argIdx := 1
+		if opt.OnlyTagged {
+			query += ` AND EXISTS (SELECT 1 FROM gacha_booru_tags bt WHERE bt.character_id = c.id AND bt.provider = 'gelbooru')`
+		}
 		if opt.SkipExisting {
 			query += ` AND NOT EXISTS (SELECT 1 FROM gacha_assets a WHERE a.character_id = c.id AND a.is_extra = true)`
 		}

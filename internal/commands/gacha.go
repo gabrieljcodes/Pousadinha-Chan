@@ -1,68 +1,185 @@
 package commands
 
 import (
-	"bot/internal/gacha"
 	"github.com/bwmarrin/discordgo"
 )
 
 func init() {
-	choices := []*discordgo.ApplicationCommandOptionChoice{}
-	for _, p := range gacha.Pools {
-		choices = append(choices, &discordgo.ApplicationCommandOptionChoice{Name: p.Name, Value: p.Code})
-	}
-	for _, v := range []struct{ name, value string }{{"Harem", "harem"}, {"Search", "search"}, {"Character details", "character"}, {"Top characters", "topchar"}, {"Character keys", "keys"}, {"Image gallery", "gallery"}, {"Wish", "wish"}, {"Remove wish", "unwish"}, {"Wishlist", "wishes"}, {"Roll and claim limits", "status"}, {"Divorce for coins", "divorce"}, {"Trade characters", "trade"}, {"Gift a character", "gift"}, {"Pending offers", "offers"}, {"Harem leaderboard", "top"}, {"Help", "help"}} {
-		choices = append(choices, &discordgo.ApplicationCommandOptionChoice{Name: v.name, Value: v.value})
-	}
 	min := 1.0
+	dm := false
+
 	page := func() *discordgo.ApplicationCommandOption {
-		return &discordgo.ApplicationCommandOption{Type: discordgo.ApplicationCommandOptionInteger, Name: "page", Description: "Page number", MinValue: &min, MaxValue: 100000}
+		return &discordgo.ApplicationCommandOption{
+			Type:        discordgo.ApplicationCommandOptionInteger,
+			Name:        "pagina",
+			Description: "Número da página",
+			MinValue:    &min,
+			MaxValue:    100000,
+		}
 	}
-	member := func(required bool) *discordgo.ApplicationCommandOption {
-		return &discordgo.ApplicationCommandOption{Type: discordgo.ApplicationCommandOptionUser, Name: "member", Description: "Server member", Required: required}
+	member := func(name, desc string, required bool) *discordgo.ApplicationCommandOption {
+		return &discordgo.ApplicationCommandOption{
+			Type:        discordgo.ApplicationCommandOptionUser,
+			Name:        name,
+			Description: desc,
+			Required:    required,
+		}
 	}
 	character := func(name, description string, required bool) *discordgo.ApplicationCommandOption {
-		return &discordgo.ApplicationCommandOption{Type: discordgo.ApplicationCommandOptionInteger, Name: name, Description: description, Required: required, MinValue: &min}
-	}
-	dm := false
-	SlashCommands = append(SlashCommands, &discordgo.ApplicationCommand{Name: "gacha", Description: "Roll, collect and trade characters in this server", DMPermission: &dm, Options: []*discordgo.ApplicationCommandOption{
-		{Type: discordgo.ApplicationCommandOptionString, Name: "action", Description: "What would you like to do?", Required: true, Choices: choices},
-		{Type: discordgo.ApplicationCommandOptionString, Name: "query", Description: "Search text or character ID", MaxLength: 100},
-		character("character", "Character ID (your character when trading)", false),
-		member(false), character("receive", "Character ID you want in exchange", false), page(),
-	}})
-	for _, p := range gacha.Pools {
-		if p.Code == "roll" {
-			continue
+		return &discordgo.ApplicationCommandOption{
+			Type:        discordgo.ApplicationCommandOptionInteger,
+			Name:        name,
+			Description: description,
+			Required:    required,
+			MinValue:    &min,
 		}
-		SlashCommands = append(SlashCommands, &discordgo.ApplicationCommand{Name: p.Code, Description: "Roll: " + p.Name, DMPermission: &dm})
+	}
+
+	poolChoices := []*discordgo.ApplicationCommandOptionChoice{
+		{Name: "🌸 Waifus (Anime)", Value: "wa"},
+		{Name: "⚔️ Husbandos (Anime)", Value: "ha"},
+		{Name: "🌟 Todos (Anime)", Value: "ma"},
+		{Name: "🎮 Waifus (Games)", Value: "wg"},
+		{Name: "🕹️ Husbandos (Games)", Value: "hg"},
+		{Name: "👾 Todos (Games)", Value: "mg"},
+		{Name: "💖 Todas Waifus (Geral)", Value: "w"},
+		{Name: "🖤 Todos Husbandos (Geral)", Value: "h"},
+		{Name: "🎲 Roleta Geral (Todos)", Value: "roll"},
 	}
 
 	claimChoices := []*discordgo.ApplicationCommandOptionChoice{
-		{Name: "Não claimados (Livres)", Value: "unclaimed"},
-		{Name: "Claimados (Casados)", Value: "claimed"},
-		{Name: "Todos os personagens", Value: "all"},
+		{Name: "✨ Todos os personagens", Value: "all"},
+		{Name: "🔓 Não casados (Livres / Unclaimed)", Value: "unclaimed"},
+		{Name: "💍 Já casados (Claimed)", Value: "claimed"},
 	}
+
 	genderChoices := []*discordgo.ApplicationCommandOptionChoice{
-		{Name: "Mulheres (Waifus)", Value: "female"},
-		{Name: "Homens (Husbandos)", Value: "male"},
-		{Name: "Todos os gêneros", Value: "all"},
+		{Name: "👑 Todos os gêneros", Value: "all"},
+		{Name: "🌸 Mulheres (Waifus)", Value: "female"},
+		{Name: "⚔️ Homens (Husbandos)", Value: "male"},
+	}
+
+	haremModeChoices := []*discordgo.ApplicationCommandOptionChoice{
+		{Name: "📋 Lista Compacta", Value: "list"},
+		{Name: "📷 Visual com Fotos", Value: "visual"},
+	}
+
+	wishlistActionChoices := []*discordgo.ApplicationCommandOptionChoice{
+		{Name: "📜 Ver lista de desejos", Value: "wishes"},
+		{Name: "➕ Adicionar personagem aos desejos", Value: "wish"},
+		{Name: "➖ Remover personagem dos desejos", Value: "unwish"},
 	}
 
 	SlashCommands = append(SlashCommands,
-		&discordgo.ApplicationCommand{Name: "keys", Description: "View a character's keys and value bonuses in this server", DMPermission: &dm, Options: []*discordgo.ApplicationCommandOption{character("character", "Character ID", true)}},
-		&discordgo.ApplicationCommand{Name: "im", Description: "Inspect a character by name or ID, view photo and ownership status in this server", DMPermission: &dm, Options: []*discordgo.ApplicationCommandOption{{Type: discordgo.ApplicationCommandOptionString, Name: "name", Description: "Character name or ID", Required: true}}},
-		&discordgo.ApplicationCommand{Name: "topchar", Description: "View top characters ranked by popularity with filters", DMPermission: &dm, Options: []*discordgo.ApplicationCommandOption{
-			{Type: discordgo.ApplicationCommandOptionString, Name: "posse", Description: "Filtrar por status de posse no servidor", Choices: claimChoices},
-			{Type: discordgo.ApplicationCommandOptionString, Name: "genero", Description: "Filtrar por gênero (Waifus / Husbandos)", Choices: genderChoices},
-			page(),
-		}},
-		&discordgo.ApplicationCommand{Name: "harem", Description: "View your harem or another member's collection", DMPermission: &dm, Options: []*discordgo.ApplicationCommandOption{
-			member(false),
-			{Type: discordgo.ApplicationCommandOptionBoolean, Name: "visual", Description: "Exibir modo visual com fotos e setas de navegação"},
-			page(),
-		}},
-		&discordgo.ApplicationCommand{Name: "divorce", Description: "Release a character for server coins, after confirmation", DMPermission: &dm, Options: []*discordgo.ApplicationCommandOption{character("character", "Character ID to release", true)}},
-		&discordgo.ApplicationCommand{Name: "trade", Description: "Offer a character trade to another member", DMPermission: &dm, Options: []*discordgo.ApplicationCommandOption{member(true), character("character", "Your character ID", true), character("receive", "Their character ID", true)}},
-		&discordgo.ApplicationCommand{Name: "gift", Description: "Offer a character as a gift to another member", DMPermission: &dm, Options: []*discordgo.ApplicationCommandOption{member(true), character("character", "Your character ID", true)}},
+		// 1. /roll
+		&discordgo.ApplicationCommand{
+			Name:         "roll",
+			Description:  "Sortear um personagem de anime ou jogos para colecionar",
+			DMPermission: &dm,
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "pool",
+					Description: "Categoria de personagens a sortear (Waifus, Husbandos, Anime, Games)",
+					Choices:     poolChoices,
+				},
+			},
+		},
+
+		// 2. /top
+		&discordgo.ApplicationCommand{
+			Name:         "top",
+			Description:  "Ranking dos personagens mais populares do catálogo",
+			DMPermission: &dm,
+			Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionString, Name: "genero", Description: "Filtrar por gênero (Waifus / Husbandos)", Choices: genderChoices},
+				{Type: discordgo.ApplicationCommandOptionString, Name: "posse", Description: "Filtrar por posse no servidor (Livres / Casados)", Choices: claimChoices},
+				page(),
+			},
+		},
+
+		// 3. /info
+		&discordgo.ApplicationCommand{
+			Name:         "info",
+			Description:  "Ver foto oficial, obra, valor e dono de um personagem",
+			DMPermission: &dm,
+			Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionString, Name: "personagem", Description: "Nome ou ID do personagem", Required: true},
+			},
+		},
+
+		// 4. /harem
+		&discordgo.ApplicationCommand{
+			Name:         "harem",
+			Description:  "Visualizar sua coleção de personagens ou a de outro membro",
+			DMPermission: &dm,
+			Options: []*discordgo.ApplicationCommandOption{
+				member("membro", "Membro do servidor (deixe vazio para ver o seu)", false),
+				{Type: discordgo.ApplicationCommandOptionString, Name: "modo", Description: "Formato de exibição (Lista ou Fotos)", Choices: haremModeChoices},
+				page(),
+			},
+		},
+
+		// 5. /perfil
+		&discordgo.ApplicationCommand{
+			Name:         "perfil",
+			Description:  "Ver seus rolls disponíveis, tempo de claim e status no gacha",
+			DMPermission: &dm,
+		},
+
+		// 6. /galeria
+		&discordgo.ApplicationCommand{
+			Name:         "galeria",
+			Description:  "Navegar pelas fotos e ilustrações aprovadas de um personagem",
+			DMPermission: &dm,
+			Options: []*discordgo.ApplicationCommandOption{
+				character("personagem", "ID do personagem", true),
+				page(),
+			},
+		},
+
+		// 7. /wishlist
+		&discordgo.ApplicationCommand{
+			Name:         "wishlist",
+			Description:  "Gerenciar sua lista de personagens desejados",
+			DMPermission: &dm,
+			Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionString, Name: "acao", Description: "O que deseja fazer?", Required: true, Choices: wishlistActionChoices},
+				character("personagem", "ID do personagem (necessário para adicionar ou remover)", false),
+			},
+		},
+
+		// 8. /troca
+		&discordgo.ApplicationCommand{
+			Name:         "troca",
+			Description:  "Propor uma troca de personagens com outro jogador",
+			DMPermission: &dm,
+			Options: []*discordgo.ApplicationCommandOption{
+				member("membro", "Membro com quem deseja trocar", true),
+				character("seu_personagem", "ID do seu personagem a oferecer", true),
+				character("personagem_desejado", "ID do personagem que você quer em troca", true),
+			},
+		},
+
+		// 9. /presente
+		&discordgo.ApplicationCommand{
+			Name:         "presente",
+			Description:  "Enviar um personagem do seu harém como presente para outro jogador",
+			DMPermission: &dm,
+			Options: []*discordgo.ApplicationCommandOption{
+				member("membro", "Membro que receberá o presente", true),
+				character("personagem", "ID do seu personagem a presentear", true),
+			},
+		},
+
+		// 10. /divorcio
+		&discordgo.ApplicationCommand{
+			Name:         "divorcio",
+			Description:  "Libertar um personagem do seu harém em troca de moedas do servidor",
+			DMPermission: &dm,
+			Options: []*discordgo.ApplicationCommandOption{
+				character("personagem", "ID do personagem a divorciar", true),
+			},
+		},
 	)
 }

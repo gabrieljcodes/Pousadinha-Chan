@@ -51,6 +51,19 @@ func main() {
 		}
 		api.CatalogStore = store
 		if gachaConfig.Enabled {
+			if cacheErr := store.ConnectPoolCache(os.Getenv("VALKEY_URL")); cacheErr != nil {
+				log.Print(cacheErr)
+			}
+			defer store.ClosePoolCache()
+			warmCtx, warmCancel := context.WithTimeout(context.Background(), time.Minute)
+			warmErr := store.WarmRollPools(warmCtx)
+			warmCancel()
+			if warmErr != nil {
+				log.Printf("Gacha pool warmup failed: %v", warmErr)
+			} else {
+				stats := store.PoolCacheStats()
+				log.Printf("Gacha pools ready: characters=%d builds=%d shared_hits=%d cache_errors=%d", stats.Characters, stats.Builds, stats.SharedHits, stats.CacheErrors)
+			}
 			gacha.Default = store
 		}
 	}

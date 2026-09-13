@@ -21,7 +21,15 @@ type HelpSection struct {
 // getHelpSections returns the help sections at runtime (to use loaded config)
 func getHelpSections() []HelpSection {
 	return []HelpSection{
-		{ID: "gacha", Name: "Character Gacha", Emoji: "✨", Value: "`!wa` / `!ha` / `!ma` — female / male / all anime\n`!wg` / `!hg` / `!mg` — female / male / all games\n`!w` / `!h` — female / male across all sources\n\n`!harem [@member] [page]` — collection and value\n`!keys <ID>` / `/keys` — keys and value bonuses\n`!divorce <ID>` — confirm a release for server coins\n`!trade @member <your ID> <their ID>` — offer an exchange\n`!gift @member <ID>` — offer a gift\n\n`!gacha help` / `/gacha action:Help` — all commands, wishlist, gallery and limits"},
+		{ID: "gacha", Name: "Character Gacha", Emoji: "✨", Value: "O sistema de Gacha é 100% integrado aos **Slash Commands (`/`)** do Discord!\n\n" +
+			"`/roll [pool]` — Sortear personagem (Waifus, Husbandos, Anime, Games ou Geral)\n" +
+			"`/top [genero] [posse] [pagina]` — Ranking dos personagens mais populares com filtros interativos\n" +
+			"`/info <personagem>` — Ver foto oficial, obra, valor e dono atual\n" +
+			"`/harem [membro] [modo] [pagina]` — Ver sua coleção em lista ou fotos\n" +
+			"`/perfil` — Rolls disponíveis, tempo de claim e estatísticas\n" +
+			"`/galeria <personagem> [pagina]` — Navegar pelas fotos aprovadas\n" +
+			"`/wishlist <acao> [personagem]` — Gerenciar sua lista de desejos\n" +
+			"`/troca` · `/presente` · `/divorcio` — Negociações sociais entre membros"},
 		{
 			ID:    "economy",
 			Name:  "Economy",

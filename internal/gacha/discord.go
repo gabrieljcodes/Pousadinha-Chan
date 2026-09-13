@@ -174,7 +174,7 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 			if e != nil {
 				return nil, e
 			}
-			msg.Components = navigation("harem", owner, page, page*10 < count)
+			msg.Components = navigation(action, owner, page, page*10 < count)
 			msg.Embeds[0].Title = fmt.Sprintf("Harem • page %d", page)
 			msg.Embeds[0].Description = fmt.Sprintf("<@%s> • **%d characters** • **%d coins**\n\n", owner, count, value) + msg.Embeds[0].Description
 		}
@@ -349,7 +349,7 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 
 		count, value, _ := s.HaremSummary(ctx, guild, user)
 		var claimedTotal int64
-		_ = s.DB.QueryRowContext(ctx, `SELECT count(*) FROM gacha_collection WHERE guild_id=$1`, guild).Scan(&claimedTotal)
+		_ = s.DB.QueryRowContext(ctx, `SELECT gacha_claimed_count($1)`, guild).Scan(&claimedTotal)
 
 		var desc strings.Builder
 		desc.WriteString(fmt.Sprintf("🎲 **Rolls:** **%d/%d** (reseta <t:%d:R>)\n", rollsLeft, s.Config.RollsPerHour, reset.Unix()))
@@ -412,6 +412,46 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 		}
 		msg.Components = navigation("top", "0", page, len(ranks) == 10)
 		msg.Embeds = []*discordgo.MessageEmbed{{Title: fmt.Sprintf("Harem leaderboard • page %d", page), Description: b.String(), Color: 0xc5a66b}}
+	case "wish", "unwish":
+		id, err := strconv.ParseInt(query, 10, 64)
+		if err != nil || id <= 0 {
+			return nil, invalidID()
+		}
+		remove := action == "unwish"
+		if err := s.Wish(ctx, guild, user, id, remove); err != nil {
+			return nil, err
+		}
+		if remove {
+			msg.Content = fmt.Sprintf("Personagem #%d removido da sua lista de desejos.", id)
+		} else {
+			msg.Content = fmt.Sprintf("Personagem #%d adicionado à sua lista de desejos! (Você será avisado quando ele for sorteado)", id)
+		}
+	case "wishes":
+		rows, err := s.DB.QueryContext(ctx, `SELECT c.id, c.name, COALESCE(cw.title, '') FROM gacha_wishes w JOIN gacha_characters c ON c.id=w.character_id LEFT JOIN LATERAL (SELECT title FROM gacha_character_works rel JOIN gacha_works gw ON gw.id=rel.work_id WHERE rel.character_id=c.id LIMIT 1) cw ON true WHERE w.guild_id=$1 AND w.user_id=$2 ORDER BY w.created_at DESC`, guild, user)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		var b strings.Builder
+		count := 0
+		for rows.Next() {
+			count++
+			var id int64
+			var name, work string
+			if err := rows.Scan(&id, &name, &work); err == nil {
+				fmt.Fprintf(&b, "**#%d** `%d` %s (%s)\n", count, id, clip(safe(name), 30), clip(safe(work), 30))
+			}
+		}
+		if count == 0 {
+			b.WriteString("Você ainda não tem nenhum personagem na sua lista de desejos.\nUse `/wishlist acao:Adicionar personagem:<ID>` para adicionar!")
+		}
+		embed := &discordgo.MessageEmbed{
+			Title:       "Sua Lista de Desejos (Wishlist)",
+			Description: b.String(),
+			Color:       0x9b59b6,
+			Footer:      &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("%d/20 personagens desejados", count)},
+		}
+		msg.Embeds = []*discordgo.MessageEmbed{embed}
 	default:
 		msg.Content = fmt.Sprintf("**Pousadinha Gacha**\n**Roll:** `!wa` female anime · `!ha` male anime · `!ma` all anime\n`!wg` female games · `!hg` male games · `!mg` all games\n`!w` all female · `!h` all male · `!gacha roll` everyone\n**Collection:** `!harem [@member] [page]` · `!gacha top [page]`\n**Discover:** `!gacha search <name>` · `character <ID>` · `gallery <ID> [page]`\n**Wishlist:** `!gacha wish <ID>` · `unwish <ID>` · `wishes`\n**Social:** `!divorce <ID>` · `!trade @member <your ID> <their ID>` · `!gift @member <ID>`\n`!gacha offers` · `!gacha status` · `!keys <ID>`\nRoll your own character for +1 key. +2%% per key, +10%% every 10 keys.\n%d shared rolls/hour • 1 claim every %d hours • 45-second claim window. Divorce pays virtual coins in this server after confirmation. Gifts/trades require acceptance. Offers expire in 10 minutes.", s.Config.RollsPerHour, s.Config.ClaimHours)
 	}
@@ -493,25 +533,37 @@ func Slash(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	var offered, requested int64
 	var visual bool
 	var claimFilter, genderFilter string
-	if i.ApplicationCommandData().Name != "gacha" {
-		action = i.ApplicationCommandData().Name
+	cmdName := i.ApplicationCommandData().Name
+	if cmdName != "gacha" {
+		action = cmdName
 	}
 	for _, o := range i.ApplicationCommandData().Options {
 		switch o.Name {
+		case "pool":
+			action = o.StringValue()
 		case "action", "acao":
 			action = o.StringValue()
-		case "query", "busca", "name", "nome":
-			query = o.StringValue()
+		case "query", "busca", "name", "nome", "personagem":
+			if o.Type == discordgo.ApplicationCommandOptionInteger {
+				query = strconv.FormatInt(o.IntValue(), 10)
+				offered = o.IntValue()
+			} else {
+				query = o.StringValue()
+			}
 		case "page", "pagina":
 			page = int(o.IntValue())
-		case "member":
+		case "member", "membro":
 			member = o.Value.(string)
-		case "character":
+		case "character", "seu_personagem":
 			offered = o.IntValue()
-		case "receive":
+		case "receive", "personagem_desejado":
 			requested = o.IntValue()
 		case "visual":
 			visual = o.BoolValue()
+		case "modo":
+			if o.StringValue() == "visual" {
+				visual = true
+			}
 		case "posse", "claim":
 			claimFilter = o.StringValue()
 		case "genero", "gender":
@@ -536,6 +588,15 @@ func Slash(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	}
 	if action == "gift" {
 		query = fmt.Sprintf("%s %d", member, offered)
+	}
+	if action == "divorce" && offered > 0 {
+		query = strconv.FormatInt(offered, 10)
+	}
+	if action == "gallery" && offered > 0 {
+		query = strconv.FormatInt(offered, 10)
+	}
+	if (action == "wish" || action == "unwish") && offered > 0 {
+		query = strconv.FormatInt(offered, 10)
 	}
 	if e := validateTarget(s, i.GuildID, i.Member.User.ID, action, query); e != nil {
 		content := friendly(e)
