@@ -36,6 +36,7 @@ func run() error {
 	}
 	defer db.Close()
 	store := &gacha.Store{DB: db.GetDB(), Config: cfg}
+	defer store.CloseMedia()
 	admin, e := catalogweb.New(store, os.Getenv("CATALOG_ADMIN_PASSWORD"), os.Getenv("CATALOG_SECURE_COOKIES") == "true")
 	if e != nil {
 		return e

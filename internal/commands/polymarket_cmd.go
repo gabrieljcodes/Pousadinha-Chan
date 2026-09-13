@@ -399,7 +399,7 @@ func HandlePolymarketButton(s *discordgo.Session, i *discordgo.InteractionCreate
 		var lines []string
 		for _, p := range positions {
 			avg := float64(p.TotalInvested) / float64(p.Shares)
-			lines = append(lines, locale.Text("commands.polymarket_cmd.shares_average_price_ec_invested_potential_payout.formatted", locale.Data{"Outcome": p.Outcome, "Shares": p.Shares, "Avg": avg, "TotalInvested": p.TotalInvested, "CurrencySymbol": config.Bot.CurrencySymbol, "Shares6": p.Shares*100 - p.TotalInvested, "CurrencySymbol7": config.Bot.CurrencySymbol}))
+			lines = append(lines, locale.Text("commands.polymarket_cmd.shares_average_price_ec_invested_potential_payout.formatted", locale.Data{"Outcome": polymarket.OutcomeLabel(p.Outcome), "Shares": p.Shares, "Avg": avg, "TotalInvested": p.TotalInvested, "CurrencySymbol": config.Bot.CurrencySymbol, "Shares6": p.Shares*100 - p.TotalInvested, "CurrencySymbol7": config.Bot.CurrencySymbol}))
 		}
 
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
@@ -644,7 +644,7 @@ func HandlePolymarketModalSubmit(s *discordgo.Session, i *discordgo.InteractionC
 		emoji = "🔴"
 	}
 
-	receipt := locale.Text("commands.polymarket_cmd.shares_purchased_market_outcome_quantity_shares_total.formatted", locale.Data{"Question": market.Question, "Emoji": emoji, "Outcome": outcome, "Shares": cost.Shares, "TotalCost": cost.TotalCost, "CurrencySymbol": config.Bot.CurrencySymbol, "RawCost": cost.RawCost, "Fee": cost.Fee, "PotentialPayout": cost.PotentialPayout, "CurrencySymbol10": config.Bot.CurrencySymbol, "PotentialProfit": cost.PotentialProfit, "CurrencySymbol12": config.Bot.CurrencySymbol})
+	receipt := locale.Text("commands.polymarket_cmd.shares_purchased_market_outcome_quantity_shares_total.formatted", locale.Data{"Question": market.Question, "Emoji": emoji, "Outcome": polymarket.OutcomeLabel(outcome), "Shares": cost.Shares, "TotalCost": cost.TotalCost, "CurrencySymbol": config.Bot.CurrencySymbol, "RawCost": cost.RawCost, "Fee": cost.Fee, "PotentialPayout": cost.PotentialPayout, "CurrencySymbol10": config.Bot.CurrencySymbol, "PotentialProfit": cost.PotentialProfit, "CurrencySymbol12": config.Bot.CurrencySymbol})
 
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,

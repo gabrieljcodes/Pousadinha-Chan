@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"image"
 	_ "image/gif"
@@ -229,7 +230,6 @@ func FetchBooruTop(ctx context.Context, tag string, limit int) ([]BooruPost, err
 	return out, nil
 }
 
-
 func FetchBooru(ctx context.Context, tag string, postID int64) (BooruPost, error) {
 	var p BooruPost
 	if !tagPattern.MatchString(tag) || postID <= 0 {
@@ -403,31 +403,11 @@ func (s *Store) addAsset(ctx context.Context, id int64, provider, externalID, wo
 	}
 	sum := hex.EncodeToString(h.Sum(nil))
 	rel := fmt.Sprintf("%s/%d-%s/photo-%s-%s/%s-v1%s", slug(work), id, slug(name), slug(provider), slug(externalID), sum, ext)
-	dest := filepath.Join(s.Config.MediaDir, filepath.FromSlash(rel))
-	if e = os.MkdirAll(filepath.Dir(dest), 0755); e != nil {
-		return 0, e
-	}
-	// Atomic publication in the destination filesystem. DB approval is required to serve it.
-	src, e := os.Open(output)
+	storage, e := s.MediaStorage()
 	if e != nil {
 		return 0, e
 	}
-	defer src.Close()
-	dst, e := os.CreateTemp(filepath.Dir(dest), ".pending-")
-	if e != nil {
-		return 0, e
-	}
-	defer os.Remove(dst.Name())
-	_, e = io.Copy(dst, src)
-	closeErr := dst.Close()
-	if e != nil {
-		return 0, e
-	}
-	if closeErr != nil {
-		return 0, closeErr
-	}
-	_ = os.Chmod(dst.Name(), 0644)
-	if e = os.Rename(dst.Name(), dest); e != nil {
+	if e = storage.PutFile(ctx, rel, output, mime); e != nil {
 		return 0, e
 	}
 	var assetID int64
@@ -452,28 +432,7 @@ func (s *Store) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	// os.Root also blocks symlink escapes from the configured storage root.
-	root, e := os.OpenRoot(s.Config.MediaDir)
-	if e != nil {
-		http.NotFound(w, r)
-		return
-	}
-	defer root.Close()
-	f, e := root.Open(rel)
-	if e != nil {
-		http.NotFound(w, r)
-		return
-	}
-	defer f.Close()
-	st, e := f.Stat()
-	if e != nil || !st.Mode().IsRegular() {
-		http.NotFound(w, r)
-		return
-	}
-	w.Header().Set("Content-Type", mime)
-	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("Cache-Control", "public, max-age=300")
-	http.ServeContent(w, r, st.Name(), st.ModTime(), f)
+	s.ServeMedia(w, r, rel, mime, false)
 }
 
 // AddBooruTop downloads and processes the top safe solo portrait images for a character from Gelbooru.
@@ -544,50 +503,44 @@ func (s *Store) AddBooruTop(ctx context.Context, id int64, tag string, limit int
 	return assetIDs, usedTag, nil
 }
 
-// DeleteExtraAssets removes all non-official (is_extra=true) assets from both disk and database.
-// If characterID is > 0, it removes only that character's extra assets.
-// Official AniList portraits (is_extra=false) are strictly protected and never touched.
+// DeleteExtraAssets removes extra assets, scoped to characterID when positive.
+// Portraits with is_extra=false are retained. Catalog references are removed
+// before their objects, so a database failure never triggers file deletion.
+// Storage failures are reported and may leave unreferenced objects.
 func (s *Store) DeleteExtraAssets(ctx context.Context, characterID int64) (int, error) {
-	query := `SELECT id, path FROM gacha_assets WHERE is_extra = true`
-	var args []any
-	if characterID > 0 {
-		query += ` AND character_id = $1`
-		args = append(args, characterID)
+	storage, err := s.MediaStorage()
+	if err != nil {
+		return 0, err
 	}
-	rows, e := s.DB.QueryContext(ctx, query, args...)
-	if e != nil {
-		return 0, e
+	rows, err := s.DB.QueryContext(ctx, `DELETE FROM gacha_assets WHERE is_extra=true AND ($1::bigint<=0 OR character_id=$1) RETURNING path`, characterID)
+	if err != nil {
+		return 0, err
 	}
-	defer rows.Close()
-	var paths []string
-	var count int
+	var keys []string
+	count := 0
 	for rows.Next() {
-		var aid int64
-		var relPath string
-		if e = rows.Scan(&aid, &relPath); e != nil {
-			return 0, e
+		var key sql.NullString
+		if err = rows.Scan(&key); err != nil {
+			rows.Close()
+			return 0, err
 		}
-		paths = append(paths, relPath)
 		count++
+		if key.Valid && key.String != "" {
+			keys = append(keys, key.String)
+		}
 	}
-	if e = rows.Err(); e != nil {
-		return 0, e
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return 0, err
 	}
-	if count == 0 {
-		return 0, nil
+	var cleanupErr error
+	for _, key := range keys {
+		if err = storage.Delete(ctx, key); err != nil {
+			cleanupErr = errors.Join(cleanupErr, fmt.Errorf("delete media %s: %w", key, err))
+		}
 	}
-	for _, rel := range paths {
-		filePath := filepath.Join(s.Config.MediaDir, filepath.FromSlash(rel))
-		_ = os.Remove(filePath)
-	}
-	delQuery := `DELETE FROM gacha_assets WHERE is_extra = true`
-	if characterID > 0 {
-		delQuery += ` AND character_id = $1`
-		_, e = s.DB.ExecContext(ctx, delQuery, characterID)
-	} else {
-		_, e = s.DB.ExecContext(ctx, delQuery)
-	}
-	return count, e
+	return count, cleanupErr
 }
 
 type AssetInfo struct {
@@ -741,5 +694,3 @@ func (s *Store) RunBooruMass(ctx context.Context, opt BooruMassOptions, out io.W
 	fmt.Fprintf(out, "\nFinished mass import! %d/%d characters had images imported (%d total new images).\n", summary.Success, total, summary.Images)
 	return summary, nil
 }
-
-

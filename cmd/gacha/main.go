@@ -25,7 +25,7 @@ func main() {
 func run() error {
 	_ = godotenv.Load()
 	if len(os.Args) < 2 {
-		return fmt.Errorf("usage: gacha booru-mass [--limit 5] [--max 0] [--auto-approve] [--skip-existing] [--min-favs 0] [IDs...] | booru-top [--limit 5] [--auto-approve] <character ID> [tag] | delete-extra <character ID | all> | assets <character ID> | import-batch [--force] --job initial-10k --limit 10000 --auto-approve | clear-lease | batch-status <job> | migrate | import <AniList ID> | tag <character ID> <tag> | image <character ID> <Gelbooru post ID> | pending | approve/reject <asset ID> <reviewer> | enable/disable <character ID>")
+		return fmt.Errorf("usage: gacha media-copy [--apply] | booru-mass [--limit 5] [--max 0] [--auto-approve] [--skip-existing] [--min-favs 0] [IDs...] | booru-top [--limit 5] [--auto-approve] <character ID> [tag] | delete-extra <character ID | all> | assets <character ID> | import-batch [--force] --job initial-10k --limit 10000 --auto-approve | clear-lease | batch-status <job> | migrate | import <AniList ID> | tag <character ID> <tag> | image <character ID> <Gelbooru post ID> | pending | approve/reject <asset ID> <reviewer> | enable/disable <character ID>")
 	}
 	config.Load()
 	cfg, e := gacha.LoadConfig()
@@ -40,18 +40,30 @@ func run() error {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	s := &gacha.Store{DB: db.GetDB(), Config: cfg}
+	defer s.CloseMedia()
 	if e = s.Migrate(ctx); e != nil {
 		return e
 	}
 	args := os.Args[2:]
 	id := int64(0)
-	if len(args) > 0 && os.Args[1] != "import-batch" && os.Args[1] != "batch-status" && os.Args[1] != "clear-lease" && os.Args[1] != "delete-extra" && os.Args[1] != "booru-top" && os.Args[1] != "booru-mass" && os.Args[1] != "assets" {
+	if len(args) > 0 && os.Args[1] != "import-batch" && os.Args[1] != "batch-status" && os.Args[1] != "clear-lease" && os.Args[1] != "delete-extra" && os.Args[1] != "booru-top" && os.Args[1] != "booru-mass" && os.Args[1] != "assets" && os.Args[1] != "media-copy" {
 		id, e = strconv.ParseInt(args[0], 10, 64)
 		if e != nil || id <= 0 {
 			return fmt.Errorf("positive numeric ID required")
 		}
 	}
 	switch os.Args[1] {
+	case "media-copy":
+		flags := flag.NewFlagSet("media-copy", flag.ContinueOnError)
+		apply := flags.Bool("apply", false, "Copy local media to S3 and verify contents; retain local originals")
+		workers := flags.Int("workers", 32, "Number of concurrent upload workers")
+		if e = flags.Parse(args); e != nil {
+			return e
+		}
+		if flags.NArg() != 0 {
+			return fmt.Errorf("media-copy accepts only --apply and --workers")
+		}
+		return s.CopyMediaToS3(ctx, *apply, *workers, os.Stdout)
 	case "clear-lease":
 		_, e = s.DB.ExecContext(ctx, `DELETE FROM gacha_import_leases WHERE provider='anilist'`)
 		if e == nil {

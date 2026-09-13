@@ -172,6 +172,7 @@ func TestPostgresGame(t *testing.T) {
 	}
 	db = scoped
 	store := &Store{DB: db, Config: Config{RollsPerHour: 2, ClaimHours: 3, MediaDir: t.TempDir(), PublicURL: "https://example.com"}}
+	defer store.CloseMedia()
 	if e = store.Migrate(ctx); e != nil {
 		t.Fatal(e)
 	}
@@ -329,6 +330,7 @@ func TestPostgresGame(t *testing.T) {
 	t.Run("progression", func(t *testing.T) { testProgression(t, store) })
 	t.Run("batch", func(t *testing.T) { testBatch(t, store); testBatchCache(t, store) })
 	t.Run("runtime", func(t *testing.T) { testRuntime(t, store) })
+	t.Run("s3_catalog", func(t *testing.T) { testS3Catalog(t, store) })
 
 }
 

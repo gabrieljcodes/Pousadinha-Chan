@@ -56,7 +56,7 @@ https://pousadinha.com/naruto/42-naruto-uzumaki/photo-gelbooru-123456/<sha256>-v
 
 O ID interno evita colisões entre homônimos; o hash e a versão identificam o conteúdo/renderizador. URLs persistidas não mudam quando o nome do personagem é atualizado. Somente arquivos aprovados são públicos; não configure um servidor estático apontando diretamente para todo o volume, pois isso exporia pendências e rejeições. Cache HTTP de cinco minutos limita a demora de revogações; caches externos do Discord podem persistir por mais tempo.
 
-Para desenvolvimento fora do Docker, use Go 1.24+ e FFmpeg no PATH, com `GACHA_MEDIA_DIR=./data/gacha`. O processador aceita originais PNG/JPEG/GIF, gera PNG ou GIF e não mantém o download bruto após o processamento.
+Para desenvolvimento fora do Docker, use Go 1.25+ e FFmpeg no PATH, com `GACHA_MEDIA_DIR=./data/gacha`. O processador aceita originais PNG/JPEG/GIF, gera PNG ou GIF e não mantém o download bruto após o processamento.
 
 ## Curadoria e importação
 
@@ -87,7 +87,7 @@ docker compose exec bot /app/gacha disable 42
 
 **IDs acima são ilustrativos e de espaços diferentes**: AniList, catálogo interno, post do Gelbooru e imagem interna. Use os IDs efetivamente retornados. `import` cria/atualiza metadados e baixa o retrato inicial; a imagem fica pendente. Se o download falhar, os metadados permanecem e a operação pode ser repetida. Reimportação preserva coleção, moderação e associações de outros provedores. Uma imagem da mesma fonte/ID já cadastrada é reutilizada; não há atualização automática do binário remoto.
 
-Para visualizar uma pendência, copie o arquivo informado por `pending` com `docker compose cp bot:/app/data/gacha/<caminho> ./revisao.png` (ou `.gif`) e abra-o localmente. Confira identidade, qualidade, classificação e atribuição. Aprovação e habilitação são explícitas e independentes. Desabilitar personagem impede novos sorteios; rejeitar imagem remove seu acesso público, sem apagar coleções existentes.
+Use the authenticated [catalog editor](CATALOG.md) to preview and approve pending images on either backend. Approval and character enablement remain independent. Disabling a character prevents new rolls; rejecting a photo removes public access without deleting existing collections.
 
 O filtro do Gelbooru exige tag exata e classificação `general/safe` tanto na consulta quanto na resposta. Isso não substitui revisão humana. Guarde e respeite os créditos/licenças da publicação; uma API de imagens não concede automaticamente direitos de redistribuição. A página de origem e a referência original do post ficam no banco; o cartão liga para a publicação com os créditos.
 
@@ -110,7 +110,7 @@ O AniList retorna favoritos, gênero do personagem e obras de anime com gêneros
 
 Cartões **420 × 600 px**, proporção preservada sem recorte, fundo escuro, borda dourada dupla. GIFs: até 12 s, 12 fps, paleta otimizada e loop. Limites: 12 MiB de download, 24 milhões de pixels de entrada, 8 MiB de saída, prazo de 40 s para FFmpeg. HTTPS e hosts permitidos, validação do IP no momento da conexão, redirecionamentos limitados e armazenamento servido com proteção contra escape por symlink. Não há URLs externas de arquivo nos embeds.
 
-Faça backup **do banco e do volume de mídia** juntos. Réplicas HTTP precisam compartilhar o mesmo armazenamento. Renders órfãos após falha de gravação no banco podem existir; não são publicados. Limpeza de órfãos e retenção de sorteios históricos são tarefas operacionais futuras: não apague o histórico sem definir uma janela de deduplicação de eventos. Há importação inicial em lote com retomada; não há worker de atualização periódica, CDN/S3, painel de curadoria ou benchmark de grande escala nesta entrega. Seleção uniforme usa contagem e offset em IDs ordenados; antes de catálogos muito grandes, meça essa consulta e considere um índice de amostragem materializado.
+Back up PostgreSQL together with the configured media store. Filesystem deployments need a shared media volume; S3 deployments use the same bucket and prefix across replicas. Imports can leave unreferenced objects if a database operation fails; those objects are not published. The private [catalog editor](CATALOG.md) handles curation. See [storage configuration, copying and operational limits](MEDIA_STORAGE.md) before switching backends.
 
 ## Verificação
 
@@ -140,8 +140,10 @@ O alvo é a quantidade de importações bem-sucedidas **neste job**, contando ID
 
 As tabelas `gacha_import_jobs`, `gacha_import_items` e `gacha_import_leases` guardam checkpoint, contagens, erro por personagem e exclusão entre processos. Aplicadas pela migration aditiva `005_gacha_import.sql`. Reiniciar não reprocessa itens concluídos. Um item interrompido antes do checkpoint pode ser tentado novamente, com upsert de metadados e reutilização da imagem. O job pode levar muitas horas: 10 mil requisições, sem contar páginas adicionais, já exigem cerca de 6,1 horas de espaçamento, além de rede e renderização.
 
-`--auto-approve` aprova somente retratos identificados como AniList, após download, renderização e verificação do arquivo local, registra `auto:anilist-portrait:v1` e habilita o personagem. Não aprova booru nem revoga rejeições manuais. `disable` agora grava uma trava editorial para impedir reativação automática; `enable` a remove. Personagens desabilitados antes dessa migration precisam receber `disable` novamente para registrar essa trava. Autoaprovação não é análise do conteúdo da imagem: origem AniList não garante que toda imagem seja adequada a todo servidor.
+`--auto-approve` aprova somente retratos identificados como AniList, após download, renderização e verificação do objeto no armazenamento configurado, registra `auto:anilist-portrait:v1` e habilita o personagem. Não aprova booru nem revoga rejeições manuais. `disable` agora grava uma trava editorial para impedir reativação automática; `enable` a remove. Personagens desabilitados antes dessa migration precisam receber `disable` novamente para registrar essa trava. Autoaprovação não é análise do conteúdo da imagem: origem AniList não garante que toda imagem seja adequada a todo servidor.
 
 **Rate limit e permissão de coleta são condições diferentes.** Os termos do AniList proíbem coleta massiva, mesmo em baixa taxa; o importador não transforma um lote de 10 mil em uso autorizado pelo provedor. Essa restrição permanece aplicável: [termos](https://docs.anilist.co/guide/terms-of-use).
 
 Arquitetura de execução, Valkey opcional e benchmarks: [Gacha runtime](GACHA_RUNTIME.md).
+
+Media storage supports filesystem and private S3-compatible buckets. See [media storage configuration and migration](MEDIA_STORAGE.md).

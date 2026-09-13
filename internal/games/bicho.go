@@ -29,31 +29,31 @@ type Animal struct {
 
 // BichoAnimals contains the official 25 animals of Jogo do Bicho
 var BichoAnimals = [25]Animal{
-	{Number: 1, Name: locale.Text("games.bicho.ostrich"), PtName: "Avestruz", Emoji: "🦤", Dezenas: [4]int{1, 2, 3, 4}},
-	{Number: 2, Name: locale.Text("games.bicho.eagle"), PtName: "Águia", Emoji: "🦅", Dezenas: [4]int{5, 6, 7, 8}},
-	{Number: 3, Name: locale.Text("games.bicho.donkey"), PtName: "Burro", Emoji: "🫏", Dezenas: [4]int{9, 10, 11, 12}},
-	{Number: 4, Name: locale.Text("games.bicho.butterfly"), PtName: "Borboleta", Emoji: "🦋", Dezenas: [4]int{13, 14, 15, 16}},
-	{Number: 5, Name: locale.Text("games.bicho.dog"), PtName: "Cachorro", Emoji: "🐶", Dezenas: [4]int{17, 18, 19, 20}},
-	{Number: 6, Name: locale.Text("games.bicho.goat"), PtName: "Cabra", Emoji: "🐐", Dezenas: [4]int{21, 22, 23, 24}},
-	{Number: 7, Name: locale.Text("games.bicho.ram"), PtName: "Carneiro", Emoji: "🐑", Dezenas: [4]int{25, 26, 27, 28}},
-	{Number: 8, Name: locale.Text("games.bicho.camel"), PtName: "Camelo", Emoji: "🐫", Dezenas: [4]int{29, 30, 31, 32}},
-	{Number: 9, Name: locale.Text("games.bicho.snake"), PtName: "Cobra", Emoji: "🐍", Dezenas: [4]int{33, 34, 35, 36}},
-	{Number: 10, Name: locale.Text("games.bicho.rabbit"), PtName: "Coelho", Emoji: "🐇", Dezenas: [4]int{37, 38, 39, 40}},
-	{Number: 11, Name: locale.Text("games.bicho.horse"), PtName: "Cavalo", Emoji: "🐴", Dezenas: [4]int{41, 42, 43, 44}},
-	{Number: 12, Name: locale.Text("games.bicho.elephant"), PtName: "Elefante", Emoji: "🐘", Dezenas: [4]int{45, 46, 47, 48}},
-	{Number: 13, Name: locale.Text("games.bicho.rooster"), PtName: "Galo", Emoji: "🐓", Dezenas: [4]int{49, 50, 51, 52}},
-	{Number: 14, Name: locale.Text("games.bicho.cat"), PtName: "Gato", Emoji: "🐱", Dezenas: [4]int{53, 54, 55, 56}},
-	{Number: 15, Name: locale.Text("games.bicho.alligator"), PtName: "Jacaré", Emoji: "🐊", Dezenas: [4]int{57, 58, 59, 60}},
-	{Number: 16, Name: locale.Text("games.bicho.lion"), PtName: "Leão", Emoji: "🦁", Dezenas: [4]int{61, 62, 63, 64}},
-	{Number: 17, Name: locale.Text("games.bicho.monkey"), PtName: "Macaco", Emoji: "🐒", Dezenas: [4]int{65, 66, 67, 68}},
-	{Number: 18, Name: locale.Text("games.bicho.pig"), PtName: "Porco", Emoji: "🐷", Dezenas: [4]int{69, 70, 71, 72}},
-	{Number: 19, Name: locale.Text("games.bicho.peacock"), PtName: "Pavão", Emoji: "🦚", Dezenas: [4]int{73, 74, 75, 76}},
-	{Number: 20, Name: locale.Text("games.bicho.turkey"), PtName: "Peru", Emoji: "🦃", Dezenas: [4]int{77, 78, 79, 80}},
-	{Number: 21, Name: locale.Text("games.bicho.bull"), PtName: "Touro", Emoji: "🐂", Dezenas: [4]int{81, 82, 83, 84}},
-	{Number: 22, Name: locale.Text("games.bicho.tiger"), PtName: "Tigre", Emoji: "🐯", Dezenas: [4]int{85, 86, 87, 88}},
-	{Number: 23, Name: locale.Text("games.bicho.bear"), PtName: "Urso", Emoji: "🐻", Dezenas: [4]int{89, 90, 91, 92}},
-	{Number: 24, Name: locale.Text("games.bicho.deer"), PtName: "Veado", Emoji: "🦌", Dezenas: [4]int{93, 94, 95, 96}},
-	{Number: 25, Name: locale.Text("games.bicho.cow"), PtName: "Vaca", Emoji: "🐄", Dezenas: [4]int{97, 98, 99, 0}},
+	{Number: 1, Name: "Ostrich", PtName: "Avestruz", Emoji: "🦤", Dezenas: [4]int{1, 2, 3, 4}},
+	{Number: 2, Name: "Eagle", PtName: "Águia", Emoji: "🦅", Dezenas: [4]int{5, 6, 7, 8}},
+	{Number: 3, Name: "Donkey", PtName: "Burro", Emoji: "🫏", Dezenas: [4]int{9, 10, 11, 12}},
+	{Number: 4, Name: "Butterfly", PtName: "Borboleta", Emoji: "🦋", Dezenas: [4]int{13, 14, 15, 16}},
+	{Number: 5, Name: "Dog", PtName: "Cachorro", Emoji: "🐶", Dezenas: [4]int{17, 18, 19, 20}},
+	{Number: 6, Name: "Goat", PtName: "Cabra", Emoji: "🐐", Dezenas: [4]int{21, 22, 23, 24}},
+	{Number: 7, Name: "Ram", PtName: "Carneiro", Emoji: "🐑", Dezenas: [4]int{25, 26, 27, 28}},
+	{Number: 8, Name: "Camel", PtName: "Camelo", Emoji: "🐫", Dezenas: [4]int{29, 30, 31, 32}},
+	{Number: 9, Name: "Snake", PtName: "Cobra", Emoji: "🐍", Dezenas: [4]int{33, 34, 35, 36}},
+	{Number: 10, Name: "Rabbit", PtName: "Coelho", Emoji: "🐇", Dezenas: [4]int{37, 38, 39, 40}},
+	{Number: 11, Name: "Horse", PtName: "Cavalo", Emoji: "🐴", Dezenas: [4]int{41, 42, 43, 44}},
+	{Number: 12, Name: "Elephant", PtName: "Elefante", Emoji: "🐘", Dezenas: [4]int{45, 46, 47, 48}},
+	{Number: 13, Name: "Rooster", PtName: "Galo", Emoji: "🐓", Dezenas: [4]int{49, 50, 51, 52}},
+	{Number: 14, Name: "Cat", PtName: "Gato", Emoji: "🐱", Dezenas: [4]int{53, 54, 55, 56}},
+	{Number: 15, Name: "Alligator", PtName: "Jacaré", Emoji: "🐊", Dezenas: [4]int{57, 58, 59, 60}},
+	{Number: 16, Name: "Lion", PtName: "Leão", Emoji: "🦁", Dezenas: [4]int{61, 62, 63, 64}},
+	{Number: 17, Name: "Monkey", PtName: "Macaco", Emoji: "🐒", Dezenas: [4]int{65, 66, 67, 68}},
+	{Number: 18, Name: "Pig", PtName: "Porco", Emoji: "🐷", Dezenas: [4]int{69, 70, 71, 72}},
+	{Number: 19, Name: "Peacock", PtName: "Pavão", Emoji: "🦚", Dezenas: [4]int{73, 74, 75, 76}},
+	{Number: 20, Name: "Turkey", PtName: "Peru", Emoji: "🦃", Dezenas: [4]int{77, 78, 79, 80}},
+	{Number: 21, Name: "Bull", PtName: "Touro", Emoji: "🐂", Dezenas: [4]int{81, 82, 83, 84}},
+	{Number: 22, Name: "Tiger", PtName: "Tigre", Emoji: "🐯", Dezenas: [4]int{85, 86, 87, 88}},
+	{Number: 23, Name: "Bear", PtName: "Urso", Emoji: "🐻", Dezenas: [4]int{89, 90, 91, 92}},
+	{Number: 24, Name: "Deer", PtName: "Veado", Emoji: "🦌", Dezenas: [4]int{93, 94, 95, 96}},
+	{Number: 25, Name: "Cow", PtName: "Vaca", Emoji: "🐄", Dezenas: [4]int{97, 98, 99, 0}},
 }
 
 // Multipliers for each bet modality
@@ -181,7 +181,7 @@ func EvaluateBichoBet(bet *database.DBBichoBet, prizes [5]int) BetEvaluationResu
 					Won:         true,
 					Multiplier:  MultGrupoCabeca,
 					Payout:      payout,
-					Description: locale.Text("games.bicho.group_on_the_head_st_prize.formatted", locale.Data{"Number": animal.Number, "Emoji": animal.Emoji, "Name": animal.Name}),
+					Description: locale.Text("games.bicho.group_on_the_head_st_prize.formatted", locale.Data{"Number": animal.Number, "Emoji": animal.Emoji, "Name": animal.DisplayName()}),
 				}
 			}
 		} else { // board (1st to 5th)
@@ -198,7 +198,7 @@ func EvaluateBichoBet(bet *database.DBBichoBet, prizes [5]int) BetEvaluationResu
 					Won:         true,
 					Multiplier:  mult,
 					Payout:      payout,
-					Description: locale.Text("games.bicho.group_drawn_x_on_the_board.formatted", locale.Data{"Number": animal.Number, "Emoji": animal.Emoji, "Name": animal.Name, "Matches": matches}),
+					Description: locale.Text("games.bicho.group_drawn_x_on_the_board.formatted", locale.Data{"Number": animal.Number, "Emoji": animal.Emoji, "Name": animal.DisplayName(), "Matches": matches}),
 				}
 			}
 		}
@@ -336,7 +336,7 @@ func EvaluateBichoBet(bet *database.DBBichoBet, prizes [5]int) BetEvaluationResu
 				Won:         true,
 				Multiplier:  MultDuque,
 				Payout:      payout,
-				Description: locale.Text("games.bicho.animal_pair_duque_and.formatted", locale.Data{"Emoji": a1.Emoji, "Name": a1.Name, "Emoji3": a2.Emoji, "Name4": a2.Name}),
+				Description: locale.Text("games.bicho.animal_pair_duque_and.formatted", locale.Data{"Emoji": a1.Emoji, "Name": a1.DisplayName(), "Emoji3": a2.Emoji, "Name4": a2.DisplayName()}),
 			}
 		}
 
@@ -372,7 +372,7 @@ func EvaluateBichoBet(bet *database.DBBichoBet, prizes [5]int) BetEvaluationResu
 				Won:         true,
 				Multiplier:  MultTerno,
 				Payout:      payout,
-				Description: locale.Text("games.bicho.animal_trio_terno_and.formatted", locale.Data{"Emoji": a1.Emoji, "Name": a1.Name, "Emoji3": a2.Emoji, "Name4": a2.Name, "Emoji5": a3.Emoji, "Name6": a3.Name}),
+				Description: locale.Text("games.bicho.animal_trio_terno_and.formatted", locale.Data{"Emoji": a1.Emoji, "Name": a1.DisplayName(), "Emoji3": a2.Emoji, "Name4": a2.DisplayName(), "Emoji5": a3.Emoji, "Name6": a3.DisplayName()}),
 			}
 		}
 	}
@@ -468,7 +468,7 @@ func CreateBichoTableEmbed() *discordgo.MessageEmbed {
 			d3 = "00"
 		}
 
-		line := fmt.Sprintf("%s **%02d %s**\n`%s, %s, %s, %s`", a.Emoji, a.Number, a.Name, d0, d1, d2, d3)
+		line := fmt.Sprintf("%s **%02d %s**\n`%s, %s, %s, %s`", a.Emoji, a.Number, a.DisplayName(), d0, d1, d2, d3)
 		if i < 9 {
 			col1 = append(col1, line)
 		} else if i < 17 {
@@ -788,10 +788,10 @@ func ValidateAndFormatBichoBet(modalityRaw, targetRaw, scopeRaw string) (*Valida
 		if !ok {
 			return nil, errors.New(locale.Text("games.bicho.invalid_animal_or_group_use_the_animal"))
 		}
-		desc := locale.Text("games.bicho.group_on_head.formatted", locale.Data{"Number": animal.Number, "Emoji": animal.Emoji, "Name": animal.Name})
+		desc := locale.Text("games.bicho.group_on_head.formatted", locale.Data{"Number": animal.Number, "Emoji": animal.Emoji, "Name": animal.DisplayName()})
 		mult := "18x"
 		if scope == "board" {
-			desc = locale.Text("games.bicho.group_on_board.formatted", locale.Data{"Number": animal.Number, "Emoji": animal.Emoji, "Name": animal.Name})
+			desc = locale.Text("games.bicho.group_on_board.formatted", locale.Data{"Number": animal.Number, "Emoji": animal.Emoji, "Name": animal.DisplayName()})
 			mult = locale.Text("games.bicho.x_per_match")
 		}
 		return &ValidatedBichoBet{
@@ -809,10 +809,10 @@ func ValidateAndFormatBichoBet(modalityRaw, targetRaw, scopeRaw string) (*Valida
 		}
 		animal := GetAnimalByDezena(num)
 		target := fmt.Sprintf("%02d", num)
-		desc := locale.Text("games.bicho.tens_on_head.formatted", locale.Data{"Num": num, "Emoji": animal.Emoji, "Name": animal.Name})
+		desc := locale.Text("games.bicho.tens_on_head.formatted", locale.Data{"Num": num, "Emoji": animal.Emoji, "Name": animal.DisplayName()})
 		mult := "60x"
 		if scope == "board" {
-			desc = locale.Text("games.bicho.tens_on_board.formatted", locale.Data{"Num": num, "Emoji": animal.Emoji, "Name": animal.Name})
+			desc = locale.Text("games.bicho.tens_on_board.formatted", locale.Data{"Num": num, "Emoji": animal.Emoji, "Name": animal.DisplayName()})
 			mult = locale.Text("games.bicho.x_per_match_0836b5")
 		}
 		return &ValidatedBichoBet{
@@ -830,10 +830,10 @@ func ValidateAndFormatBichoBet(modalityRaw, targetRaw, scopeRaw string) (*Valida
 		}
 		animal := GetAnimalByDezena(num % 100)
 		target := fmt.Sprintf("%03d", num)
-		desc := locale.Text("games.bicho.hundreds_on_head.formatted", locale.Data{"Num": num, "Emoji": animal.Emoji, "Name": animal.Name})
+		desc := locale.Text("games.bicho.hundreds_on_head.formatted", locale.Data{"Num": num, "Emoji": animal.Emoji, "Name": animal.DisplayName()})
 		mult := "600x"
 		if scope == "board" {
-			desc = locale.Text("games.bicho.hundreds_on_board.formatted", locale.Data{"Num": num, "Emoji": animal.Emoji, "Name": animal.Name})
+			desc = locale.Text("games.bicho.hundreds_on_board.formatted", locale.Data{"Num": num, "Emoji": animal.Emoji, "Name": animal.DisplayName()})
 			mult = locale.Text("games.bicho.x_per_match_7cfdbe")
 		}
 		return &ValidatedBichoBet{
@@ -851,10 +851,10 @@ func ValidateAndFormatBichoBet(modalityRaw, targetRaw, scopeRaw string) (*Valida
 		}
 		animal := GetAnimalByDezena(num % 100)
 		target := fmt.Sprintf("%04d", num)
-		desc := locale.Text("games.bicho.thousands_on_head.formatted", locale.Data{"Num": num, "Emoji": animal.Emoji, "Name": animal.Name})
+		desc := locale.Text("games.bicho.thousands_on_head.formatted", locale.Data{"Num": num, "Emoji": animal.Emoji, "Name": animal.DisplayName()})
 		mult := "4,000x"
 		if scope == "board" {
-			desc = locale.Text("games.bicho.thousands_on_board.formatted", locale.Data{"Num": num, "Emoji": animal.Emoji, "Name": animal.Name})
+			desc = locale.Text("games.bicho.thousands_on_board.formatted", locale.Data{"Num": num, "Emoji": animal.Emoji, "Name": animal.DisplayName()})
 			mult = locale.Text("games.bicho.x_per_match_c6ba1f")
 		}
 		return &ValidatedBichoBet{
@@ -882,7 +882,7 @@ func ValidateAndFormatBichoBet(modalityRaw, targetRaw, scopeRaw string) (*Valida
 			Modality:      "pair",
 			Scope:         "board",
 			Target:        fmt.Sprintf("%s,%s", a1.Name, a2.Name),
-			Description:   locale.Text("games.bicho.animal_pair_and.formatted", locale.Data{"Emoji": a1.Emoji, "Name": a1.Name, "Emoji3": a2.Emoji, "Name4": a2.Name}),
+			Description:   locale.Text("games.bicho.animal_pair_and.formatted", locale.Data{"Emoji": a1.Emoji, "Name": a1.DisplayName(), "Emoji3": a2.Emoji, "Name4": a2.DisplayName()}),
 			PotentialMult: "18.5x",
 		}, nil
 
@@ -904,7 +904,7 @@ func ValidateAndFormatBichoBet(modalityRaw, targetRaw, scopeRaw string) (*Valida
 			Modality:      "trio",
 			Scope:         "board",
 			Target:        fmt.Sprintf("%s,%s,%s", a1.Name, a2.Name, a3.Name),
-			Description:   locale.Text("games.bicho.animal_trio_and.formatted", locale.Data{"Emoji": a1.Emoji, "Name": a1.Name, "Emoji3": a2.Emoji, "Name4": a2.Name, "Emoji5": a3.Emoji, "Name6": a3.Name}),
+			Description:   locale.Text("games.bicho.animal_trio_and.formatted", locale.Data{"Emoji": a1.Emoji, "Name": a1.DisplayName(), "Emoji3": a2.Emoji, "Name4": a2.DisplayName(), "Emoji5": a3.Emoji, "Name6": a3.DisplayName()}),
 			PotentialMult: "130x",
 		}, nil
 	}
@@ -968,4 +968,61 @@ func (bm *BichoManager) PlaceBet(guildID, userID, modalityRaw, targetRaw, scopeR
 		Multiplier:  val.PotentialMult,
 		DrawTime:    round.DrawTime,
 	}, nil
+}
+
+// DisplayName translates presentation without changing stored bet targets.
+func (a Animal) DisplayName() string {
+	switch a.Number {
+	case 1:
+		return locale.Text("games.bicho.ostrich")
+	case 2:
+		return locale.Text("games.bicho.eagle")
+	case 3:
+		return locale.Text("games.bicho.donkey")
+	case 4:
+		return locale.Text("games.bicho.butterfly")
+	case 5:
+		return locale.Text("games.bicho.dog")
+	case 6:
+		return locale.Text("games.bicho.goat")
+	case 7:
+		return locale.Text("games.bicho.ram")
+	case 8:
+		return locale.Text("games.bicho.camel")
+	case 9:
+		return locale.Text("games.bicho.snake")
+	case 10:
+		return locale.Text("games.bicho.rabbit")
+	case 11:
+		return locale.Text("games.bicho.horse")
+	case 12:
+		return locale.Text("games.bicho.elephant")
+	case 13:
+		return locale.Text("games.bicho.rooster")
+	case 14:
+		return locale.Text("games.bicho.cat")
+	case 15:
+		return locale.Text("games.bicho.alligator")
+	case 16:
+		return locale.Text("games.bicho.lion")
+	case 17:
+		return locale.Text("games.bicho.monkey")
+	case 18:
+		return locale.Text("games.bicho.pig")
+	case 19:
+		return locale.Text("games.bicho.peacock")
+	case 20:
+		return locale.Text("games.bicho.turkey")
+	case 21:
+		return locale.Text("games.bicho.bull")
+	case 22:
+		return locale.Text("games.bicho.tiger")
+	case 23:
+		return locale.Text("games.bicho.bear")
+	case 24:
+		return locale.Text("games.bicho.deer")
+	case 25:
+		return locale.Text("games.bicho.cow")
+	}
+	return a.Name
 }

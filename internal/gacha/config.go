@@ -1,6 +1,7 @@
 package gacha
 
 import (
+	"bot/internal/mediastore"
 	"fmt"
 	"net/url"
 	"os"
@@ -10,6 +11,7 @@ import (
 
 type Config struct {
 	Enabled                  bool
+	Storage                  mediastore.Config
 	MediaDir, PublicURL      string
 	RollsPerHour, ClaimHours int
 }
@@ -18,6 +20,17 @@ func LoadConfig() (Config, error) {
 	c := Config{Enabled: os.Getenv("GACHA_ENABLED") == "true", MediaDir: os.Getenv("GACHA_MEDIA_DIR"), PublicURL: strings.TrimRight(os.Getenv("GACHA_PUBLIC_URL"), "/"), RollsPerHour: 10, ClaimHours: 3}
 	if c.MediaDir == "" {
 		c.MediaDir = "data/gacha"
+	}
+	c.Storage = mediastore.Config{Backend: os.Getenv("GACHA_STORAGE_BACKEND"), Bucket: os.Getenv("GACHA_S3_BUCKET"), Region: os.Getenv("GACHA_S3_REGION"), Endpoint: os.Getenv("GACHA_S3_ENDPOINT"), Prefix: os.Getenv("GACHA_S3_PREFIX")}
+	if raw := os.Getenv("GACHA_S3_PATH_STYLE"); raw != "" {
+		var err error
+		c.Storage.PathStyle, err = strconv.ParseBool(raw)
+		if err != nil {
+			return c, fmt.Errorf("GACHA_S3_PATH_STYLE must be a boolean")
+		}
+	}
+	if err := c.Storage.Validate(); err != nil {
+		return c, err
 	}
 	for _, v := range []struct {
 		key string

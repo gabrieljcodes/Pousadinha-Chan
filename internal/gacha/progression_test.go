@@ -63,7 +63,7 @@ func testProgression(t *testing.T, s *Store) {
 		must(db.QueryRow(`SELECT keys FROM gacha_collection WHERE guild_id=$1 AND character_id=$2`, guild, cid).Scan(&n))
 		return n
 	}
-	local := *s
+	local := &Store{DB: s.DB, Config: s.Config}
 	local.Config.RollsPerHour = 100
 	acquire("keys", "key-owner")
 	roll, e := local.Roll(ctx, "keys", "channel", "key-owner", "key-roll-1")

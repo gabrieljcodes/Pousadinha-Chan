@@ -11,6 +11,12 @@
   "polymarket.oracle.polymarket_market_resolved_the_event_ended_with.formatted": {
     "other": "🏆 **POLYMARKET MARKET RESOLVED**\nThe event **\"{{printf \"%s\" .Question}}\"** ended with outcome **{{printf \"%s\" .Strings}}**.\nNo server members held winning shares."
   },
+  "polymarket.outcome.no": {
+    "other": "No"
+  },
+  "polymarket.outcome.yes": {
+    "other": "Yes"
+  },
   "polymarket.service.buy_no_currency.formatted": {
     "other": "Buy NO ({{printf \"%d\" .TotalCost}} {{printf \"%s\" .CurrencySymbol}})"
   },

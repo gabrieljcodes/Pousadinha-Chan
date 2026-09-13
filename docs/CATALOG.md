@@ -1,7 +1,7 @@
 # Catalog studio
 
 A private character and photo editor, embedded in the Go binary. The UI and API
-share the bot's PostgreSQL catalog and media directory; no Node build is needed.
+share the bot's PostgreSQL catalog and configured media backend; no Node build is needed.
 
 ## Run independently of Discord
 
@@ -30,8 +30,8 @@ For an HTTPS domain, proxy `/catalog/` to the Go server and set
 `CATALOG_SECURE_COOKIES=true`. Keep the same public origin for the UI and API, allow
 13 MiB request bodies, and allow up to 180 seconds for imports. The standalone
 command binds only to loopback by default; use `CATALOG_ADDR=0.0.0.0:8081` inside a
-container with an explicitly chosen port mapping. Mount the same persistent media
-directory as the bot. A shared password gives full administrative catalog access.
+container with an explicitly chosen port mapping. Use the same [media storage settings](MEDIA_STORAGE.md) as the bot. Mount the same
+persistent media directory for filesystem storage and during a transition to S3. A shared password gives full administrative catalog access.
 
 ## Workflows
 

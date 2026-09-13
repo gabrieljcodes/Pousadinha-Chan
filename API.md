@@ -442,8 +442,8 @@ Common HTTP status codes:
 | 500 | Internal Server Error - Database or server error |
 | 503 | Service Unavailable - Could not fetch prices |
 
-## Gacha e mídia local
+## Gacha media
 
-O catálogo e o jogo de personagens são operados pelo Discord (comandos `/roll`, `/harem`, `/info` e demais comandos slash). Com `GACHA_ENABLED=true`, este servidor também publica imagens aprovadas em caminhos legíveis no domínio definido por `GACHA_PUBLIC_URL`. Não há endpoint público para importar ou aprovar imagens; essas operações usam o executável administrativo `gacha`.
+With `GACHA_ENABLED=true`, approved character images are served at their existing relative paths under `GACHA_PUBLIC_URL`, whether stored locally or in a private S3-compatible bucket. GET, HEAD, byte ranges and conditional requests are supported. Pending and rejected assets are not publicly accessible. Storage failures return 503 and missing assets return 404.
 
-Configuração, schema, comandos, curadoria e implantação: [docs/GACHA.md](docs/GACHA.md).
+Import, upload and moderation use the authenticated [catalog API](docs/CATALOG.md) or the administrative `gacha` CLI. See [media configuration and migration](docs/MEDIA_STORAGE.md) and [gacha configuration](docs/GACHA.md).

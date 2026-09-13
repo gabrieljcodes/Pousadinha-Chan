@@ -19,3 +19,5 @@ context.txt
 DESIGN.md
 *.sqlite
 *.sqlite3
+*.zip
+bin/

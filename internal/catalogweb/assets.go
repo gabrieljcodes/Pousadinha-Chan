@@ -2,6 +2,7 @@ package catalogweb
 
 import (
 	"bot/internal/gacha"
+	"context"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
@@ -14,6 +15,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -33,21 +35,8 @@ func (s *Server) assetFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if path.Valid && path.String != "" {
-		root, e := os.OpenRoot(s.Store.Config.MediaDir)
-		if e == nil {
-			defer root.Close()
-			f, e := root.Open(filepath.FromSlash(path.String))
-			if e == nil {
-				defer f.Close()
-				info, e := f.Stat()
-				if e == nil && info.Mode().IsRegular() {
-					w.Header().Set("Content-Type", mime.String)
-					w.Header().Set("Cache-Control", "public, max-age=604800, immutable")
-					http.ServeContent(w, r, filepath.Base(path.String), info.ModTime(), f)
-					return
-				}
-			}
-		}
+		s.Store.ServeMedia(w, r, path.String, mime.String, true)
+		return
 	}
 	if sourceURL.Valid && (strings.HasPrefix(sourceURL.String, "http://") || strings.HasPrefix(sourceURL.String, "https://")) {
 		http.Redirect(w, r, sourceURL.String, http.StatusFound)
@@ -170,11 +159,7 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 		failure(w, 400, "Attribution is too long.")
 		return
 	}
-	if e = os.MkdirAll(s.Store.Config.MediaDir, 0750); e != nil {
-		internal(w, e)
-		return
-	}
-	temp, e := os.MkdirTemp(s.Store.Config.MediaDir, ".upload-")
+	temp, e := os.MkdirTemp("", "gacha-upload-")
 	if e != nil {
 		internal(w, e)
 		return
@@ -215,20 +200,23 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 	}
 	token := uuid.NewString()
 	rel := fmt.Sprintf("manual/%d/photo-%s/card%s", id, token, ext)
-	dest := filepath.Join(s.Store.Config.MediaDir, filepath.FromSlash(rel))
-	if e = os.MkdirAll(filepath.Dir(dest), 0755); e != nil {
+	storage, e := s.Store.MediaStorage()
+	if e != nil {
 		internal(w, e)
 		return
 	}
-	_ = os.Chmod(output, 0644)
-	if e = os.Rename(output, dest); e != nil {
+	if e = storage.PutFile(r.Context(), rel, output, mime); e != nil {
 		internal(w, e)
 		return
 	}
-	committed := false
+	retainObject := false
 	defer func() {
-		if !committed {
-			os.Remove(dest)
+		if !retainObject {
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			if err := storage.Delete(cleanupCtx, rel); err != nil {
+				log.Printf("catalog upload cleanup failed: %v", err)
+			}
 		}
 	}()
 	tx, e := s.Store.DB.BeginTx(r.Context(), nil)
@@ -282,11 +270,12 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// A failed Commit can have an ambiguous outcome; retain the object for reconciliation.
+	retainObject = true
 	if e = tx.Commit(); e != nil {
 		internal(w, e)
 		return
 	}
-	committed = true
 	respond(w, 201, map[string]int64{"id": aid})
 }
 func logUploadError(w http.ResponseWriter, e error) {

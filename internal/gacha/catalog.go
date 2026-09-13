@@ -12,6 +12,7 @@ type Store struct {
 	DB      *sql.DB
 	Config  Config
 	runtime poolRuntime
+	media   mediaRuntime
 }
 
 func (s *Store) Migrate(ctx context.Context) error {

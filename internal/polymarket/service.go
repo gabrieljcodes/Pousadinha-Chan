@@ -327,7 +327,7 @@ func CreatePortfolioEmbed(userID string, positions []*database.DBPolymarketPosit
 			emoji = "🔴"
 		}
 
-		line := locale.Text("polymarket.service.shares_average_price_ec_invested_potential_return.formatted", locale.Data{"Emoji": emoji, "Q": q, "Outcome": p.Outcome, "Shares": p.Shares, "AvgPrice": avgPrice, "TotalInvested": p.TotalInvested, "CurrencySymbol": config.Bot.CurrencySymbol, "Payout": payout - p.TotalInvested, "CurrencySymbol9": config.Bot.CurrencySymbol})
+		line := locale.Text("polymarket.service.shares_average_price_ec_invested_potential_return.formatted", locale.Data{"Emoji": emoji, "Q": q, "Outcome": OutcomeLabel(p.Outcome), "Shares": p.Shares, "AvgPrice": avgPrice, "TotalInvested": p.TotalInvested, "CurrencySymbol": config.Bot.CurrencySymbol, "Payout": payout - p.TotalInvested, "CurrencySymbol9": config.Bot.CurrencySymbol})
 		positionLines = append(positionLines, line)
 	}
 

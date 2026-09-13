@@ -137,17 +137,11 @@
   "commands.bicho_cmd.your_tickets_in_the_current_round_total.formatted": {
     "other": "🎫 **Your Tickets in the Current Round:**\n{{printf \"%s\" .Strings}}\n\n💰 **Total Wagered:** `{{printf \"%d\" .TotalInvested}} {{printf \"%s\" .CurrencySymbol}}`"
   },
-  "commands.components.this_bot_can_only_be_used_in": {
-    "other": "❌ This bot can only be used in designated channels."
-  },
   "commands.definitions.admins_only": {
     "other": "Admins Only"
   },
   "commands.definitions.all_users": {
     "other": "All Users"
-  },
-  "commands.definitions.amount_to_invest": {
-    "other": "Amount to invest"
   },
   "commands.definitions.amount_to_bet": {
     "other": "Amount to bet"
@@ -161,14 +155,14 @@
   "commands.definitions.amount_to_bet_min_fb12ba": {
     "other": "Amount to bet (Min 50)"
   },
+  "commands.definitions.amount_to_invest": {
+    "other": "Amount to invest"
+  },
   "commands.definitions.amount_to_lend": {
     "other": "Amount to lend"
   },
   "commands.definitions.amount_to_transfer": {
     "other": "Amount to transfer"
-  },
-  "commands.definitions.auto_detect_user_language": {
-    "other": "Auto (detect user language)"
   },
   "commands.definitions.animal_or_number_e_g_monkey_or": {
     "other": "Animal or number (E.g. Monkey, 28, 528, 4528, or Monkey Lion)"
@@ -178,6 +172,9 @@
   },
   "commands.definitions.animal_trio_x": {
     "other": "Animal Trio (130x)"
+  },
+  "commands.definitions.auto_detect_user_language": {
+    "other": "Auto (detect user language)"
   },
   "commands.definitions.bet_type_number_red_black_even_odd": {
     "other": "Bet type (number, red, black, even, odd, low, high, dozen)"
@@ -311,6 +308,9 @@
   "commands.definitions.interest_rate_percentage": {
     "other": "Interest rate percentage (0-100)"
   },
+  "commands.definitions.language_mode_to_apply": {
+    "other": "Language mode to apply"
+  },
   "commands.definitions.list_your_active_api_keys": {
     "other": "List your active API Keys"
   },
@@ -319,9 +319,6 @@
   },
   "commands.definitions.loan_system_lend_or_borrow_money": {
     "other": "Loan system - Lend or borrow money"
-  },
-  "commands.definitions.language_mode_to_apply": {
-    "other": "Language mode to apply"
   },
   "commands.definitions.low": {
     "other": "Low 1-18 (1:1)"
@@ -437,14 +434,14 @@
   "commands.definitions.send_a_test_payload_to_your_configured": {
     "other": "Send a test payload to your configured webhook"
   },
+  "commands.definitions.set_the_server_language_mode": {
+    "other": "Set the server language mode"
+  },
   "commands.definitions.set_your_webhook_url": {
     "other": "Set your webhook URL"
   },
   "commands.definitions.show_all_commands_and_features": {
     "other": "Show all commands and features"
-  },
-  "commands.definitions.set_the_server_language_mode": {
-    "other": "Set the server language mode"
   },
   "commands.definitions.specific_number": {
     "other": "Specific Number 0-36 (35:1)"
@@ -922,9 +919,6 @@
   },
   "commands.language.title": {
     "other": "Language Settings"
-  },
-  "commands.names.language": {
-    "other": "language"
   },
   "commands.loans.accept": {
     "other": "Accept"
@@ -1417,5 +1411,8 @@
   },
   "commands.webhook_cmd.your_webhook_url_has_been_saved": {
     "other": "Your webhook URL has been saved."
+  },
+  "commands.components.this_bot_can_only_be_used_in": {
+    "other": "This bot can only be used in designated channels."
   }
 }

@@ -45,6 +45,7 @@ func main() {
 			log.Fatal("Gacha and the catalog editor require ENABLE_API=true")
 		}
 		store := &gacha.Store{DB: database.DB.GetDB(), Config: gachaConfig}
+		defer store.CloseMedia()
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		err = store.Migrate(ctx)
 		cancel()

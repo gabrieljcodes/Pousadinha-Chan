@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"io"
-	"os"
 	"strconv"
 	"time"
 )
@@ -45,21 +44,16 @@ func (s *Store) publishPortrait(ctx context.Context, cid, aid int64) error {
 	if e != nil {
 		return fmt.Errorf("portrait is missing, rejected, or not from AniList: %w", e)
 	}
-	root, e := os.OpenRoot(s.Config.MediaDir)
+	storage, e := s.MediaStorage()
 	if e != nil {
 		return e
 	}
-	defer root.Close()
-	f, e := root.Open(path)
+	object, e := storage.Open(ctx, path)
 	if e != nil {
 		return e
 	}
-	st, e := f.Stat()
-	f.Close()
-	if e != nil {
-		return e
-	}
-	if !st.Mode().IsRegular() || st.Size() == 0 {
+	object.Close()
+	if object.Size == 0 {
 		return fmt.Errorf("portrait file is empty or invalid")
 	}
 	_, e = tx.ExecContext(ctx, `UPDATE gacha_assets SET status='approved',reviewed_by=CASE WHEN status='pending' THEN 'auto:anilist-portrait:v1' ELSE reviewed_by END,reviewed_at=CASE WHEN status='pending' THEN now() ELSE reviewed_at END WHERE id=$1`, aid)

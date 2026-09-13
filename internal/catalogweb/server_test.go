@@ -112,6 +112,7 @@ func testCatalog(t *testing.T) (*Server, *sql.DB) {
 		t.Fatal(e)
 	}
 	store := &gacha.Store{DB: scoped, Config: gacha.Config{MediaDir: t.TempDir()}}
+	t.Cleanup(func() { store.CloseMedia() })
 	if e = store.Migrate(context.Background()); e != nil {
 		t.Fatal(e)
 	}
