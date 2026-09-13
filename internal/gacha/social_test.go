@@ -28,29 +28,6 @@ func TestCharacterValue(t *testing.T) {
 	}
 }
 func TestCommandParsing(t *testing.T) {
-	for _, v := range []struct {
-		args          []string
-		action, query string
-		page          int
-	}{
-		{[]string{"MM", "<@123456789012345678>", "2"}, "harem", "<@123456789012345678>", 2},
-		{[]string{"gallery", "17", "3"}, "gallery", "17", 3},
-		{[]string{"gallery", "17"}, "gallery", "17", 1},
-		{[]string{"harem", "2"}, "harem", "", 2},
-		{[]string{"wa"}, "wa", "", 1},
-		{[]string{"search", "Monkey", "D", "Luffy"}, "search", "Monkey D Luffy", 1},
-		{[]string{"tu"}, "status", "", 1},
-		{[]string{"topchar", "unclaimed"}, "topchar", "unclaimed", 1},
-		{[]string{"topu"}, "topchar_unclaimed", "", 1},
-		{[]string{"topw"}, "topchar_waifu", "", 1},
-		{[]string{"mmi"}, "harem_visual", "", 1},
-		{[]string{"im", "Rem"}, "character", "Rem", 1},
-	} {
-		a, q, p, e := parseText(v.args)
-		if e != nil || a != v.action || q != v.query || p != v.page {
-			t.Fatal(v, a, q, p, e)
-		}
-	}
 	for _, q := range []string{"", "bob", "<@&123456789012345678>", "123456789012345678 extra"} {
 		if _, e := parseMember(q); e == nil {
 			t.Fatalf("accepted member %q", q)
@@ -59,9 +36,7 @@ func TestCommandParsing(t *testing.T) {
 	if _, _, _, e := parseOffer("trade", "<@123456789012345678> 1 -2"); e == nil {
 		t.Fatal("negative ID accepted")
 	}
-	if _, _, _, e := parseText([]string{"harem", "0"}); e == nil {
-		t.Fatal("page zero accepted")
-	}
+
 }
 func testSocial(t *testing.T, s *Store) {
 	ctx := context.Background()
@@ -82,7 +57,7 @@ func testSocial(t *testing.T, s *Store) {
 		_, e = db.Exec(`INSERT INTO gacha_assets(character_id,provider,external_id,source_url,sha256,path,media_type,status) VALUES($1,'fixture',$2,'https://example.com',$2,$2,'image/png','approved')`, id, fmt.Sprint(10000+n))
 		must(e)
 	}
-	poolStore := *s
+	poolStore := &Store{DB: s.DB, Config: s.Config}
 	poolStore.Config.RollsPerHour = 100
 	for _, pool := range Pools {
 		for n := 0; n < 3; n++ {
@@ -331,22 +306,33 @@ func testSocial(t *testing.T, s *Store) {
 		t.Fatalf("expected top characters, got %d (total %d)", len(topEntries), totalTop)
 	}
 
+	must(s.Wish(ctx, "social", "social-alice", ids[1], false))
+	wishlistMessage, e := s.Execute(ctx, "social", "channel", "social-alice", "wishlist-view", "wishes", "", 1)
+	must(e)
+	if len(wishlistMessage.Embeds) != 1 || !strings.Contains(wishlistMessage.Embeds[0].Description, "Social 1") {
+		t.Fatal("wishlist did not render its character")
+	}
+
 	// Test HaremCardAt
 	haremCard, totalHarem, e := s.HaremCardAt(ctx, "social", "social-alice", 0)
 	must(e)
-	if haremCard.ID != ids[1] || totalHarem != 1 {
+	expectedHarem := int64(1)
+	if owner("social", ids[2]) == "social-alice" {
+		expectedHarem = 2
+	}
+	if haremCard.ID != ids[1] || totalHarem != expectedHarem {
 		t.Fatalf("unexpected harem card at 0: card %d total %d", haremCard.ID, totalHarem)
 	}
 
-	// Test Execute with status (tu)
-	tuMsg, e := s.Execute(ctx, "social", "channel", "social-alice", "tu-test", "tu", "", 1)
+	// Test the canonical profile action.
+	tuMsg, e := s.Execute(ctx, "social", "channel", "social-alice", "profile-test", "profile", "", 1)
 	must(e)
 	if len(tuMsg.Embeds) == 0 {
 		t.Fatal("expected embed in status message")
 	}
 
 	// Test Execute with visual harem
-	haremVisualMsg, e := s.Execute(ctx, "social", "channel", "social-alice", "harem-vis-test", "harem", "-i", 1)
+	haremVisualMsg, e := s.Execute(ctx, "social", "channel", "social-alice", "harem-vis-test", "harem_visual", "", 1)
 	must(e)
 	if len(haremVisualMsg.Embeds) == 0 || haremVisualMsg.Embeds[0].Image == nil {
 		t.Fatal("expected image in visual harem embed")
@@ -369,8 +355,8 @@ func testSocial(t *testing.T, s *Store) {
 	// Test Execute with pagination query "all female"
 	topwPage2Msg, e := s.Execute(ctx, "social", "channel", "social-alice", "topw-p2-test", "topchar", "all female", 2)
 	must(e)
-	if len(topwPage2Msg.Embeds) == 0 || !strings.Contains(topwPage2Msg.Embeds[0].Title, "Waifus • Página 2") {
-		t.Fatalf("expected Waifus • Página 2 in title, got %q", topwPage2Msg.Embeds[0].Title)
+	if len(topwPage2Msg.Embeds) == 0 || !strings.Contains(topwPage2Msg.Embeds[0].Title, "Waifus • Page 2") {
+		t.Fatalf("expected Waifus • Page 2 in title, got %q", topwPage2Msg.Embeds[0].Title)
 	}
 
 	// Test navigationTopChar interactive components
@@ -388,19 +374,19 @@ func testSocial(t *testing.T, s *Store) {
 	// Test wishlist Execution
 	wishMsg, e := s.Execute(ctx, "social", "channel", "social-alice", "wish-test", "wish", fmt.Sprintf("%d", ids[1]), 1)
 	must(e)
-	if !strings.Contains(wishMsg.Content, "adicionado à sua lista de desejos") {
+	if !strings.Contains(wishMsg.Content, "added to your wishlist") {
 		t.Fatalf("unexpected wishMsg: %q", wishMsg.Content)
 	}
 
 	wishesListMsg, e := s.Execute(ctx, "social", "channel", "social-alice", "wishes-test", "wishes", "", 1)
 	must(e)
-	if len(wishesListMsg.Embeds) == 0 || !strings.Contains(wishesListMsg.Embeds[0].Title, "Lista de Desejos") {
+	if len(wishesListMsg.Embeds) == 0 || !strings.Contains(wishesListMsg.Embeds[0].Title, "Wishlist") {
 		t.Fatalf("unexpected wishes embed title: %v", wishesListMsg.Embeds)
 	}
 
 	unwishMsg, e := s.Execute(ctx, "social", "channel", "social-alice", "unwish-test", "unwish", fmt.Sprintf("%d", ids[1]), 1)
 	must(e)
-	if !strings.Contains(unwishMsg.Content, "removido da sua lista de desejos") {
+	if !strings.Contains(unwishMsg.Content, "removed from your wishlist") {
 		t.Fatalf("unexpected unwishMsg: %q", unwishMsg.Content)
 	}
 }

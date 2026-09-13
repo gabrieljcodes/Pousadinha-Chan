@@ -3,11 +3,12 @@ package commands
 import (
 	"bot/internal/database"
 	"bot/internal/games"
+	"bot/internal/locale"
 	"bot/pkg/config"
 	"bot/pkg/utils"
 	"fmt"
 	"log"
-	"strconv"
+
 	"strings"
 	"sync"
 	"time"
@@ -65,33 +66,16 @@ func ExecuteShop() *discordgo.MessageEmbed {
 		costMute = 100
 	}
 
-	desc := fmt.Sprintf(`**Available Items:**
+	desc := locale.Text("commands.shop.available_items_change_own_nickname_cost_command.formatted", locale.Data{"CostNicknameSelf": costNicknameSelf, "Sym": sym, "CostNicknameOther": costNicknameOther, "Sym4": sym, "CostTimeout": costTimeout, "Sym6": sym, "CostMute": costMute, "Sym8": sym})
 
-1. **Change Own Nickname**
-   Cost: %d %s
-   Command: `+"`!buy nickname <new name>` or `/buy nickname`"+`
-
-2. **Change Other's Nickname**
-   Cost: %d %s
-   Command: `+"`!buy rename @user <new name>` or `/buy rename`"+`
-
-3. **Timeout User (Text & Voice)**
-   Cost: %d %s per minute (max 1440 min / 24h)
-   Command: `+"`!buy timeout @user <minutes>` or `/buy timeout`"+`
-
-4. **Voice Mute User (Call Only)**
-   Cost: %d %s per minute (max 1440 min / 24h)
-   Command: `+"`!buy mute @user <minutes>` or `/buy mute`"+`
-`, costNicknameSelf, sym, costNicknameOther, sym, costTimeout, sym, costMute, sym)
-
-	return utils.GoldEmbed(fmt.Sprintf("🛒 %s Shop", config.Bot.BotName), desc)
+	return utils.GoldEmbed(locale.Text("commands.shop.shop.formatted", locale.Data{"BotName": config.Bot.BotName}), desc)
 }
 
 // ExecuteBuyNickname handles purchasing own nickname change
 func ExecuteBuyNickname(s *discordgo.Session, guildID, userID, newName string) *discordgo.MessageEmbed {
 	newName = strings.TrimSpace(newName)
 	if len(newName) < 1 || len(newName) > 32 {
-		return utils.ErrorEmbed("Nickname must be between 1 and 32 characters.")
+		return utils.ErrorEmbed(locale.Text("commands.shop.nickname_must_be_between_and_characters"))
 	}
 
 	cost := config.Economy.CostNicknameSelf
@@ -101,7 +85,7 @@ func ExecuteBuyNickname(s *discordgo.Session, guildID, userID, newName string) *
 
 	// Atomic debit before action
 	if err := database.CollectLostBet(guildID, userID, cost); err != nil {
-		return utils.ErrorEmbed("Insufficient funds.")
+		return utils.ErrorEmbed(locale.Text("commands.shop.insufficient_funds"))
 	}
 
 	// Apply change in Discord
@@ -109,27 +93,27 @@ func ExecuteBuyNickname(s *discordgo.Session, guildID, userID, newName string) *
 	if err != nil {
 		// Automatic refund on Discord failure
 		_ = database.AddCoins(guildID, userID, cost)
-		return utils.ErrorEmbed("Could not change nickname. Check my permissions and role hierarchy.")
+		return utils.ErrorEmbed(locale.Text("commands.shop.could_not_change_nickname_check_my_permissions"))
 	}
 
-	return utils.SuccessEmbed("Purchase Successful", fmt.Sprintf("Your nickname has been changed to **%s**!", newName))
+	return utils.SuccessEmbed(locale.Text("commands.shop.purchase_successful"), locale.Text("commands.shop.your_nickname_has_been_changed_to.formatted", locale.Data{"NewName": newName}))
 }
 
 // ExecuteBuyRename handles purchasing nickname change for another member
 func ExecuteBuyRename(s *discordgo.Session, guildID, userID string, targetUser *discordgo.User, newName string) *discordgo.MessageEmbed {
 	if targetUser == nil {
-		return utils.ErrorEmbed("Target user not found.")
+		return utils.ErrorEmbed(locale.Text("commands.shop.target_user_not_found"))
 	}
 	if targetUser.ID == userID {
 		return ExecuteBuyNickname(s, guildID, userID, newName)
 	}
 	if targetUser.Bot {
-		return utils.ErrorEmbed("You cannot rename bot accounts.")
+		return utils.ErrorEmbed(locale.Text("commands.shop.you_cannot_rename_bot_accounts"))
 	}
 
 	newName = strings.TrimSpace(newName)
 	if len(newName) < 1 || len(newName) > 32 {
-		return utils.ErrorEmbed("Nickname must be between 1 and 32 characters.")
+		return utils.ErrorEmbed(locale.Text("commands.shop.nickname_must_be_between_and_characters"))
 	}
 
 	cost := config.Economy.CostNicknameOther
@@ -139,32 +123,32 @@ func ExecuteBuyRename(s *discordgo.Session, guildID, userID string, targetUser *
 
 	// Atomic debit before action
 	if err := database.CollectLostBet(guildID, userID, cost); err != nil {
-		return utils.ErrorEmbed("Insufficient funds.")
+		return utils.ErrorEmbed(locale.Text("commands.shop.insufficient_funds"))
 	}
 
 	err := s.GuildMemberNickname(guildID, targetUser.ID, newName)
 	if err != nil {
 		// Automatic refund on Discord failure
 		_ = database.AddCoins(guildID, userID, cost)
-		return utils.ErrorEmbed("Could not change nickname. Check my permissions and role hierarchy.")
+		return utils.ErrorEmbed(locale.Text("commands.shop.could_not_change_nickname_check_my_permissions"))
 	}
 
-	return utils.SuccessEmbed("Purchase Successful", fmt.Sprintf("Nickname of **%s** changed to **%s**!", targetUser.Username, newName))
+	return utils.SuccessEmbed(locale.Text("commands.shop.purchase_successful"), locale.Text("commands.shop.nickname_of_changed_to.formatted", locale.Data{"Username": targetUser.Username, "NewName": newName}))
 }
 
 // ExecuteBuyTimeout handles purchasing a server-wide timeout (text and voice)
 func ExecuteBuyTimeout(s *discordgo.Session, guildID, userID string, targetUser *discordgo.User, minutes int) *discordgo.MessageEmbed {
 	if targetUser == nil {
-		return utils.ErrorEmbed("Target user not found.")
+		return utils.ErrorEmbed(locale.Text("commands.shop.target_user_not_found"))
 	}
 	if targetUser.ID == userID {
-		return utils.ErrorEmbed("You cannot timeout yourself.")
+		return utils.ErrorEmbed(locale.Text("commands.shop.you_cannot_timeout_yourself"))
 	}
 	if targetUser.Bot {
-		return utils.ErrorEmbed("You cannot timeout bot accounts.")
+		return utils.ErrorEmbed(locale.Text("commands.shop.you_cannot_timeout_bot_accounts"))
 	}
 	if minutes < 1 || minutes > 1440 {
-		return utils.ErrorEmbed("Timeout duration must be between 1 and 1440 minutes (max 24 hours).")
+		return utils.ErrorEmbed(locale.Text("commands.shop.timeout_duration_must_be_between_and_minutes"))
 	}
 
 	costPerMin := config.Economy.CostPerMinutePunishment
@@ -175,7 +159,7 @@ func ExecuteBuyTimeout(s *discordgo.Session, guildID, userID string, targetUser 
 
 	// Atomic debit before action
 	if err := database.CollectLostBet(guildID, userID, cost); err != nil {
-		return utils.ErrorEmbed(fmt.Sprintf("Insufficient funds. Cost: %d %s.", cost, config.Bot.CurrencySymbol))
+		return utils.ErrorEmbed(locale.Text("commands.shop.insufficient_funds_cost.formatted", locale.Data{"Cost": cost, "CurrencySymbol": config.Bot.CurrencySymbol}))
 	}
 
 	// Wait if user is currently playing a game
@@ -186,7 +170,7 @@ func ExecuteBuyTimeout(s *discordgo.Session, guildID, userID string, targetUser 
 	member, err := s.GuildMember(guildID, targetUser.ID)
 	if err != nil {
 		_ = database.AddCoins(guildID, userID, cost)
-		return utils.ErrorEmbed("Member not found in this server.")
+		return utils.ErrorEmbed(locale.Text("commands.shop.member_not_found_in_this_server"))
 	}
 
 	var until time.Time
@@ -199,26 +183,26 @@ func ExecuteBuyTimeout(s *discordgo.Session, guildID, userID string, targetUser 
 	err = s.GuildMemberTimeout(guildID, targetUser.ID, &until)
 	if err != nil {
 		_ = database.AddCoins(guildID, userID, cost)
-		return utils.ErrorEmbed("Could not apply timeout. Check my permissions and role hierarchy.")
+		return utils.ErrorEmbed(locale.Text("commands.shop.could_not_apply_timeout_check_my_permissions"))
 	}
 
-	return utils.SuccessEmbed("Punishment Applied!",
-		fmt.Sprintf("**%s** has been timed out until %s (%d min).", targetUser.Username, until.Format("15:04:05"), minutes))
+	return utils.SuccessEmbed(locale.Text("commands.shop.punishment_applied"),
+		locale.Text("commands.shop.has_been_timed_out_until_min.formatted", locale.Data{"Username": targetUser.Username, "Until": until.Format("15:04:05"), "Minutes": minutes}))
 }
 
 // ExecuteBuyMute handles purchasing a voice-only server mute
 func ExecuteBuyMute(s *discordgo.Session, guildID, userID string, targetUser *discordgo.User, minutes int) *discordgo.MessageEmbed {
 	if targetUser == nil {
-		return utils.ErrorEmbed("Target user not found.")
+		return utils.ErrorEmbed(locale.Text("commands.shop.target_user_not_found"))
 	}
 	if targetUser.ID == userID {
-		return utils.ErrorEmbed("You cannot mute yourself.")
+		return utils.ErrorEmbed(locale.Text("commands.shop.you_cannot_mute_yourself"))
 	}
 	if targetUser.Bot {
-		return utils.ErrorEmbed("You cannot mute bot accounts.")
+		return utils.ErrorEmbed(locale.Text("commands.shop.you_cannot_mute_bot_accounts"))
 	}
 	if minutes < 1 || minutes > 1440 {
-		return utils.ErrorEmbed("Mute duration must be between 1 and 1440 minutes (max 24 hours).")
+		return utils.ErrorEmbed(locale.Text("commands.shop.mute_duration_must_be_between_and_minutes"))
 	}
 
 	costPerMin := config.Economy.CostPerMinuteMute
@@ -230,12 +214,12 @@ func ExecuteBuyMute(s *discordgo.Session, guildID, userID string, targetUser *di
 	// Check if target is in a voice channel
 	voiceState, err := s.State.VoiceState(guildID, targetUser.ID)
 	if err != nil || voiceState == nil || voiceState.ChannelID == "" {
-		return utils.ErrorEmbed(fmt.Sprintf("**%s** is not in a voice channel! You can only mute users who are currently in a call.", targetUser.Username))
+		return utils.ErrorEmbed(locale.Text("commands.shop.is_not_in_a_voice_channel_you.formatted", locale.Data{"Username": targetUser.Username}))
 	}
 
 	// Atomic debit before action
 	if err := database.CollectLostBet(guildID, userID, cost); err != nil {
-		return utils.ErrorEmbed(fmt.Sprintf("Insufficient funds. Cost: %d %s.", cost, config.Bot.CurrencySymbol))
+		return utils.ErrorEmbed(locale.Text("commands.shop.insufficient_funds_cost.formatted", locale.Data{"Cost": cost, "CurrencySymbol": config.Bot.CurrencySymbol}))
 	}
 
 	// Wait if target is currently playing a game
@@ -247,75 +231,12 @@ func ExecuteBuyMute(s *discordgo.Session, guildID, userID string, targetUser *di
 	err = s.GuildMemberMute(guildID, targetUser.ID, true)
 	if err != nil {
 		_ = database.AddCoins(guildID, userID, cost)
-		return utils.ErrorEmbed("Could not mute user in voice. Check my permissions and role hierarchy.")
+		return utils.ErrorEmbed(locale.Text("commands.shop.could_not_mute_user_in_voice_check"))
 	}
 
 	// Schedule unmute with safe timer tracker
 	scheduleVoiceUnmute(s, guildID, targetUser.ID, minutes)
 
-	return utils.SuccessEmbed("User Muted!",
-		fmt.Sprintf("**%s** has been muted in voice for %d minute(s).", targetUser.Username, minutes))
-}
-
-// CmdShop displays the shop catalog
-func CmdShop(s *discordgo.Session, m *discordgo.MessageCreate) {
-	s.ChannelMessageSendEmbed(m.ChannelID, ExecuteShop())
-}
-
-// CmdBuy processes text purchases
-func CmdBuy(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
-	if len(args) < 1 {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("Shop", "Use `!shop` to see available items."))
-		return
-	}
-
-	item := strings.ToLower(args[0])
-
-	switch item {
-	case "nickname":
-		if len(args) < 2 {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Usage: `!buy nickname <new name>`"))
-			return
-		}
-		newName := strings.Join(args[1:], " ")
-		s.ChannelMessageSendEmbed(m.ChannelID, ExecuteBuyNickname(s, m.GuildID, m.Author.ID, newName))
-
-	case "rename":
-		if len(m.Mentions) == 0 || len(args) < 3 {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Usage: `!buy rename @user <new name>`"))
-			return
-		}
-		targetUser := m.Mentions[0]
-		newName := strings.Join(args[2:], " ")
-		s.ChannelMessageSendEmbed(m.ChannelID, ExecuteBuyRename(s, m.GuildID, m.Author.ID, targetUser, newName))
-
-	case "punishment", "timeout":
-		if len(m.Mentions) == 0 || len(args) < 3 {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Usage: `!buy timeout @user <minutes>`"))
-			return
-		}
-		targetUser := m.Mentions[0]
-		minutes, err := strconv.Atoi(args[len(args)-1])
-		if err != nil || minutes <= 0 {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Invalid minutes."))
-			return
-		}
-		s.ChannelMessageSendEmbed(m.ChannelID, ExecuteBuyTimeout(s, m.GuildID, m.Author.ID, targetUser, minutes))
-
-	case "mute":
-		if len(m.Mentions) == 0 || len(args) < 3 {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Usage: `!buy mute @user <minutes>`"))
-			return
-		}
-		targetUser := m.Mentions[0]
-		minutes, err := strconv.Atoi(args[len(args)-1])
-		if err != nil || minutes <= 0 {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Invalid minutes."))
-			return
-		}
-		s.ChannelMessageSendEmbed(m.ChannelID, ExecuteBuyMute(s, m.GuildID, m.Author.ID, targetUser, minutes))
-
-	default:
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Item not found. Use `!shop` to see available items."))
-	}
+	return utils.SuccessEmbed(locale.Text("commands.shop.user_muted"),
+		locale.Text("commands.shop.has_been_muted_in_voice_for_minute.formatted", locale.Data{"Username": targetUser.Username, "Minutes": minutes}))
 }

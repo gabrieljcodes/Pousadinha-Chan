@@ -1,11 +1,12 @@
 package games
 
 import (
-	"crypto/rand"
-	"encoding/binary"
 	"bot/internal/database"
+	"bot/internal/locale"
 	"bot/pkg/config"
 	"bot/pkg/utils"
+	"crypto/rand"
+	"encoding/binary"
 	"fmt"
 	"strconv"
 	"strings"
@@ -136,15 +137,9 @@ func spinSlots(bet int) SlotsResult {
 // createSpinningEmbed creates the initial suspense embed while the reels roll
 func createSpinningEmbed(username string, bet int) *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
-		Title: "🎰 Slot Machine",
-		Description: fmt.Sprintf(
-			"**%s** pulled the lever!\n\n"+
-				"# 🎰 | 🎰 | 🎰\n\n"+
-				"**Bet:** %d %s\n"+
-				"*Reels are spinning...*",
-			username, bet, config.Bot.CurrencySymbol,
-		),
-		Color: 0xFFD700, // Gold
+		Title:       locale.Text("games.slots.slot_machine"),
+		Description: locale.Text("games.slots.pulled_the_lever_bet_reels_are_spinning.formatted", locale.Data{"Username": username, "Bet": bet, "CurrencySymbol": config.Bot.CurrencySymbol}),
+		Color:       0xFFD700, // Gold
 	}
 }
 
@@ -158,22 +153,22 @@ func createResultEmbed(username string, bet int, result SlotsResult) *discordgo.
 
 	if result.IsJackpot {
 		color = 0xFFD700 // Gold
-		title = "🎰💰 JACKPOT! 💰🎰"
-		outcomeText = fmt.Sprintf("🎉 **3x %s! JACKPOT HIT!**", result.MatchSymbol.Emoji)
+		title = locale.Text("games.slots.jackpot")
+		outcomeText = locale.Text("games.slots.x_jackpot_hit.formatted", locale.Data{"Emoji": result.MatchSymbol.Emoji})
 	} else if result.IsTwoMatch {
 		if result.IsPush {
 			color = 0x3498DB // Blue
-			title = "🍒 Push - Bet Returned"
-			outcomeText = fmt.Sprintf("🍒 **Pair of Cherries!** Your bet of %d %s was refunded.", bet, currency)
+			title = locale.Text("games.slots.push_bet_returned")
+			outcomeText = locale.Text("games.slots.pair_of_cherries_your_bet_of_was.formatted", locale.Data{"Bet": bet, "Currency": currency})
 		} else {
 			color = 0x2ECC71 // Green
-			title = "🎉 Match Win!"
-			outcomeText = fmt.Sprintf("✨ **Pair of %s!**", result.MatchSymbol.Emoji)
+			title = locale.Text("games.slots.match_win")
+			outcomeText = locale.Text("games.slots.pair_of.formatted", locale.Data{"Emoji": result.MatchSymbol.Emoji})
 		}
 	} else {
 		color = 0xE74C3C // Red
-		title = "😢 No Luck!"
-		outcomeText = "💔 No matching symbols this time."
+		title = locale.Text("games.slots.no_luck")
+		outcomeText = locale.Text("games.slots.no_matching_symbols_this_time")
 	}
 
 	profitStr := ""
@@ -185,22 +180,7 @@ func createResultEmbed(username string, bet int, result SlotsResult) *discordgo.
 		profitStr = fmt.Sprintf("%d %s", result.NetProfit, currency)
 	}
 
-	description := fmt.Sprintf(
-		"**%s** spun the reels!\n\n"+
-			"%s\n\n"+
-			"%s\n\n"+
-			"**Bet:** %d %s\n"+
-			"**Multiplier:** %.1fx\n"+
-			"**Total Payout:** %d %s\n"+
-			"**Net Profit:** %s",
-		username,
-		slotsDisplay,
-		outcomeText,
-		bet, currency,
-		result.Multiplier,
-		result.WinAmount, currency,
-		profitStr,
-	)
+	description := locale.Text("games.slots.spun_the_reels_bet_multiplier_x_total.formatted", locale.Data{"Username": username, "SlotsDisplay": slotsDisplay, "OutcomeText": outcomeText, "Bet": bet, "Currency": currency, "Multiplier": result.Multiplier, "WinAmount": result.WinAmount, "Currency8": currency, "ProfitStr": profitStr})
 
 	return &discordgo.MessageEmbed{
 		Title:       title,
@@ -218,13 +198,13 @@ func buildSlotsActionRow(userID string, bet int, disabled bool) []discordgo.Mess
 		discordgo.ActionsRow{
 			Components: []discordgo.MessageComponent{
 				discordgo.Button{
-					Label:    fmt.Sprintf("🎰 Spin Again (%d %s)", bet, config.Bot.CurrencySymbol),
+					Label:    locale.Text("games.slots.spin_again.formatted", locale.Data{"Bet": bet, "CurrencySymbol": config.Bot.CurrencySymbol}),
 					Style:    discordgo.SuccessButton,
 					CustomID: fmt.Sprintf("slots_again_%s_%d", userID, bet),
 					Disabled: disabled,
 				},
 				discordgo.Button{
-					Label:    "🛑 Leave",
+					Label:    locale.Text("games.slots.leave"),
 					Style:    discordgo.SecondaryButton,
 					CustomID: fmt.Sprintf("slots_leave_%s", userID),
 					Disabled: disabled,
@@ -268,73 +248,10 @@ func cleanupSlotsSession(userID string, disableUI bool, s *discordgo.Session) {
 	}
 }
 
-// --- ENTRY POINTS ---
-
-// StartSlotsText starts a slots game from a text command (!slots <bet> or !bet slots <bet>)
-func StartSlotsText(s *discordgo.Session, m *discordgo.MessageCreate, bet int) {
-	if m.GuildID == "" {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("This game can only be played within a server."))
-		return
-	}
-	guildID := m.GuildID
-	userID := m.Author.ID
-	username := m.Author.Username
-	channelID := m.ChannelID
-
-	if bet < MinSlotsBet {
-		s.ChannelMessageSendEmbed(channelID, utils.ErrorEmbed(fmt.Sprintf("Minimum bet is %d %s", MinSlotsBet, config.Bot.CurrencySymbol)))
-		return
-	}
-
-	if !RegisterActivePlayer(userID) {
-		s.ChannelMessageSendEmbed(channelID, utils.ErrorEmbed("You already have an active game in progress! Finish it first."))
-		return
-	}
-
-	if database.GetBalance(guildID, userID) < bet {
-		UnregisterActivePlayer(userID)
-		s.ChannelMessageSendEmbed(channelID, utils.ErrorEmbed(fmt.Sprintf("<@%s> Insufficient balance! You need %d %s.", userID, bet, config.Bot.CurrencySymbol)))
-		return
-	}
-
-	if err := database.CollectLostBet(guildID, userID, bet); err != nil {
-		UnregisterActivePlayer(userID)
-		s.ChannelMessageSendEmbed(channelID, utils.ErrorEmbed("Error deducting bet coins."))
-		return
-	}
-
-	embed := createSpinningEmbed(username, bet)
-	msg, err := s.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{
-		Content: fmt.Sprintf("<@%s> The reels are rolling!", userID),
-		Embeds:  []*discordgo.MessageEmbed{embed},
-	})
-	if err != nil || msg == nil {
-		_ = database.AddCoins(guildID, userID, bet)
-		UnregisterActivePlayer(userID)
-		return
-	}
-
-	session := &SlotsSession{
-		GuildID:    guildID,
-		UserID:     userID,
-		Username:   username,
-		Bet:        bet,
-		ChannelID:  channelID,
-		MessageID:  msg.ID,
-		IsSpinning: true,
-	}
-
-	slotsMu.Lock()
-	activeSlotsSessions[userID] = session
-	slotsMu.Unlock()
-
-	go executeSpinCycle(s, session)
-}
-
 // StartSlotsInteraction starts a slots game from a slash command (/bet slots <bet> or /slots <bet>)
 func StartSlotsInteraction(s *discordgo.Session, i *discordgo.InteractionCreate, bet int) {
 	if i.GuildID == "" {
-		respondPrivate(s, i, utils.ErrorEmbed("This game can only be played within a server."))
+		respondPrivate(s, i, utils.ErrorEmbed(locale.Text("games.aviator.this_game_can_only_be_played_within")))
 		return
 	}
 	guildID := i.GuildID
@@ -343,24 +260,24 @@ func StartSlotsInteraction(s *discordgo.Session, i *discordgo.InteractionCreate,
 	channelID := i.ChannelID
 
 	if bet < MinSlotsBet {
-		respondPrivate(s, i, utils.ErrorEmbed(fmt.Sprintf("Minimum bet is %d %s", MinSlotsBet, config.Bot.CurrencySymbol)))
+		respondPrivate(s, i, utils.ErrorEmbed(locale.Text("games.cups.minimum_bet_is.formatted4", locale.Data{"MinSlotsBet": MinSlotsBet, "CurrencySymbol": config.Bot.CurrencySymbol})))
 		return
 	}
 
 	if !RegisterActivePlayer(userID) {
-		respondPrivate(s, i, utils.ErrorEmbed("You already have an active game in progress! Finish it first."))
+		respondPrivate(s, i, utils.ErrorEmbed(locale.Text("games.aviator.you_already_have_an_active_game_in")))
 		return
 	}
 
 	if database.GetBalance(guildID, userID) < bet {
 		UnregisterActivePlayer(userID)
-		respondPrivate(s, i, utils.ErrorEmbed(fmt.Sprintf("Insufficient balance! You need %d %s.", bet, config.Bot.CurrencySymbol)))
+		respondPrivate(s, i, utils.ErrorEmbed(locale.Text("games.slots.insufficient_balance_you_need.formatted", locale.Data{"Bet": bet, "CurrencySymbol": config.Bot.CurrencySymbol})))
 		return
 	}
 
 	if err := database.CollectLostBet(guildID, userID, bet); err != nil {
 		UnregisterActivePlayer(userID)
-		respondPrivate(s, i, utils.ErrorEmbed("Error deducting bet coins."))
+		respondPrivate(s, i, utils.ErrorEmbed(locale.Text("games.roulette.error_deducting_bet_coins")))
 		return
 	}
 
@@ -368,7 +285,7 @@ func StartSlotsInteraction(s *discordgo.Session, i *discordgo.InteractionCreate,
 	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Content: fmt.Sprintf("<@%s> The reels are rolling!", userID),
+			Content: locale.Text("games.slots.the_reels_are_rolling.formatted", locale.Data{"UserID": userID}),
 			Embeds:  []*discordgo.MessageEmbed{embed},
 		},
 	})
@@ -453,7 +370,7 @@ func HandleSlotsInteraction(s *discordgo.Session, i *discordgo.InteractionCreate
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
 				Data: &discordgo.InteractionResponseData{
-					Content: "❌ This is not your game!",
+					Content: locale.Text("games.blackjack.this_is_not_your_game"),
 					Flags:   discordgo.MessageFlagsEphemeral,
 				},
 			})
@@ -465,7 +382,7 @@ func HandleSlotsInteraction(s *discordgo.Session, i *discordgo.InteractionCreate
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseUpdateMessage,
 			Data: &discordgo.InteractionResponseData{
-				Content:    fmt.Sprintf("<@%s> stepped away from the slot machine. Thanks for playing!", expectedUser),
+				Content:    locale.Text("games.slots.stepped_away_from_the_slot_machine_thanks.formatted", locale.Data{"ExpectedUser": expectedUser}),
 				Components: []discordgo.MessageComponent{},
 			},
 		})
@@ -487,7 +404,7 @@ func HandleSlotsInteraction(s *discordgo.Session, i *discordgo.InteractionCreate
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
 				Data: &discordgo.InteractionResponseData{
-					Content: "❌ This is not your game!",
+					Content: locale.Text("games.blackjack.this_is_not_your_game"),
 					Flags:   discordgo.MessageFlagsEphemeral,
 				},
 			})
@@ -502,7 +419,7 @@ func HandleSlotsInteraction(s *discordgo.Session, i *discordgo.InteractionCreate
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
 				Data: &discordgo.InteractionResponseData{
-					Content: "❌ This session has expired. Start a new game with `!slots <bet>` or `/bet slots`!",
+					Content: locale.Text("games.slots.this_session_has_expired_start_a_new"),
 					Flags:   discordgo.MessageFlagsEphemeral,
 				},
 			})
@@ -527,7 +444,7 @@ func HandleSlotsInteraction(s *discordgo.Session, i *discordgo.InteractionCreate
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
 				Data: &discordgo.InteractionResponseData{
-					Content: fmt.Sprintf("❌ Insufficient balance! You need %d %s to spin again.", bet, config.Bot.CurrencySymbol),
+					Content: locale.Text("games.slots.insufficient_balance_you_need_to_spin_again.formatted", locale.Data{"Bet": bet, "CurrencySymbol": config.Bot.CurrencySymbol}),
 					Flags:   discordgo.MessageFlagsEphemeral,
 				},
 			})
@@ -540,7 +457,7 @@ func HandleSlotsInteraction(s *discordgo.Session, i *discordgo.InteractionCreate
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
 				Data: &discordgo.InteractionResponseData{
-					Content: "❌ Error processing your bet.",
+					Content: locale.Text("games.slots.error_processing_your_bet"),
 					Flags:   discordgo.MessageFlagsEphemeral,
 				},
 			})
@@ -552,7 +469,7 @@ func HandleSlotsInteraction(s *discordgo.Session, i *discordgo.InteractionCreate
 		err = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseUpdateMessage,
 			Data: &discordgo.InteractionResponseData{
-				Content:    fmt.Sprintf("<@%s> The reels are rolling again!", expectedUser),
+				Content:    locale.Text("games.slots.the_reels_are_rolling_again.formatted", locale.Data{"ExpectedUser": expectedUser}),
 				Embeds:     []*discordgo.MessageEmbed{spinningEmbed},
 				Components: []discordgo.MessageComponent{},
 			},

@@ -1,0 +1,77 @@
+{
+  "crypto.commands.coins_invested_p_l.formatted": {
+    "other": "{{printf \"%s\" .StatusEmoji}} **{{printf \"%s\" .Name}}** ({{printf \"%s\" .Symbol}}): {{printf \"%s\" .Value4}} coins (~{{printf \"%d\" .Value5}} {{printf \"%s\" .CurrencyName}} @ ${{printf \"%s\" .Value7}})\n  ↳ Invested: {{printf \"%d\" .Value8}} {{printf \"%s\" .CurrencyName9}} | P/L: {{printf \"%s\" .PnlStr}}\n"
+  },
+  "crypto.commands.could_not_fetch_crypto_price_try_again": {
+    "other": "Could not fetch crypto price. Try again later."
+  },
+  "crypto.commands.could_not_fetch_current_prices": {
+    "other": "Could not fetch current prices."
+  },
+  "crypto.commands.crypto_market": {
+    "other": "Crypto Market"
+  },
+  "crypto.commands.crypto_portfolio": {
+    "other": "Crypto Portfolio"
+  },
+  "crypto.commands.crypto_purchase_successful": {
+    "other": "Crypto Purchase Successful!"
+  },
+  "crypto.commands.crypto_sale_successful": {
+    "other": "Crypto Sale Successful!"
+  },
+  "crypto.commands.database_error": {
+    "other": "Database error."
+  },
+  "crypto.commands.database_error_refunded": {
+    "other": "Database error. Refunded."
+  },
+  "crypto.commands.error_fetching_crypto_prices_try_again_later": {
+    "other": "Error fetching crypto prices. Try again later."
+  },
+  "crypto.commands.insufficient_funds": {
+    "other": "Insufficient funds."
+  },
+  "crypto.commands.invalid_amount": {
+    "other": "Invalid amount."
+  },
+  "crypto.commands.invalid_cryptocurrency_symbol": {
+    "other": "Invalid cryptocurrency symbol."
+  },
+  "crypto.commands.invalid_cryptocurrency_symbol_use_crypto_market_or": {
+    "other": "Invalid cryptocurrency symbol. Use `/crypto market` or `/crypto market` to see available options."
+  },
+  "crypto.commands.major_cryptocurrencies": {
+    "other": "**Major Cryptocurrencies:**\n"
+  },
+  "crypto.commands.meme_coins_are_highly_volatile_invest_at": {
+    "other": "\n⚠️ **Meme coins are highly volatile! Invest at your own risk.**"
+  },
+  "crypto.commands.meme_coins_high_volatility": {
+    "other": "\n**Meme Coins (High Volatility!):**\n"
+  },
+  "crypto.commands.total_value_total_invested_net_return.formatted": {
+    "other": "\n**Total Value**: ~{{printf \"%d\" .Value1}} {{printf \"%s\" .CurrencyName}}\n**Total Invested**: {{printf \"%d\" .Value3}} {{printf \"%s\" .CurrencyName4}}\n**Net Return**: {{printf \"%s\" .OverallPnlStr}}"
+  },
+  "crypto.commands.transaction_failed": {
+    "other": "Transaction failed."
+  },
+  "crypto.commands.you_bought_for_at_coin.formatted": {
+    "other": "{{printf \"%s\" .Emoji}} You bought **{{printf \"%s\" .Value2}} {{printf \"%s\" .Symbol}}** for **{{printf \"%d\" .Amount}} {{printf \"%s\" .CurrencyName}}** (at ${{printf \"%s\" .Value6}}/coin).{{printf \"%s\" .Warning}}"
+  },
+  "crypto.commands.you_don_t_own_any.formatted": {
+    "other": "You don't own any {{printf \"%s\" .Symbol}}."
+  },
+  "crypto.commands.you_have_no_cryptocurrency_investments": {
+    "other": "You have no cryptocurrency investments."
+  },
+  "crypto.commands.you_only_own.formatted": {
+    "other": "You only own {{printf \"%s\" .Value1}} {{printf \"%s\" .Symbol}}."
+  },
+  "crypto.commands.you_sold_for_at_coin.formatted": {
+    "other": "{{printf \"%s\" .Emoji}} You sold **{{printf \"%s\" .Value2}} {{printf \"%s\" .Symbol}}** for **{{printf \"%d\" .Payout}} {{printf \"%s\" .CurrencyName}}** (at ${{printf \"%s\" .Value6}}/coin)."
+  },
+  "crypto.commands.your_crypto_portfolio": {
+    "other": "Your Crypto Portfolio"
+  }
+}

@@ -1,0 +1,390 @@
+{
+  "gacha.discord.available_now": {
+    "other": "**Available now!**"
+  },
+  "gacha.discord.available_t_r.formatted": {
+    "other": "Available <t:{{printf \"%d\" .Claim}}:R>"
+  },
+  "gacha.discord.belongs_to.formatted": {
+    "other": "\nBelongs to <@{{printf \"%s\" .Owner}}>"
+  },
+  "gacha.discord.belongs_to.formatted1": {
+    "other": "\nBelongs to <@{{printf \"%s\" .ID}}>"
+  },
+  "gacha.discord.belongs_to_e5d9ee": {
+    "other": "Belongs to"
+  },
+  "gacha.discord.catalog": {
+    "other": "Catalog"
+  },
+  "gacha.discord.catalog_page.formatted": {
+    "other": "Catalog • page {{printf \"%d\" .Page}}"
+  },
+  "gacha.discord.character_added_to_your_wishlist_its_rolls.formatted": {
+    "other": "Character #{{printf \"%d\" .Id}} added to your wishlist. Its rolls will be marked as wished."
+  },
+  "gacha.discord.character_claimed_check_your_harem": {
+    "other": "Character claimed! Check your harem."
+  },
+  "gacha.discord.character_gender": {
+    "other": "Character gender"
+  },
+  "gacha.discord.character_not_found": {
+    "other": "Character not found."
+  },
+  "gacha.discord.character_not_found_try_another_name_with.formatted": {
+    "other": "Character '{{printf \"%s\" .Query}}' not found. Try another name with /info."
+  },
+  "gacha.discord.character_of_s_harem.formatted": {
+    "other": "Character {{printf \"%d\" .Index}} of {{printf \"%d\" .Total}} • @{{printf \"%s\" .Owner}}’s Harem"
+  },
+  "gacha.discord.character_removed_from_your_wishlist.formatted": {
+    "other": "Character #{{printf \"%d\" .Id}} removed from your wishlist."
+  },
+  "gacha.discord.character_value": {
+    "other": "Character value"
+  },
+  "gacha.discord.characters_coins.formatted": {
+    "other": "<@{{printf \"%s\" .Owner}}> • **{{printf \"%d\" .Count}} characters** • **{{printf \"%d\" .Value}} coins**\n\n"
+  },
+  "gacha.discord.characters_coins_82844f": {
+    "other": "**%d.** <@%s> · %d characters · **%d coins**\n"
+  },
+  "gacha.discord.claim_character": {
+    "other": "Claim character"
+  },
+  "gacha.discord.claimed": {
+    "other": "Claimed"
+  },
+  "gacha.discord.claimed_by.formatted": {
+    "other": "\n💍 Claimed by <@{{printf \"%s\" .Owner}}>"
+  },
+  "gacha.discord.coins.formatted": {
+    "other": "{{printf \"%s\" .Value1}} - {{printf \"%d\" .Val}} coins"
+  },
+  "gacha.discord.coins_136392.formatted": {
+    "other": "{{printf \"%s\" .Value1}} / {{printf \"%s\" .Value2}} - {{printf \"%d\" .Val}} coins"
+  },
+  "gacha.discord.coins_d8c438": {
+    "other": "`#%d` **%s** · %s · %d coins · 🔑 %d\n"
+  },
+  "gacha.discord.doesn_t_have_any_characters_in_their.formatted": {
+    "other": "<@{{printf \"%s\" .Owner}}> doesn't have any characters in their harem yet."
+  },
+  "gacha.discord.expires_t_r": {
+    "other": "**%s** · #%d → <@%s> · expires <t:%d:R>\n`%s`\n"
+  },
+  "gacha.discord.gacha_is_unavailable_use_it_in_a": {
+    "other": "Gacha is unavailable. Use it in a server with the feature enabled."
+  },
+  "gacha.discord.harem_leaderboard_page.formatted": {
+    "other": "Harem leaderboard • page {{printf \"%d\" .Page}}"
+  },
+  "gacha.discord.harem_page.formatted": {
+    "other": "Harem • page {{printf \"%d\" .Page}}"
+  },
+  "gacha.discord.husbandos": {
+    "other": " • Husbandos"
+  },
+  "gacha.discord.image_of_character.formatted": {
+    "other": "Image {{printf \"%d\" .Page}} of {{printf \"%d\" .Total}} • Character #{{printf \"%d\" .Id}}"
+  },
+  "gacha.discord.invalid_page": {
+    "other": "Invalid page."
+  },
+  "gacha.discord.key_milestones": {
+    "other": "Key milestones"
+  },
+  "gacha.discord.key_total.formatted": {
+    "other": "\n🔑 **+1 key** (Total: {{printf \"%d\" .Keys}})"
+  },
+  "gacha.discord.likes.formatted": {
+    "other": "Likes: #{{printf \"%d\" .Favourites}}\n"
+  },
+  "gacha.discord.list_view": {
+    "other": "📝 List View"
+  },
+  "gacha.discord.marry_claim.formatted": {
+    "other": "💍 **Marry / Claim:** {{printf \"%s\" .ClaimStatus}}\n\n"
+  },
+  "gacha.discord.next": {
+    "other": "Next ▶"
+  },
+  "gacha.discord.no_characters_found_on_this_page": {
+    "other": "No characters found on this page."
+  },
+  "gacha.discord.no_characters_match_these_filters_on_this": {
+    "other": "No characters match these filters on this page."
+  },
+  "gacha.discord.no_harems_yet": {
+    "other": "No harems yet."
+  },
+  "gacha.discord.no_pending_offers": {
+    "other": "No pending offers."
+  },
+  "gacha.discord.others": {
+    "other": " • Others: "
+  },
+  "gacha.discord.page.formatted": {
+    "other": "{{printf \"%s\" .Title}} • Page {{printf \"%d\" .P}}"
+  },
+  "gacha.discord.page_of_total_characters.formatted": {
+    "other": "Page {{printf \"%d\" .P}} of {{printf \"%d\" .MaxPages}} • Total: {{printf \"%d\" .Total}} characters"
+  },
+  "gacha.discord.per_key_plus_every_keys_keys_to.formatted": {
+    "other": "+2% per key, plus +10% every 10 keys.\n{{printf \"%d\" .Value1}} keys to the next milestone. Keys follow trades/gifts and reset on divorce."
+  },
+  "gacha.discord.per_page_use_character_id_for_details": {
+    "other": "10 per page • use /info for details"
+  },
+  "gacha.discord.player_profile": {
+    "other": "Player Profile"
+  },
+  "gacha.discord.pousadinha_gacha_use_roll_or_harem": {
+    "other": "Pousadinha Gacha • Use /roll or /harem"
+  },
+  "gacha.discord.pousadinha_gacha_use_roll_top_info_harem.formatted": {
+    "other": "**Pousadinha Gacha**\nUse /roll, /top, /info, /harem, /gallery, /profile and /wishlist.\nUse /trade, /gift and /divorce to manage ownership.\nRoll your own character for +1 key: +2% per key and +10% every 10 keys.\n{{printf \"%d\" .RollsPerHour}} shared rolls/hour • 1 claim every {{printf \"%d\" .ClaimHours}} hours • 45-second claim window. Gifts and trades require acceptance; offers expire after 10 minutes."
+  },
+  "gacha.discord.previous": {
+    "other": "◀ Previous"
+  },
+  "gacha.discord.rolls_resets_t_r.formatted": {
+    "other": "🎲 **Rolls:** **{{printf \"%d\" .RollsLeft}}/{{printf \"%d\" .RollsPerHour}}** (resets <t:{{printf \"%d\" .Reset}}:R>)\n"
+  },
+  "gacha.discord.server_bonus_claimed_characters.formatted": {
+    "other": "🌐 **Server Bonus:** +{{printf \"%.2f\" .Value1}}% ({{printf \"%d\" .ClaimedTotal}} claimed characters)"
+  },
+  "gacha.discord.something_went_wrong_please_try_again": {
+    "other": "Something went wrong. Please try again."
+  },
+  "gacha.discord.studios": {
+    "other": "Studios"
+  },
+  "gacha.discord.there_is_no_approved_image_on_this": {
+    "other": "There is no approved image on this page."
+  },
+  "gacha.discord.top_characters": {
+    "other": "Top Characters"
+  },
+  "gacha.discord.top_claimed_characters": {
+    "other": "Top Claimed Characters"
+  },
+  "gacha.discord.top_unclaimed_characters": {
+    "other": "Top Unclaimed Characters"
+  },
+  "gacha.discord.unclaimed": {
+    "other": "✨ Unclaimed"
+  },
+  "gacha.discord.unclaimed_in_this_server": {
+    "other": "\n✨ Unclaimed in this server"
+  },
+  "gacha.discord.use_the_buttons_on_the_original_offer": {
+    "other": "\nUse the original offer buttons or /offers with an action and ID in the original channel."
+  },
+  "gacha.discord.use_this_command_in_a_server": {
+    "other": "Use this command in a server."
+  },
+  "gacha.discord.waifus": {
+    "other": " • Waifus"
+  },
+  "gacha.discord.wished_in_this_server": {
+    "other": "\n✦ Wished in this server"
+  },
+  "gacha.discord.work_genres": {
+    "other": "Work genres"
+  },
+  "gacha.discord.works": {
+    "other": "Works"
+  },
+  "gacha.discord.your_harem_characters_total_value.formatted": {
+    "other": "✨ **Your Harem:** **{{printf \"%d\" .Count}}** characters • **{{printf \"%d\" .Value}}** 🪙 total value\n"
+  },
+  "gacha.discord.your_wishlist": {
+    "other": "Your Wishlist"
+  },
+  "gacha.discord.your_wishlist_is_empty_use_wishlist_with": {
+    "other": "Your wishlist is empty.\nUse /wishlist with the Add a character action and a character ID."
+  },
+  "gacha.game.enter_a_character_name_or_id": {
+    "other": "Enter a character name or ID."
+  },
+  "gacha.game.no_enabled_characters_with_approved_images_match": {
+    "other": "No enabled characters with approved images match this pool. No roll was spent."
+  },
+  "gacha.game.no_rolls_left_in_this_hourly_window": {
+    "other": "No rolls left in this hourly window. Check /profile for the reset."
+  },
+  "gacha.game.this_character_is_owned_the_roll_expired": {
+    "other": "This character is owned, the roll expired, or your claim is on cooldown."
+  },
+  "gacha.game.your_wishlist_is_full_characters_remove_a": {
+    "other": "Your wishlist is full (20 characters). Remove a wish first."
+  },
+  "gacha.pools.all_anime_characters": {
+    "other": "All anime characters"
+  },
+  "gacha.pools.all_characters": {
+    "other": "All characters"
+  },
+  "gacha.pools.all_game_characters": {
+    "other": "All game characters"
+  },
+  "gacha.pools.coins.formatted": {
+    "other": "{{printf \"%d\" .Value}} coins"
+  },
+  "gacha.pools.enter_a_positive_character_id_find_ids": {
+    "other": "Enter a positive character ID. Find IDs with /info character:<name>."
+  },
+  "gacha.pools.female_anime_characters": {
+    "other": "Female anime characters"
+  },
+  "gacha.pools.female_characters": {
+    "other": "Female characters"
+  },
+  "gacha.pools.female_game_characters": {
+    "other": "Female game characters"
+  },
+  "gacha.pools.male_anime_characters": {
+    "other": "Male anime characters"
+  },
+  "gacha.pools.male_characters": {
+    "other": "Male characters"
+  },
+  "gacha.pools.male_game_characters": {
+    "other": "Male game characters"
+  },
+  "gacha.pools.unknown_roll_pool_use_roll_w_h": {
+    "other": "Unknown roll pool. Use roll, w, h, wa, ha, ma, wg, hg or mg."
+  },
+  "gacha.social.a_gift_accepts_one_character": {
+    "other": "A gift accepts one character."
+  },
+  "gacha.social.a_trade_needs_two_different_character_ids": {
+    "other": "A trade needs two different character IDs."
+  },
+  "gacha.social.character_is_not_in_the_expected_owner.formatted": {
+    "other": "Character #{{printf \"%d\" .Id}} is not in the expected owner's harem."
+  },
+  "gacha.social.choose_another_server_member": {
+    "other": "Choose another server member."
+  },
+  "gacha.social.desc_col_user_id_limit_offset": {
+    "other": ") DESC,col.user_id LIMIT 10 OFFSET $2"
+  },
+  "gacha.social.divorce_accepts_one_character": {
+    "other": "Divorce accepts one character."
+  },
+  "gacha.social.offer_not_found_in_this_channel": {
+    "other": "Offer not found in this channel."
+  },
+  "gacha.social.only_the_named_participant_can_respond_to": {
+    "other": "Only the named participant can respond to this offer."
+  },
+  "gacha.social.this_request_belongs_to_another_action": {
+    "other": "This request belongs to another action."
+  },
+  "gacha.social.unknown_action": {
+    "other": "Unknown action."
+  },
+  "gacha.social.unknown_action_response": {
+    "other": "Unknown action response."
+  },
+  "gacha.social.use_cancel_to_keep_your_character": {
+    "other": "Use Cancel to keep your character."
+  },
+  "gacha.social.use_this_command_in_a_server_channel": {
+    "other": "Use this command in a server channel."
+  },
+  "gacha.social.you_already_have_pending_offers_cancel_one": {
+    "other": "You already have 10 pending offers. Cancel one or wait for it to expire."
+  },
+  "gacha.social_discord.accept": {
+    "other": "Accept"
+  },
+  "gacha.social_discord.all": {
+    "other": "👑 All"
+  },
+  "gacha.social_discord.cancel": {
+    "other": "Cancel"
+  },
+  "gacha.social_discord.character_gift": {
+    "other": "Character gift"
+  },
+  "gacha.social_discord.character_trade": {
+    "other": "Character trade"
+  },
+  "gacha.social_discord.confirm_divorce": {
+    "other": "Confirm divorce"
+  },
+  "gacha.social_discord.decline": {
+    "other": "Decline"
+  },
+  "gacha.social_discord.divorce_completed_coins_credited_to_your_wallet.formatted": {
+    "other": "Divorce completed. {{printf \"%d\" .Payout}} coins credited to your wallet in this server."
+  },
+  "gacha.social_discord.divorce_for_coins.formatted": {
+    "other": "Divorce for {{printf \"%d\" .Payout}} coins"
+  },
+  "gacha.social_discord.husbandos": {
+    "other": "⚔️ Husbandos"
+  },
+  "gacha.social_discord.invalid_discord_user_id": {
+    "other": "Invalid Discord user ID."
+  },
+  "gacha.social_discord.invalid_offer_button": {
+    "other": "Invalid offer button."
+  },
+  "gacha.social_discord.invalid_page_button": {
+    "other": "Invalid page button."
+  },
+  "gacha.social_discord.list_view": {
+    "other": "📋 List View"
+  },
+  "gacha.social_discord.mention_a_server_member_or_use_their": {
+    "other": "Mention a server member or use their Discord user ID."
+  },
+  "gacha.social_discord.offer": {
+    "other": "Offer "
+  },
+  "gacha.social_discord.offer_status": {
+    "other": "Offer status: "
+  },
+  "gacha.social_discord.offers_for_s_both_characters_change_owners.formatted": {
+    "other": "<@{{printf \"%s\" .Proposer}}> offers **{{printf \"%s\" .Value2}}** (#{{printf \"%d\" .Offered}}, {{printf \"%s\" .Value4}})\nfor <@{{printf \"%s\" .Recipient}}>'s **{{printf \"%s\" .Value6}}** (#{{printf \"%d\" .Requested}}, {{printf \"%s\" .Value8}}).\nBoth characters change owners together on acceptance."
+  },
+  "gacha.social_discord.offers_to_the_recipient_must_accept.formatted": {
+    "other": "<@{{printf \"%s\" .Proposer}}> offers **{{printf \"%s\" .Value2}}** (#{{printf \"%d\" .Offered}}) to <@{{printf \"%s\" .Recipient}}>.\nThe recipient must accept."
+  },
+  "gacha.social_discord.photo_view": {
+    "other": "📷 Photo View"
+  },
+  "gacha.social_discord.release_and_receive_coins_in_this_server.formatted": {
+    "other": "Release **{{printf \"%s\" .Value1}}** (#{{printf \"%d\" .Offered}}) and receive **{{printf \"%d\" .Payout}} coins** in this server.\nThis removes the character from your harem and resets its keys. The quoted payout is fixed until expiry."
+  },
+  "gacha.social_discord.show_all": {
+    "other": "✨ Show All"
+  },
+  "gacha.social_discord.status_expires_t_r.formatted": {
+    "other": "\n\n**Status: {{printf \"%s\" .Status}}** · expires <t:{{printf \"%d\" .Expires}}:R>"
+  },
+  "gacha.social_discord.the_recipient_must_be_a_current_member": {
+    "other": "The recipient must be a current member of this server."
+  },
+  "gacha.social_discord.unclaimed_only": {
+    "other": "🔓 Unclaimed Only"
+  },
+  "gacha.social_discord.usage_divorce_id_gift_member_id_trade": {
+    "other": "Choose the required character and member options for /divorce, /gift or /trade."
+  },
+  "gacha.social_discord.waifus": {
+    "other": "🌸 Waifus"
+  },
+  "gacha.social_discord.you_cannot_trade_with_or_gift_to": {
+    "other": "You cannot trade with or gift to a bot."
+  },
+  "gacha.wishlist.count": {
+    "one": "{{printf \"%d\" .Count}}/20 wished character",
+    "other": "{{printf \"%d\" .Count}}/20 wished characters"
+  }
+}

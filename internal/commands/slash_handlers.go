@@ -5,6 +5,7 @@ import (
 	"bot/internal/database"
 	"bot/internal/gacha"
 	"bot/internal/games"
+	"bot/internal/locale"
 	"bot/internal/stockmarket"
 	"bot/internal/webhook"
 	"bot/pkg/config"
@@ -29,6 +30,14 @@ func SlashHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		return
 	}
 
+	if i.GuildID == "" || i.Member == nil || i.Member.User == nil {
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{Content: locale.Text("common.server_only"), Flags: discordgo.MessageFlagsEphemeral},
+		})
+		return
+	}
+
 	// Check if channel is allowed
 	if !config.Bot.IsChannelAllowed(i.ChannelID) {
 		allowedInSpecial := false
@@ -48,7 +57,7 @@ func SlashHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
 				Data: &discordgo.InteractionResponseData{
-					Embeds: []*discordgo.MessageEmbed{utils.ErrorEmbed("❌ This bot can only be used in designated channels.")},
+					Embeds: []*discordgo.MessageEmbed{utils.ErrorEmbed(locale.Text("commands.components.this_bot_can_only_be_used_in"))},
 					Flags:  discordgo.MessageFlagsEphemeral,
 				},
 			})
@@ -57,9 +66,10 @@ func SlashHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	}
 
 	switch i.ApplicationCommandData().Name {
-	case "roll", "top", "info", "harem", "perfil", "galeria", "wishlist", "troca", "presente", "divorcio",
-		"status", "character", "gallery", "trade", "gift", "divorce", "topchar", "gacha":
+	case "roll", "top", "info", "harem", "profile", "gallery", "wishlist", "trade", "gift", "divorce", "keys", "offers", "search", "harem-ranking":
 		gacha.Slash(s, i)
+	case "event":
+		games.HandleEventCommand(s, i)
 	case "help":
 		HandleSlashHelp(s, i)
 	case "daily":
@@ -127,19 +137,16 @@ func handleSlashWheel(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if subCmd == "status" {
 		endTime, active, betsCount, totalAmount := games.GetCurrentRoundInfo()
 		if !active {
-			respondEmbed(s, i, utils.InfoEmbed("Casino Roulette", "The wheel is currently spinning! Please wait for the next round."))
+			respondEmbed(s, i, utils.InfoEmbed(locale.Text("commands.slash_handlers.casino_roulette"), locale.Text("commands.slash_handlers.the_wheel_is_currently_spinning_please_wait")))
 			return
 		}
 
 		embed := &discordgo.MessageEmbed{
-			Title: "🎰 Casino Roulette - Status",
-			Description: fmt.Sprintf("Next spin <t:%d:R> (<t:%d:T>).\n\n"+
-				"**Bets Placed:** %d\n"+
-				"**Total Wagered:** %d %s",
-				endTime.Unix(), endTime.Unix(), betsCount, totalAmount, config.Bot.CurrencySymbol),
-			Color: utils.ColorGold,
+			Title:       locale.Text("commands.slash_handlers.casino_roulette_status"),
+			Description: locale.Text("commands.slash_handlers.next_spin_t_r_t_t_bets.formatted", locale.Data{"EndTime": endTime.Unix(), "EndTime2": endTime.Unix(), "BetsCount": betsCount, "TotalAmount": totalAmount, "CurrencySymbol": config.Bot.CurrencySymbol}),
+			Color:       utils.ColorGold,
 			Footer: &discordgo.MessageEmbedFooter{
-				Text: "Place your bets with /wheel bet or !wheel <type> <amount>",
+				Text: locale.Text("commands.slash_handlers.place_your_bets_with_wheel_bet_or"),
 			},
 		}
 		respondEmbed(s, i, embed)
@@ -169,7 +176,7 @@ func handleSlashWheel(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		switch betTypeChoice {
 		case "number":
 			if specificNumber < 0 || specificNumber > 36 {
-				respondEmbed(s, i, utils.ErrorEmbed("Please provide a valid number between 0 and 36 for number bets!"))
+				respondEmbed(s, i, utils.ErrorEmbed(locale.Text("commands.slash_handlers.please_provide_a_valid_number_between_and")))
 				return
 			}
 			betType = games.BetNumber
@@ -190,12 +197,12 @@ func handleSlashWheel(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			betType = games.BetDozen
 			value = betTypeChoice
 		default:
-			respondEmbed(s, i, utils.ErrorEmbed("Invalid bet type."))
+			respondEmbed(s, i, utils.ErrorEmbed(locale.Text("commands.slash_handlers.invalid_bet_type")))
 			return
 		}
 
 		if i.GuildID == "" {
-			respondEmbed(s, i, utils.ErrorEmbed("This command can only be used within a server."))
+			respondEmbed(s, i, utils.ErrorEmbed(locale.Text("commands.economy.this_command_can_only_be_used_within")))
 			return
 		}
 
@@ -216,9 +223,8 @@ func handleSlashWheel(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		}
 
 		endTime, _, _, _ := games.GetCurrentRoundInfo()
-		respondEmbed(s, i, utils.SuccessEmbed("Bet Placed!",
-			fmt.Sprintf("You bet **%d %s** on **%s**.\nNext spin: <t:%d:R>",
-				amount, config.Bot.CurrencySymbol, value, endTime.Unix())))
+		respondEmbed(s, i, utils.SuccessEmbed(locale.Text("commands.slash_handlers.bet_placed"),
+			locale.Text("commands.slash_handlers.you_bet_on_next_spin_t_r.formatted", locale.Data{"Amount": amount, "CurrencySymbol": config.Bot.CurrencySymbol, "Value": value, "EndTime": endTime.Unix()})))
 	}
 }
 
@@ -277,7 +283,7 @@ func handleSlashMines(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 func handleSlashDaily(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if i.GuildID == "" {
-		respondEmbed(s, i, utils.ErrorEmbed("This command can only be used within a server."))
+		respondEmbed(s, i, utils.ErrorEmbed(locale.Text("commands.economy.this_command_can_only_be_used_within")))
 		return
 	}
 	userID := ""
@@ -291,7 +297,7 @@ func handleSlashDaily(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 func handleSlashBalance(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if i.GuildID == "" {
-		respondEmbed(s, i, utils.ErrorEmbed("This command can only be used within a server."))
+		respondEmbed(s, i, utils.ErrorEmbed(locale.Text("commands.economy.this_command_can_only_be_used_within")))
 		return
 	}
 	var targetUser *discordgo.User
@@ -306,7 +312,7 @@ func handleSlashBalance(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	}
 
 	balance := database.GetBalance(i.GuildID, targetUser.ID)
-	respondEmbed(s, i, utils.GoldEmbed("Balance", fmt.Sprintf("**%s** has **%d %s**.", targetUser.Username, balance, config.Bot.CurrencyName)))
+	respondEmbed(s, i, utils.GoldEmbed(locale.Text("commands.slash_handlers.balance"), locale.Text("commands.slash_handlers.has.formatted", locale.Data{"Username": targetUser.Username, "Balance": balance, "CurrencyName": config.Bot.CurrencyName})))
 }
 
 func handleSlashLeaderboard(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -326,7 +332,7 @@ func handleSlashLeaderboard(s *discordgo.Session, i *discordgo.InteractionCreate
 
 func handleSlashPay(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if i.GuildID == "" {
-		respondEmbed(s, i, utils.ErrorEmbed("This command can only be used within a server."))
+		respondEmbed(s, i, utils.ErrorEmbed(locale.Text("commands.economy.this_command_can_only_be_used_within")))
 		return
 	}
 	options := i.ApplicationCommandData().Options
@@ -340,19 +346,19 @@ func handleSlashPay(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	}
 
 	if toUser.ID == fromID {
-		respondEmbed(s, i, utils.ErrorEmbed("You cannot pay yourself."))
+		respondEmbed(s, i, utils.ErrorEmbed(locale.Text("commands.slash_handlers.you_cannot_pay_yourself")))
 		return
 	}
 
 	err := database.TransferCoins(i.GuildID, fromID, toUser.ID, amount)
 	if err != nil {
-		respondEmbed(s, i, utils.ErrorEmbed("Insufficient funds or transaction error."))
+		respondEmbed(s, i, utils.ErrorEmbed(locale.Text("commands.slash_handlers.insufficient_funds_or_transaction_error")))
 		return
 	}
 
 	webhook.SendTransferNotification(fromID, toUser.ID, amount)
 
-	respondEmbed(s, i, utils.SuccessEmbed("Transfer Successful", fmt.Sprintf("You sent **%d %s** to **%s**.", amount, config.Bot.CurrencyName, toUser.Username)))
+	respondEmbed(s, i, utils.SuccessEmbed(locale.Text("commands.slash_handlers.transfer_successful"), locale.Text("commands.slash_handlers.you_sent_to.formatted", locale.Data{"Amount": amount, "CurrencyName": config.Bot.CurrencyName, "Username": toUser.Username})))
 }
 
 func handleSlashShop(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -390,7 +396,7 @@ func handleSlashBuy(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		newName := subOpts[1].StringValue()
 		respondEmbed(s, i, ExecuteBuyRename(s, guildID, userID, targetUser, newName))
 
-	case "timeout", "punishment":
+	case "timeout":
 		if len(subOpts) < 2 {
 			return
 		}
@@ -427,16 +433,16 @@ func handleSlashLoan(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			loanID = options[0].Options[0].StringValue()
 		}
 
-		ExecuteLoanPay(s, i.ChannelID, i.Member.User.ID, loanID, i)
+		ExecuteLoanPay(s, i.Member.User.ID, loanID, i)
 
 	case "list":
-		ExecuteLoanList(s, i.ChannelID, i.Member.User, true, i)
+		ExecuteLoanList(s, i.Member.User, true, i)
 	}
 }
 
 func handleSlashStock(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if i.GuildID == "" {
-		respondEmbed(s, i, utils.ErrorEmbed("This command can only be used within a server."))
+		respondEmbed(s, i, utils.ErrorEmbed(locale.Text("commands.economy.this_command_can_only_be_used_within")))
 		return
 	}
 	options := i.ApplicationCommandData().Options
@@ -470,7 +476,7 @@ func handleSlashStock(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 func handleSlashCrypto(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if i.GuildID == "" {
-		respondEmbed(s, i, utils.ErrorEmbed("This command can only be used within a server."))
+		respondEmbed(s, i, utils.ErrorEmbed(locale.Text("commands.economy.this_command_can_only_be_used_within")))
 		return
 	}
 	options := i.ApplicationCommandData().Options

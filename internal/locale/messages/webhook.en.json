@@ -1,0 +1,44 @@
+{
+  "webhook.sender.could_not_resolve_hostname": {
+    "other": "could not resolve hostname: %w"
+  },
+  "webhook.sender.crypto_purchase_you_bought_for_at_coin.formatted": {
+    "other": "🪙 **Crypto Purchase**\nYou bought **{{printf \"%.8f\" .Coins}} {{printf \"%s\" .Symbol}}** for **{{printf \"%d\" .Amount}} {{printf \"%s\" .CurrencyName}}** (at ${{printf \"%.6f\" .Price}}/coin)."
+  },
+  "webhook.sender.crypto_sale_you_sold_for_at_coin.formatted": {
+    "other": "💰 **Crypto Sale**\nYou sold **{{printf \"%.8f\" .Coins}} {{printf \"%s\" .Symbol}}** for **{{printf \"%d\" .Amount}} {{printf \"%s\" .CurrencyName}}** (at ${{printf \"%.6f\" .Price}}/coin)."
+  },
+  "webhook.sender.invalid_url_format": {
+    "other": "invalid URL format: %w"
+  },
+  "webhook.sender.no_ip_address_found_for_host": {
+    "other": "no IP address found for host"
+  },
+  "webhook.sender.remote_endpoint_returned_status": {
+    "other": "remote endpoint returned status %d %s"
+  },
+  "webhook.sender.stock_purchase_you_bought_shares_of_for.formatted": {
+    "other": "📈 **Stock Purchase**\nYou bought **{{printf \"%.4f\" .Shares}}** shares of **{{printf \"%s\" .Ticker}}** for **{{printf \"%d\" .Amount}} {{printf \"%s\" .CurrencyName}}** (at ${{printf \"%.2f\" .Price}}/share)."
+  },
+  "webhook.sender.stock_sale_you_sold_shares_of_for.formatted": {
+    "other": "📉 **Stock Sale**\nYou sold **{{printf \"%.4f\" .Shares}}** shares of **{{printf \"%s\" .Ticker}}** for **{{printf \"%d\" .Amount}} {{printf \"%s\" .CurrencyName}}** (at ${{printf \"%.2f\" .Price}}/share)."
+  },
+  "webhook.sender.test_notification_from_pousadinha_chan_your_webhook": {
+    "other": "🔔 **Test Notification** from Pousadinha-Chan! Your webhook is working properly."
+  },
+  "webhook.sender.transfer_received_you_received_from.formatted": {
+    "other": "💰 **Transfer Received!** You received **{{printf \"%d\" .Amount}} {{printf \"%s\" .CurrencyName}}** from <@{{printf \"%s\" .FromID}}>."
+  },
+  "webhook.sender.url_exceeds_maximum_allowed_length_of_characters": {
+    "other": "URL exceeds maximum allowed length of 2048 characters"
+  },
+  "webhook.sender.url_hostname_cannot_be_empty": {
+    "other": "URL hostname cannot be empty"
+  },
+  "webhook.sender.url_scheme_must_be_http_or_https": {
+    "other": "URL scheme must be http or https"
+  },
+  "webhook.sender.webhook_url_targets_an_unauthorized_local_or": {
+    "other": "webhook URL targets an unauthorized local or private IP address"
+  }
+}

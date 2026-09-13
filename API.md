@@ -444,6 +444,6 @@ Common HTTP status codes:
 
 ## Gacha e mídia local
 
-O catálogo e o jogo de personagens são operados pelo Discord (`/gacha` e `!gacha`). Com `GACHA_ENABLED=true`, este servidor também publica imagens aprovadas em caminhos legíveis no domínio definido por `GACHA_PUBLIC_URL`. Não há endpoint público para importar ou aprovar imagens; essas operações usam o executável administrativo `gacha`.
+O catálogo e o jogo de personagens são operados pelo Discord (comandos `/roll`, `/harem`, `/info` e demais comandos slash). Com `GACHA_ENABLED=true`, este servidor também publica imagens aprovadas em caminhos legíveis no domínio definido por `GACHA_PUBLIC_URL`. Não há endpoint público para importar ou aprovar imagens; essas operações usam o executável administrativo `gacha`.
 
 Configuração, schema, comandos, curadoria e implantação: [docs/GACHA.md](docs/GACHA.md).

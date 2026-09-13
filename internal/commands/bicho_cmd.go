@@ -3,377 +3,15 @@ package commands
 import (
 	"bot/internal/database"
 	"bot/internal/games"
+	"bot/internal/locale"
 	"bot/pkg/config"
-	"bot/pkg/utils"
+
 	"fmt"
 	"strconv"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
 )
-
-// CmdBicho handles text commands for Jogo do Bicho
-func CmdBicho(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
-	if len(args) == 0 {
-		showBichoPanel(s, m)
-		return
-	}
-
-	subCmd := strings.ToLower(args[0])
-	switch subCmd {
-	case "panel", "painel", "status", "info", "round", "rodada":
-		showBichoPanel(s, m)
-
-	case "bet", "apostar", "aposta":
-		handleBichoTextBet(s, m, args[1:])
-
-	case "table", "tabela", "animals", "animais", "groups", "grupos", "bichos":
-		s.ChannelMessageSendEmbed(m.ChannelID, games.CreateBichoTableEmbed())
-
-	case "bets", "my-bets", "mybets", "apostas", "minhas-apostas", "minhasapostas", "tickets", "bilhetes":
-		showUserBichoBets(s, m)
-
-	case "draw", "sortear":
-		handleBichoManualDraw(s, m)
-
-	case "config", "configure", "configurar":
-		handleBichoConfig(s, m, args[1:])
-
-	case "help", "ajuda", "rules", "regras":
-		sendBichoHelp(s, m.ChannelID)
-
-	default:
-		sendBichoHelp(s, m.ChannelID)
-	}
-}
-
-// showBichoPanel displays the active round embed with buttons or directs the user to configure it
-func showBichoPanel(s *discordgo.Session, m *discordgo.MessageCreate) {
-	guildID := m.GuildID
-	if guildID == "" {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("This command can only be used in a server."))
-		return
-	}
-
-	settings, err := database.GetBichoSettings(guildID)
-	if err != nil || settings == nil || settings.ChannelID == "" {
-		if isUserAdmin(s, guildID, m.Author.ID) {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("Configuration Required",
-				"🎲 **The official Jogo do Bicho channel has not been configured yet!**\n\n"+
-					"Set the dedicated channel using:\n"+
-					"`!bicho config channel #channel` or `/bicho config channel:#channel`"))
-		} else {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Jogo do Bicho has not been configured on this server by administrators yet."))
-		}
-		return
-	}
-
-	round, err := database.GetActiveBichoRound(guildID)
-	if err != nil || round == nil {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("Jogo do Bicho", "No active round open at this time. Please wait for the next draw."))
-		return
-	}
-
-	totalBets, totalAmount, uniqueBettors, _ := database.GetBichoRoundStats(round.ID)
-	embed := games.CreateBichoRoundEmbed(round, totalBets, totalAmount, uniqueBettors)
-	components := games.CreateBichoRoundComponents(round.ID)
-
-	s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
-		Embeds:     []*discordgo.MessageEmbed{embed},
-		Components: components,
-	})
-}
-
-// handleBichoTextBet processes bets made through text command: !bicho bet <modality> <target> <amount> [position]
-func handleBichoTextBet(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
-	if len(args) < 3 {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed(
-			"How to Bet on Jogo do Bicho",
-			"**Syntax:**\n"+
-				"`!bicho bet <modality> <target> <amount> [position]`\n\n"+
-				"**Modalities:**\n"+
-				"• `group` (E.g. `!bicho bet monkey 100` or `!bicho bet group 17 100 board`)\n"+
-				"• `tens` (E.g. `!bicho bet tens 28 50`)\n"+
-				"• `hundreds` (E.g. `!bicho bet hundreds 528 20 board`)\n"+
-				"• `thousands` (E.g. `!bicho bet thousands 4528 10`)\n"+
-				"• `pair` (E.g. `!bicho bet pair \"monkey, lion\" 50`)\n"+
-				"• `trio` (E.g. `!bicho bet trio \"monkey, lion, tiger\" 20`)\n\n"+
-				"**Positions:**\n"+
-				"• `head` (1st prize - default)\n"+
-				"• `board` (1st to 5th prizes)",
-		))
-		return
-	}
-
-	modality := args[0]
-	var target, scope string
-	var amount int64
-
-	// Determine if last argument is scope (head/board/cabeca/cercado)
-	lastArg := strings.ToLower(args[len(args)-1])
-	isScopeLast := lastArg == "head" || lastArg == "cabeca" || lastArg == "cabeça" ||
-		lastArg == "board" || lastArg == "cercado" || lastArg == "cer" || lastArg == "cab"
-
-	if isScopeLast {
-		scope = lastArg
-		if len(args) < 4 {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Incomplete bet format. Use `!bicho bet <modality> <target> <amount> <position>`"))
-			return
-		}
-		val, err := strconv.ParseInt(args[len(args)-2], 10, 64)
-		if err != nil || val <= 0 {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Invalid bet amount!"))
-			return
-		}
-		amount = val
-		target = strings.Join(args[1:len(args)-2], " ")
-	} else {
-		scope = "head"
-		val, err := strconv.ParseInt(args[len(args)-1], 10, 64)
-		if err != nil || val <= 0 {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Invalid bet amount! The amount must be the last parameter."))
-			return
-		}
-		amount = val
-		target = strings.Join(args[1:len(args)-1], " ")
-	}
-
-	res, err := games.GetBichoManager().PlaceBet(m.GuildID, m.Author.ID, modality, target, scope, amount)
-	if err != nil {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(fmt.Sprintf("❌ Could not register bet: %s", err.Error())))
-		return
-	}
-
-	ticketEmbed := createBetTicketEmbed(m.Author, res)
-	s.ChannelMessageSendEmbed(m.ChannelID, ticketEmbed)
-}
-
-// showUserBichoBets lists all bets placed by the user in the active round
-func showUserBichoBets(s *discordgo.Session, m *discordgo.MessageCreate) {
-	round, err := database.GetActiveBichoRound(m.GuildID)
-	if err != nil || round == nil {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("Jogo do Bicho", "No active round open at this time."))
-		return
-	}
-
-	bets, err := database.GetUserRoundBetsDB(round.ID, m.Author.ID)
-	if err != nil {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Error fetching your tickets."))
-		return
-	}
-
-	if len(bets) == 0 {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed(
-			fmt.Sprintf("Your Tickets - Round #%d", round.RoundNumber),
-			"You haven't placed any bets in this round yet.\nClick the **Place Bet** button in the official channel or use `!bicho bet`!",
-		))
-		return
-	}
-
-	var totalInvested int64
-	var lines []string
-	for i, b := range bets {
-		totalInvested += b.Amount
-		scopeStr := "Head"
-		if b.Scope == "board" || b.Scope == "cercado" {
-			scopeStr = "Board (1st to 5th)"
-		}
-		lines = append(lines, fmt.Sprintf("`%d.` **%s** (%s) on target **%s** | `%d %s`",
-			i+1, strings.Title(b.BetType), scopeStr, b.Target, b.Amount, config.Bot.CurrencySymbol))
-	}
-
-	embed := &discordgo.MessageEmbed{
-		Title: fmt.Sprintf("🎫 Your Tickets in Round #%d", round.RoundNumber),
-		Description: fmt.Sprintf(
-			"**Draw in:** <t:%d:R> (<t:%d:t>)\n\n"+
-				"**Registered Bets (%d):**\n%s\n\n"+
-				"💰 **Total Wagered in Round:** `%d %s`",
-			round.DrawTime.Unix(), round.DrawTime.Unix(),
-			len(bets), strings.Join(lines, "\n"), totalInvested, config.Bot.CurrencySymbol,
-		),
-		Color: 0x3498db,
-		Footer: &discordgo.MessageEmbedFooter{
-			Text: fmt.Sprintf("Good luck, %s! Official draw at %s", m.Author.Username, round.DrawTime.Format("15:04")),
-		},
-	}
-
-	s.ChannelMessageSendEmbed(m.ChannelID, embed)
-}
-
-// handleBichoManualDraw executes an immediate draw (admin only)
-func handleBichoManualDraw(s *discordgo.Session, m *discordgo.MessageCreate) {
-	if !isUserAdmin(s, m.GuildID, m.Author.ID) {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Only administrators can trigger a manual draw."))
-		return
-	}
-
-	if err := games.GetBichoManager().TriggerManualDraw(m.GuildID); err != nil {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(fmt.Sprintf("Error triggering draw: %s", err.Error())))
-		return
-	}
-
-	s.ChannelMessageSendEmbed(m.ChannelID, utils.SuccessEmbed(
-		"🎲 Draw Initiated",
-		"The Jogo do Bicho draw has been triggered! The 5 prizes and winner evaluation will be published in the official channel shortly.",
-	))
-}
-
-// handleBichoConfig manages guild bicho settings
-func handleBichoConfig(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
-	if !isUserAdmin(s, m.GuildID, m.Author.ID) {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Only administrators can configure Jogo do Bicho."))
-		return
-	}
-
-	settings, err := database.GetBichoSettings(m.GuildID)
-	if err != nil || settings == nil {
-		settings = &database.DBBichoSettings{
-			GuildID:    m.GuildID,
-			DrawHour:   20,
-			DrawMinute: 0,
-			Enabled:    true,
-			MinBet:     10,
-		}
-	}
-
-	if len(args) == 0 {
-		channelText := "Not configured"
-		if settings.ChannelID != "" {
-			channelText = fmt.Sprintf("<#%s>", settings.ChannelID)
-		}
-		statusText := "🟢 Enabled"
-		if !settings.Enabled {
-			statusText = "🔴 Disabled"
-		}
-
-		info := fmt.Sprintf(
-			"**Current Jogo do Bicho Settings:**\n\n"+
-				"• **Official Channel:** %s\n"+
-				"• **Daily Draw Schedule:** `%02d:%02d`\n"+
-				"• **Minimum Bet:** `%d %s`\n"+
-				"• **Status:** %s\n\n"+
-				"**How to change:**\n"+
-				"`!bicho config channel #channel` - Set dedicated channel\n"+
-				"`!bicho config hour <0-23>` - Set draw hour\n"+
-				"`!bicho config minute <0-59>` - Set draw minute\n"+
-				"`!bicho config min <amount>` - Set minimum bet amount\n"+
-				"`!bicho config status <on|off>` - Enable or disable the game",
-			channelText, settings.DrawHour, settings.DrawMinute, settings.MinBet, config.Bot.CurrencySymbol, statusText,
-		)
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("Jogo do Bicho Configuration", info))
-		return
-	}
-
-	param := strings.ToLower(args[0])
-	if len(args) < 2 {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Specify the new value. Example: `!bicho config channel #lottery`"))
-		return
-	}
-	val := args[1]
-
-	switch param {
-	case "channel", "canal":
-		cleanID := strings.Trim(val, "<#>")
-		settings.ChannelID = cleanID
-		settings.Enabled = true
-		if err := database.SaveBichoSettings(settings); err != nil {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Error saving channel configuration."))
-			return
-		}
-		games.GetBichoManager().ScheduleGuildRound(settings)
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.SuccessEmbed("Channel Configured", fmt.Sprintf("Dedicated Jogo do Bicho channel set to <#%s>. The round panel has been initialized there!", cleanID)))
-
-	case "hour", "hora":
-		h, err := strconv.Atoi(val)
-		if err != nil || h < 0 || h > 23 {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Invalid hour! Enter a number between 0 and 23."))
-			return
-		}
-		settings.DrawHour = h
-		_ = database.SaveBichoSettings(settings)
-		games.GetBichoManager().ScheduleGuildRound(settings)
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.SuccessEmbed("Schedule Updated", fmt.Sprintf("Daily draw schedule set to `%02d:%02d`.", settings.DrawHour, settings.DrawMinute)))
-
-	case "minute", "minuto":
-		min, err := strconv.Atoi(val)
-		if err != nil || min < 0 || min > 59 {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Invalid minute! Enter a number between 0 and 59."))
-			return
-		}
-		settings.DrawMinute = min
-		_ = database.SaveBichoSettings(settings)
-		games.GetBichoManager().ScheduleGuildRound(settings)
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.SuccessEmbed("Schedule Updated", fmt.Sprintf("Daily draw schedule set to `%02d:%02d`.", settings.DrawHour, settings.DrawMinute)))
-
-	case "min", "minimo", "minimum", "min_bet":
-		minVal, err := strconv.ParseInt(val, 10, 64)
-		if err != nil || minVal <= 0 {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Invalid minimum bet amount!"))
-			return
-		}
-		settings.MinBet = minVal
-		_ = database.SaveBichoSettings(settings)
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.SuccessEmbed("Minimum Bet Updated", fmt.Sprintf("Minimum bet amount set to `%d %s`.", minVal, config.Bot.CurrencySymbol)))
-
-	case "status", "enable", "disable", "ligar", "desligar":
-		if val == "on" || val == "enable" || val == "enabled" || val == "true" || val == "ligar" || val == "ativar" {
-			settings.Enabled = true
-		} else {
-			settings.Enabled = false
-		}
-		_ = database.SaveBichoSettings(settings)
-		if settings.Enabled {
-			games.GetBichoManager().ScheduleGuildRound(settings)
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.SuccessEmbed("Jogo do Bicho Enabled", "The daily lottery scheduler is now active."))
-		} else {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.SuccessEmbed("Jogo do Bicho Disabled", "Jogo do Bicho has been paused."))
-		}
-
-	default:
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Unknown parameter. Options: `channel`, `hour`, `minute`, `min`, `status`."))
-	}
-}
-
-// sendBichoHelp displays the game tutorial and commands
-func sendBichoHelp(s *discordgo.Session, channelID string) {
-	embed := &discordgo.MessageEmbed{
-		Title: "🎲 Jogo do Bicho - Complete Guide & Rules",
-		Description: "The traditional 25-animal Brazilian lottery in an audited, daily edition!\n" +
-			"Every day at 20:00 (or the time configured by admins), the official draw takes place with 5 prizes (1st to 5th).",
-		Color: 0x2ecc71,
-		Fields: []*discordgo.MessageEmbedField{
-			{
-				Name: "🎯 Modalities and Multipliers",
-				Value: "• **Group:** `18x` on Head | `3.6x` on Board (1st to 5th)\n" +
-					"• **Tens:** `60x` on Head | `12x` on Board\n" +
-					"• **Hundreds:** `600x` on Head | `120x` on Board\n" +
-					"• **Thousands:** `4,000x` on Head | `800x` on Board\n" +
-					"• **Animal Pair (Duque):** `18.5x` (both animals in the 5 prizes)\n" +
-					"• **Animal Trio (Terno):** `130x` (all 3 animals in the 5 prizes)",
-				Inline: false,
-			},
-			{
-				Name: "⌨️ Main Commands",
-				Value: "• `!bicho` - View active round panel and interactive buttons\n" +
-					"• `!bicho bet <modality> <target> <amount> [position]`\n" +
-					"• `!bicho table` - View all 25 animals and their tens\n" +
-					"• `!bicho bets` - View your active tickets in the current round",
-				Inline: false,
-			},
-			{
-				Name: "⚙️ Administrator Commands",
-				Value: "• `!bicho config channel #channel` - Set official channel\n" +
-					"• `!bicho config hour <0-23>` - Change daily draw time\n" +
-					"• `!bicho draw` - Trigger immediate draw",
-				Inline: false,
-			},
-		},
-		Footer: &discordgo.MessageEmbedFooter{
-			Text: "Pousadinha-Chan • Good luck to all players!",
-		},
-	}
-	s.ChannelMessageSendEmbed(channelID, embed)
-}
 
 // HandleBichoButton handles button clicks on the Bicho round embed
 func HandleBichoButton(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -398,7 +36,7 @@ func HandleBichoButton(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
 				Data: &discordgo.InteractionResponseData{
-					Content: "🎫 You don't have any tickets in this round yet. Use the **Place Bet** button to play!",
+					Content: locale.Text("commands.bicho_cmd.you_don_t_have_any_tickets_in"),
 					Flags:   discordgo.MessageFlagsEphemeral,
 				},
 			})
@@ -409,16 +47,14 @@ func HandleBichoButton(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		var lines []string
 		for idx, b := range bets {
 			totalInvested += b.Amount
-			posStr := "Head"
+			posStr := locale.Text("commands.bicho_cmd.head")
 			if b.Scope == "board" || b.Scope == "cercado" {
-				posStr = "Board"
+				posStr = locale.Text("commands.bicho_cmd.board")
 			}
-			lines = append(lines, fmt.Sprintf("`%d.` **%s** (%s) on target **%s** | `%d %s`",
-				idx+1, strings.Title(b.BetType), posStr, b.Target, b.Amount, config.Bot.CurrencySymbol))
+			lines = append(lines, locale.Text("commands.bicho_cmd.on_target.formatted", locale.Data{"Idx": idx + 1, "Strings": strings.Title(b.BetType), "PosStr": posStr, "Target": b.Target, "Amount": b.Amount, "CurrencySymbol": config.Bot.CurrencySymbol}))
 		}
 
-		content := fmt.Sprintf("🎫 **Your Tickets in the Current Round:**\n%s\n\n💰 **Total Wagered:** `%d %s`",
-			strings.Join(lines, "\n"), totalInvested, config.Bot.CurrencySymbol)
+		content := locale.Text("commands.bicho_cmd.your_tickets_in_the_current_round_total.formatted", locale.Data{"Strings": strings.Join(lines, "\n"), "TotalInvested": totalInvested, "CurrencySymbol": config.Bot.CurrencySymbol})
 
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -444,16 +80,9 @@ func HandleBichoButton(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	if customID == "bicho_btn_help" {
 		helpEmbed := &discordgo.MessageEmbed{
-			Title: "📜 Jogo do Bicho Rules",
-			Description: "• **25 Animals and 100 Tens:** Each animal rules 4 consecutive tens.\n" +
-				"• **Daily Draw:** Every day 5 four-digit numbers (1st to 5th prizes) are drawn.\n" +
-				"• **Head (Cabeça):** Top payout if your pick hits the **1st prize**.\n" +
-				"• **Board (Cercado):** Splits payout across all 5 prizes (1st to 5th).\n\n" +
-				"**Examples:**\n" +
-				"• If `4528` is drawn as 1st prize, the tens are `28`, which belongs to **Ram (Group 07)**.\n" +
-				"• Betting on Ram on Head pays **18x**!\n" +
-				"• Betting on tens 28 on Head pays **60x**!",
-			Color: 0x9b59b6,
+			Title:       locale.Text("commands.bicho_cmd.jogo_do_bicho_rules"),
+			Description: locale.Text("commands.bicho_cmd.animals_and_tens_each_animal_rules_consecutive"),
+			Color:       0x9b59b6,
 		}
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -472,15 +101,15 @@ func createBichoBetModal(roundID int64) *discordgo.InteractionResponse {
 		Type: discordgo.InteractionResponseModal,
 		Data: &discordgo.InteractionResponseData{
 			CustomID: fmt.Sprintf("bicho_modal_bet_%d", roundID),
-			Title:    "Jogo do Bicho - Place Bet",
+			Title:    locale.Text("commands.bicho_cmd.jogo_do_bicho_place_bet"),
 			Components: []discordgo.MessageComponent{
 				discordgo.ActionsRow{
 					Components: []discordgo.MessageComponent{
 						discordgo.TextInput{
 							CustomID:    "modality",
-							Label:       "Modality (group, tens, hundreds, thousands)",
+							Label:       locale.Text("commands.bicho_cmd.modality_group_tens_hundreds_thousands"),
 							Style:       discordgo.TextInputShort,
-							Placeholder: "group, tens, hundreds, thousands, pair, trio",
+							Placeholder: locale.Text("commands.bicho_cmd.group_tens_hundreds_thousands_pair_trio"),
 							Required:    true,
 							MinLength:   1,
 							MaxLength:   15,
@@ -491,9 +120,9 @@ func createBichoBetModal(roundID int64) *discordgo.InteractionResponse {
 					Components: []discordgo.MessageComponent{
 						discordgo.TextInput{
 							CustomID:    "target",
-							Label:       "Target (Animal or Number)",
+							Label:       locale.Text("commands.bicho_cmd.target_animal_or_number"),
 							Style:       discordgo.TextInputShort,
-							Placeholder: "E.g. Monkey, 28, 528, 4528, or Monkey Lion",
+							Placeholder: locale.Text("commands.bicho_cmd.e_g_monkey_or_monkey_lion"),
 							Required:    true,
 							MinLength:   1,
 							MaxLength:   40,
@@ -504,7 +133,7 @@ func createBichoBetModal(roundID int64) *discordgo.InteractionResponse {
 					Components: []discordgo.MessageComponent{
 						discordgo.TextInput{
 							CustomID:    "amount",
-							Label:       "Bet Amount (EC)",
+							Label:       locale.Text("commands.bicho_cmd.bet_amount_ec"),
 							Style:       discordgo.TextInputShort,
 							Placeholder: "E.g. 100",
 							Required:    true,
@@ -517,10 +146,10 @@ func createBichoBetModal(roundID int64) *discordgo.InteractionResponse {
 					Components: []discordgo.MessageComponent{
 						discordgo.TextInput{
 							CustomID:    "scope",
-							Label:       "Position (head or board)",
+							Label:       locale.Text("commands.bicho_cmd.position_head_or_board"),
 							Style:       discordgo.TextInputShort,
 							Value:       "head",
-							Placeholder: "head (1st prize) or board (1st to 5th)",
+							Placeholder: locale.Text("commands.bicho_cmd.head_st_prize_or_board_st_to"),
 							Required:    false,
 							MinLength:   0,
 							MaxLength:   15,
@@ -567,7 +196,7 @@ func HandleBichoModalSubmit(s *discordgo.Session, i *discordgo.InteractionCreate
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "❌ Invalid bet amount! Enter an integer greater than 0.",
+				Content: locale.Text("commands.bicho_cmd.invalid_bet_amount_enter_an_integer_greater"),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -579,7 +208,7 @@ func HandleBichoModalSubmit(s *discordgo.Session, i *discordgo.InteractionCreate
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: fmt.Sprintf("❌ Error registering ticket: %s", err.Error()),
+				Content: locale.Text("commands.bicho_cmd.error_registering_ticket.formatted", locale.Data{"Err": err.Error()}),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -598,26 +227,17 @@ func HandleBichoModalSubmit(s *discordgo.Session, i *discordgo.InteractionCreate
 
 // createBetTicketEmbed builds a rich confirmation ticket
 func createBetTicketEmbed(user *discordgo.User, res *games.PlaceBetResult) *discordgo.MessageEmbed {
-	posStr := "Head (1st Prize)"
+	posStr := locale.Text("commands.bicho_cmd.head_st_prize")
 	if res.Scope == "board" || res.Scope == "cercado" {
-		posStr = "Board (1st to 5th Prizes)"
+		posStr = locale.Text("commands.bicho_cmd.board_st_to_th_prizes")
 	}
 
 	return &discordgo.MessageEmbed{
-		Title: fmt.Sprintf("🎫 Ticket Registered! - Round #%d", res.RoundNumber),
-		Description: fmt.Sprintf(
-			"Your bet was successfully recorded in the official lottery system!\n\n"+
-				"📌 **Pick:** %s\n"+
-				"🎯 **Position:** `%s`\n"+
-				"💰 **Amount Wagered:** `%d %s`\n"+
-				"📈 **Potential Payout:** `%s`\n\n"+
-				"⏰ **Draw:** <t:%d:R> (<t:%d:t>)",
-			res.Description, posStr, res.Amount, config.Bot.CurrencySymbol,
-			res.Multiplier, res.DrawTime.Unix(), res.DrawTime.Unix(),
-		),
-		Color: 0x2ecc71,
+		Title:       locale.Text("commands.bicho_cmd.ticket_registered_round.formatted", locale.Data{"RoundNumber": res.RoundNumber}),
+		Description: locale.Text("commands.bicho_cmd.your_bet_was_successfully_recorded_in_the.formatted", locale.Data{"Description": res.Description, "PosStr": posStr, "Amount": res.Amount, "CurrencySymbol": config.Bot.CurrencySymbol, "Multiplier": res.Multiplier, "DrawTime": res.DrawTime.Unix(), "DrawTime7": res.DrawTime.Unix()}),
+		Color:       0x2ecc71,
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: fmt.Sprintf("Bettor: %s • Good luck!", user.Username),
+			Text: locale.Text("commands.bicho_cmd.bettor_good_luck.formatted", locale.Data{"Username": user.Username}),
 		},
 	}
 }
@@ -634,7 +254,7 @@ func HandleSlashBicho(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	case "panel", "painel":
 		round, err := database.GetActiveBichoRound(i.GuildID)
 		if err != nil || round == nil {
-			respondBichoEphemeral(s, i, "No active round open at this time.")
+			respondBichoEphemeral(s, i, locale.Text("commands.bicho_cmd.no_active_round_open_at_this_time"))
 			return
 		}
 		totalBets, totalAmount, uniqueBettors, _ := database.GetBichoRoundStats(round.ID)
@@ -661,27 +281,25 @@ func HandleSlashBicho(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	case "my-bets", "minhas-apostas":
 		round, err := database.GetActiveBichoRound(i.GuildID)
 		if err != nil || round == nil {
-			respondBichoEphemeral(s, i, "No active round open at this time.")
+			respondBichoEphemeral(s, i, locale.Text("commands.bicho_cmd.no_active_round_open_at_this_time"))
 			return
 		}
 		bets, _ := database.GetUserRoundBetsDB(round.ID, i.Member.User.ID)
 		if len(bets) == 0 {
-			respondBichoEphemeral(s, i, "You don't have any tickets in this round yet.")
+			respondBichoEphemeral(s, i, locale.Text("commands.bicho_cmd.you_don_t_have_any_tickets_in_c41e41"))
 			return
 		}
 		var totalInvested int64
 		var lines []string
 		for idx, b := range bets {
 			totalInvested += b.Amount
-			pos := "Head"
+			pos := locale.Text("commands.bicho_cmd.head")
 			if b.Scope == "board" || b.Scope == "cercado" {
-				pos = "Board"
+				pos = locale.Text("commands.bicho_cmd.board")
 			}
-			lines = append(lines, fmt.Sprintf("`%d.` **%s** (%s) on target **%s** | `%d %s`",
-				idx+1, strings.Title(b.BetType), pos, b.Target, b.Amount, config.Bot.CurrencySymbol))
+			lines = append(lines, locale.Text("commands.bicho_cmd.on_target.formatted1", locale.Data{"Idx": idx + 1, "Strings": strings.Title(b.BetType), "Pos": pos, "Target": b.Target, "Amount": b.Amount, "CurrencySymbol": config.Bot.CurrencySymbol}))
 		}
-		content := fmt.Sprintf("🎫 **Your Tickets in Round #%d:**\n%s\n\n💰 **Total Wagered:** `%d %s`",
-			round.RoundNumber, strings.Join(lines, "\n"), totalInvested, config.Bot.CurrencySymbol)
+		content := locale.Text("commands.bicho_cmd.your_tickets_in_round_total_wagered.formatted", locale.Data{"RoundNumber": round.RoundNumber, "Strings": strings.Join(lines, "\n"), "TotalInvested": totalInvested, "CurrencySymbol": config.Bot.CurrencySymbol})
 		respondBichoEphemeral(s, i, content)
 
 	case "bet", "apostar":
@@ -704,7 +322,7 @@ func HandleSlashBicho(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 		res, err := games.GetBichoManager().PlaceBet(i.GuildID, i.Member.User.ID, modality, target, scope, amount)
 		if err != nil {
-			respondBichoEphemeral(s, i, fmt.Sprintf("❌ Error registering bet: %s", err.Error()))
+			respondBichoEphemeral(s, i, locale.Text("commands.bicho_cmd.error_registering_bet.formatted", locale.Data{"Err": err.Error()}))
 			return
 		}
 
@@ -719,18 +337,18 @@ func HandleSlashBicho(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	case "draw", "sortear":
 		if !isUserAdmin(s, i.GuildID, i.Member.User.ID) {
-			respondBichoEphemeral(s, i, "❌ Only administrators can trigger the draw.")
+			respondBichoEphemeral(s, i, locale.Text("commands.bicho_cmd.only_administrators_can_trigger_the_draw"))
 			return
 		}
 		if err := games.GetBichoManager().TriggerManualDraw(i.GuildID); err != nil {
-			respondBichoEphemeral(s, i, fmt.Sprintf("❌ Error triggering draw: %s", err.Error()))
+			respondBichoEphemeral(s, i, locale.Text("commands.bicho_cmd.error_triggering_draw.formatted", locale.Data{"Err": err.Error()}))
 			return
 		}
-		respondBichoEphemeral(s, i, "🎲 Draw triggered successfully! Results will be published in the official channel.")
+		respondBichoEphemeral(s, i, locale.Text("commands.bicho_cmd.draw_triggered_successfully_results_will_be_published"))
 
 	case "config":
 		if !isUserAdmin(s, i.GuildID, i.Member.User.ID) {
-			respondBichoEphemeral(s, i, "❌ Only administrators can configure Jogo do Bicho.")
+			respondBichoEphemeral(s, i, locale.Text("commands.bicho_cmd.only_administrators_can_configure_jogo_do_bicho"))
 			return
 		}
 		settings, _ := database.GetBichoSettings(i.GuildID)
@@ -764,8 +382,7 @@ func HandleSlashBicho(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		if settings.Enabled && settings.ChannelID != "" {
 			games.GetBichoManager().ScheduleGuildRound(settings)
 		}
-		respondBichoEphemeral(s, i, fmt.Sprintf("✅ Settings saved! Channel: <#%s>, Schedule: `%02d:%02d`, Min Bet: `%d %s`.",
-			settings.ChannelID, settings.DrawHour, settings.DrawMinute, settings.MinBet, config.Bot.CurrencySymbol))
+		respondBichoEphemeral(s, i, locale.Text("commands.bicho_cmd.settings_saved_channel_schedule_min_bet.formatted", locale.Data{"ChannelID": settings.ChannelID, "DrawHour": settings.DrawHour, "DrawMinute": settings.DrawMinute, "MinBet": settings.MinBet, "CurrencySymbol": config.Bot.CurrencySymbol}))
 	}
 }
 

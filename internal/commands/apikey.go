@@ -1,11 +1,12 @@
 package commands
 
 import (
+	"bot/internal/database"
+	"bot/internal/locale"
+	"bot/pkg/utils"
 	"crypto/rand"
 	"encoding/hex"
-	"bot/internal/database"
-	"bot/pkg/utils"
-	"fmt"
+
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -32,18 +33,18 @@ func HandleSlashApiKey(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	switch subCommand {
 	case "create":
-		name := "Default Key"
+		name := locale.Text("commands.apikey.default_key")
 		if len(options[0].Options) > 0 {
 			name = strings.TrimSpace(options[0].Options[0].StringValue())
 			if name == "" {
-				name = "Default Key"
+				name = locale.Text("commands.apikey.default_key")
 			}
 		}
 
 		key := generateSecureAPIKey()
 		err := database.CreateAPIKey(key, userID, name)
 		if err != nil {
-			respondEmbed(s, i, utils.ErrorEmbed(fmt.Sprintf("Could not create API key: %v", err)))
+			respondEmbed(s, i, utils.ErrorEmbed(locale.Text("commands.apikey.could_not_create_api_key.formatted", locale.Data{"Err": err})))
 			return
 		}
 
@@ -53,8 +54,8 @@ func HandleSlashApiKey(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			Data: &discordgo.InteractionResponseData{
 				Flags: discordgo.MessageFlagsEphemeral,
 				Embeds: []*discordgo.MessageEmbed{
-					utils.SuccessEmbed("🔑 API Key Created",
-						fmt.Sprintf("**Name:** %s\n\n**Your Secret Key:**\n`%s`\n\n⚠️ **Save this key now!** It will not be shown again.\nUse `/apikey list` to see active key prefixes.", name, key)),
+					utils.SuccessEmbed(locale.Text("commands.apikey.api_key_created"),
+						locale.Text("commands.apikey.name_your_secret_key_save_this_key.formatted", locale.Data{"Name": name, "Key": key})),
 				},
 			},
 		})
@@ -62,36 +63,36 @@ func HandleSlashApiKey(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	case "list":
 		keys, err := database.ListAPIKeys(userID)
 		if err != nil {
-			respondEmbed(s, i, utils.ErrorEmbed("Error listing API keys."))
+			respondEmbed(s, i, utils.ErrorEmbed(locale.Text("commands.apikey.error_listing_api_keys")))
 			return
 		}
 
 		if len(keys) == 0 {
-			respondEmbed(s, i, utils.InfoEmbed("API Keys", "You don't have any API keys. Use `/apikey create` to generate one."))
+			respondEmbed(s, i, utils.InfoEmbed(locale.Text("commands.apikey.api_keys"), locale.Text("commands.apikey.you_don_t_have_any_api_keys")))
 			return
 		}
 
 		var desc strings.Builder
-		desc.WriteString("Use `/apikey delete <prefix>` to revoke a key.\n\n")
+		desc.WriteString(locale.Text("commands.apikey.use_apikey_delete_prefix_to_revoke_a"))
 		for _, k := range keys {
-			desc.WriteString(fmt.Sprintf("• **%s**: `%s...` (Created: %s)\n", k.Name, k.KeyPrefix, k.CreatedAt.Format("2006-01-02")))
+			desc.WriteString(locale.Text("commands.apikey.created.formatted", locale.Data{"Name": k.Name, "KeyPrefix": k.KeyPrefix, "CreatedAt": k.CreatedAt.Format("2006-01-02")}))
 		}
 
-		respondEmbed(s, i, utils.GoldEmbed("🔑 Your API Keys", desc.String()))
+		respondEmbed(s, i, utils.GoldEmbed(locale.Text("commands.apikey.your_api_keys"), desc.String()))
 
 	case "delete":
 		prefix := strings.TrimSpace(options[0].Options[0].StringValue())
 		if len(prefix) < 3 {
-			respondEmbed(s, i, utils.ErrorEmbed("Please provide at least 3 characters of the key prefix."))
+			respondEmbed(s, i, utils.ErrorEmbed(locale.Text("commands.apikey.please_provide_at_least_characters_of_the")))
 			return
 		}
 
 		err := database.DeleteAPIKey(userID, prefix)
 		if err != nil {
-			respondEmbed(s, i, utils.ErrorEmbed("No active API key found matching that prefix."))
+			respondEmbed(s, i, utils.ErrorEmbed(locale.Text("commands.apikey.no_active_api_key_found_matching_that")))
 			return
 		}
 
-		respondEmbed(s, i, utils.SuccessEmbed("Key Revoked", fmt.Sprintf("API key matching `%s...` has been revoked.", prefix)))
+		respondEmbed(s, i, utils.SuccessEmbed(locale.Text("commands.apikey.key_revoked"), locale.Text("commands.apikey.api_key_matching_has_been_revoked.formatted", locale.Data{"Prefix": prefix})))
 	}
 }

@@ -1,13 +1,14 @@
 package games
 
 import (
-	"crypto/rand"
 	"bot/internal/database"
+	"bot/internal/locale"
 	"bot/pkg/config"
-	"bot/pkg/utils"
+	"crypto/rand"
+
 	"fmt"
 	"log"
-	"strconv"
+
 	"strings"
 	"sync"
 	"time"
@@ -146,11 +147,11 @@ func checkAndAutoCloseEvents(s *discordgo.Session) {
 		// Notify channel that betting has closed
 		if s != nil && channelID != "" {
 			closeEmbed := &discordgo.MessageEmbed{
-				Title:       "🔒 Betting Closed",
-				Description: fmt.Sprintf("**%s**\n\nBetting is now closed! Awaiting result from admin/creator.\n\nTotal Pool: **%d %s** | Total Bets: **%d**", question, totalPool, config.Bot.CurrencySymbol, totalBets),
+				Title:       locale.Text("games.eventbetting.betting_closed"),
+				Description: locale.Text("games.eventbetting.betting_is_now_closed_awaiting_result_from.formatted", locale.Data{"Question": question, "TotalPool": totalPool, "CurrencySymbol": config.Bot.CurrencySymbol, "TotalBets": totalBets}),
 				Color:       0xFFA500,
 				Footer: &discordgo.MessageEmbedFooter{
-					Text: fmt.Sprintf("Event ID: %s | Use !result %s <option_number>", id, id),
+					Text: locale.Text("games.eventbetting.event_id_use_event_result_option_number.formatted", locale.Data{"Id": id, "Id2": id}),
 				},
 			}
 			_, _ = s.ChannelMessageSendEmbed(channelID, closeEmbed)
@@ -196,16 +197,16 @@ func generateUniqueEventID() string {
 // CreateEvent creates a new betting event and persists it in PostgreSQL
 func CreateEvent(guildID, channelID, adminID, question string, options []string, durationMinutes int) (*BettingEvent, string) {
 	if len(options) < 2 {
-		return nil, "Need at least 2 options."
+		return nil, locale.Text("games.eventbetting.need_at_least_options")
 	}
 	if len(options) > 10 {
-		return nil, "Maximum 10 options allowed."
+		return nil, locale.Text("games.eventbetting.maximum_options_allowed")
 	}
 	if durationMinutes < 1 || durationMinutes > 1440 {
-		return nil, "Duration must be between 1 and 1440 minutes (24 hours)."
+		return nil, locale.Text("games.eventbetting.duration_must_be_between_and_minutes_hours")
 	}
 	if len(question) < 5 || len(question) > 200 {
-		return nil, "Question must be between 5 and 200 characters."
+		return nil, locale.Text("games.eventbetting.question_must_be_between_and_characters")
 	}
 
 	eventID := generateUniqueEventID()
@@ -258,7 +259,7 @@ func CreateEvent(guildID, channelID, adminID, question string, options []string,
 
 	if err := database.CreateBettingEventDB(dbEvt); err != nil {
 		log.Printf("[CreateEvent] Database error creating event: %v", err)
-		return nil, "Failed to persist betting event in database."
+		return nil, locale.Text("games.eventbetting.failed_to_persist_betting_event_in_database")
 	}
 
 	eventsMu.Lock()
@@ -271,7 +272,7 @@ func CreateEvent(guildID, channelID, adminID, question string, options []string,
 // PlaceBet places a bet on an option using an atomic database transaction
 func PlaceBet(userID, username, eventID string, optIndex int, amount int) (bool, string) {
 	if amount < MinEventBet {
-		return false, fmt.Sprintf("Minimum bet is %d %s", MinEventBet, config.Bot.CurrencySymbol)
+		return false, locale.Text("games.cups.minimum_bet_is.formatted1", locale.Data{"MinEventBet": MinEventBet, "CurrencySymbol": config.Bot.CurrencySymbol})
 	}
 
 	eventsMu.RLock()
@@ -279,13 +280,13 @@ func PlaceBet(userID, username, eventID string, optIndex int, amount int) (bool,
 	eventsMu.RUnlock()
 
 	if !exists {
-		return false, "Event not found or betting is closed."
+		return false, locale.Text("games.eventbetting.event_not_found_or_betting_is_closed")
 	}
 
 	event.mu.RLock()
 	if optIndex < 1 || optIndex > len(event.Options) {
 		event.mu.RUnlock()
-		return false, fmt.Sprintf("Invalid option number. Choose between 1 and %d.", len(event.Options))
+		return false, locale.Text("games.eventbetting.invalid_option_number_choose_between_and.formatted", locale.Data{"Value1": len(event.Options)})
 	}
 	targetOpt := event.Options[optIndex-1]
 	optionID := targetOpt.ID
@@ -319,7 +320,7 @@ func SetResult(requesterID, eventID string, optIndex int) (bool, string, map[str
 	if !exists {
 		dbEvt, err := database.GetBettingEventByID(eventID)
 		if err != nil || dbEvt == nil {
-			return false, "Event not found.", nil
+			return false, locale.Text("games.eventbetting.event_not_found"), nil
 		}
 		event = fromDBEvent(dbEvt)
 		eventsMu.Lock()
@@ -330,7 +331,7 @@ func SetResult(requesterID, eventID string, optIndex int) (bool, string, map[str
 	event.mu.RLock()
 	if optIndex < 1 || optIndex > len(event.Options) {
 		event.mu.RUnlock()
-		return false, fmt.Sprintf("Invalid option number. Choose between 1 and %d.", len(event.Options)), nil
+		return false, locale.Text("games.eventbetting.invalid_option_number_choose_between_and.formatted", locale.Data{"Value1": len(event.Options)}), nil
 	}
 	targetOpt := event.Options[optIndex-1]
 	optionID := targetOpt.ID
@@ -350,8 +351,7 @@ func SetResult(requesterID, eventID string, optIndex int) (bool, string, map[str
 	event.ResolvedAt = &now
 	event.mu.Unlock()
 
-	msg := fmt.Sprintf("Distributed **%d %s** to winners. House profit: **%d %s**.",
-		totalDistributed, config.Bot.CurrencySymbol, houseProfit, config.Bot.CurrencySymbol)
+	msg := locale.Text("games.eventbetting.distributed_to_winners_house_profit.formatted", locale.Data{"TotalDistributed": totalDistributed, "CurrencySymbol": config.Bot.CurrencySymbol, "HouseProfit": houseProfit, "CurrencySymbol4": config.Bot.CurrencySymbol})
 	return true, msg, payouts
 }
 
@@ -364,7 +364,7 @@ func CancelEvent(requesterID, eventID string) (bool, string, int) {
 	if !exists {
 		dbEvt, err := database.GetBettingEventByID(eventID)
 		if err != nil || dbEvt == nil {
-			return false, "Event not found.", 0
+			return false, locale.Text("games.eventbetting.event_not_found"), 0
 		}
 		event = fromDBEvent(dbEvt)
 		eventsMu.Lock()
@@ -383,8 +383,7 @@ func CancelEvent(requesterID, eventID string) (bool, string, int) {
 	event.ResolvedAt = &now
 	event.mu.Unlock()
 
-	return true, fmt.Sprintf("Event cancelled. Refunded **%d %s** to %d bettors.",
-		totalRefunded, config.Bot.CurrencySymbol, len(refunds)), totalRefunded
+	return true, locale.Text("games.eventbetting.event_cancelled_refunded_to_bettors.formatted", locale.Data{"TotalRefunded": totalRefunded, "CurrencySymbol": config.Bot.CurrencySymbol, "Value3": len(refunds)}), totalRefunded
 }
 
 // getOddsLocked calculates odds without acquiring locks (caller MUST hold e.mu.RLock)
@@ -427,17 +426,17 @@ func (e *BettingEvent) ToEmbed() *discordgo.MessageEmbed {
 	defer e.mu.RUnlock()
 
 	timeLeft := time.Until(e.EndTime)
-	status := "🟢 Open"
+	status := locale.Text("games.eventbetting.open")
 	color := 0x00FF00
 
 	if e.Status == "cancelled" {
-		status = "❌ Cancelled"
+		status = locale.Text("games.eventbetting.cancelled")
 		color = 0x888888
 	} else if e.Status == "resolved" {
-		status = "🏆 Resolved"
+		status = locale.Text("games.eventbetting.resolved")
 		color = 0xFFD700
 	} else if e.Status == "closed" || timeLeft <= 0 {
-		status = "🔒 Closed (Awaiting Result)"
+		status = locale.Text("games.eventbetting.closed_awaiting_result")
 		color = 0xFFA500
 	}
 
@@ -451,431 +450,21 @@ func (e *BettingEvent) ToEmbed() *discordgo.MessageEmbed {
 			oddsStr = "∞"
 		}
 
-		optionsText.WriteString(fmt.Sprintf("**%d.** %s — Odds: **%s** | Bets: %d (%d %s)\n",
-			i+1, opt.Name, oddsStr, opt.TotalBets, opt.TotalAmount, config.Bot.CurrencySymbol))
+		optionsText.WriteString(locale.Text("games.eventbetting.odds_bets.formatted", locale.Data{"I": i + 1, "Name": opt.Name, "OddsStr": oddsStr, "TotalBets": opt.TotalBets, "TotalAmount": opt.TotalAmount, "CurrencySymbol": config.Bot.CurrencySymbol}))
 	}
 
-	footerText := fmt.Sprintf("Event ID: %s | Min Bet: %d %s", e.ID, MinEventBet, config.Bot.CurrencySymbol)
+	footerText := locale.Text("games.eventbetting.event_id_min_bet.formatted", locale.Data{"ID": e.ID, "MinEventBet": MinEventBet, "CurrencySymbol": config.Bot.CurrencySymbol})
 	if e.Status == "open" && timeLeft > 0 {
-		footerText += fmt.Sprintf(" | Ends in %d min", int(timeLeft.Minutes())+1)
+		footerText += locale.Text("games.eventbetting.ends_in_min.formatted", locale.Data{"Value1": int(timeLeft.Minutes()) + 1})
 	}
 
 	return &discordgo.MessageEmbed{
-		Title: fmt.Sprintf("🎲 %s", e.Question),
-		Description: fmt.Sprintf("**Status:** %s\n**Total Pool:** %d %s\n\n%s\n*Use `!betevent %s <number> <amount>` to place a bet!*",
-			status, e.TotalPool, config.Bot.CurrencySymbol, optionsText.String(), e.ID),
-		Color: color,
+		Title:       fmt.Sprintf("🎲 %s", e.Question),
+		Description: locale.Text("games.eventbetting.status_total_pool_use_event_bet_number.formatted", locale.Data{"Status": status, "TotalPool": e.TotalPool, "CurrencySymbol": config.Bot.CurrencySymbol, "OptionsText": optionsText.String(), "ID": e.ID}),
+		Color:       color,
 		Footer: &discordgo.MessageEmbedFooter{
 			Text: footerText,
 		},
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
-}
-
-// hasAdminPermission verifies if the user is a guild administrator or has Manage Server permissions
-func hasAdminPermission(s *discordgo.Session, m *discordgo.MessageCreate) bool {
-	if m.GuildID == "" {
-		return false
-	}
-
-	guild, err := s.State.Guild(m.GuildID)
-	if err == nil && guild != nil && guild.OwnerID == m.Author.ID {
-		return true
-	}
-
-	perms, err := s.UserChannelPermissions(m.Author.ID, m.ChannelID)
-	if err == nil {
-		return (perms&discordgo.PermissionAdministrator != 0) || (perms&discordgo.PermissionManageServer != 0)
-	}
-
-	member, err := s.GuildMember(m.GuildID, m.Author.ID)
-	if err == nil && member != nil && guild != nil && guild.OwnerID == member.User.ID {
-		return true
-	}
-
-	return false
-}
-
-// canManageEvent checks if requester is either the event creator or a server admin
-func canManageEvent(s *discordgo.Session, m *discordgo.MessageCreate, event *BettingEvent) bool {
-	if hasAdminPermission(s, m) {
-		return true
-	}
-	event.mu.RLock()
-	defer event.mu.RUnlock()
-	return event.CreatorID == m.Author.ID
-}
-
-// --- Discord Command Handlers ---
-
-func sendCreateEventUsage(s *discordgo.Session, channelID string) {
-	s.ChannelMessageSendEmbed(channelID, utils.ErrorEmbed(
-		"**Usage:** `!createevent <question> | <option1> | <option2> | ... [| duration_minutes]`\n\n"+
-			"**Examples:**\n"+
-			"• `!createevent Who will win the derby? | Team A | Team B | 30`\n"+
-			"• `!createevent Will it rain tomorrow? | Yes | No` *(defaults to 60 min)*"))
-}
-
-// CmdCreateEvent creates a new betting event (admin only)
-func CmdCreateEvent(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
-	if !hasAdminPermission(s, m) {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("You need Administrator or Manage Server permissions to create betting events."))
-		return
-	}
-
-	content := strings.TrimSpace(m.Content)
-	spaceIdx := strings.Index(content, " ")
-	if spaceIdx == -1 {
-		sendCreateEventUsage(s, m.ChannelID)
-		return
-	}
-
-	rawArgs := strings.TrimSpace(content[spaceIdx:])
-	rawParts := strings.Split(rawArgs, "|")
-	var parts []string
-	for _, p := range rawParts {
-		trimmed := strings.TrimSpace(p)
-		if trimmed != "" {
-			parts = append(parts, trimmed)
-		}
-	}
-
-	if len(parts) < 3 {
-		sendCreateEventUsage(s, m.ChannelID)
-		return
-	}
-
-	question := parts[0]
-	durationMinutes := 60
-
-	// Check if the last item is a number (duration in minutes)
-	lastPart := parts[len(parts)-1]
-	parsedDuration, err := strconv.Atoi(lastPart)
-	var options []string
-
-	if err == nil && len(parts) >= 4 {
-		durationMinutes = parsedDuration
-		options = parts[1 : len(parts)-1]
-	} else {
-		options = parts[1:]
-	}
-
-	if len(options) < 2 {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Need at least 2 options separated by `|`."))
-		return
-	}
-
-	event, errMsg := CreateEvent(m.GuildID, m.ChannelID, m.Author.ID, question, options, durationMinutes)
-	if event == nil {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(errMsg))
-		return
-	}
-
-	embed := event.ToEmbed()
-	msg, err := s.ChannelMessageSendEmbed(m.ChannelID, embed)
-	if err == nil && msg != nil {
-		event.mu.Lock()
-		event.MessageID = msg.ID
-		event.mu.Unlock()
-		_ = database.UpdateEventMessageIDDB(event.ID, msg.ID)
-	}
-}
-
-// CmdPlaceBet places a user's bet on an option
-func CmdPlaceBet(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
-	if len(args) < 3 {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(
-			"**Usage:** `!betevent <event_id> <option_number> <amount>`\n"+
-				"**Example:** `!betevent evt_4821 1 100` (bets 100 on option 1)"))
-		return
-	}
-
-	eventID := strings.TrimSpace(args[0])
-	optNum, err := strconv.Atoi(args[1])
-	if err != nil || optNum < 1 {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Invalid option number. Use the numbers shown in the event (e.g. 1, 2)."))
-		return
-	}
-
-	amount, err := strconv.Atoi(args[2])
-	if err != nil || amount < MinEventBet {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(fmt.Sprintf("Invalid amount. Minimum bet is %d %s.", MinEventBet, config.Bot.CurrencySymbol)))
-		return
-	}
-
-	eventsMu.RLock()
-	event, exists := activeEvents[eventID]
-	eventsMu.RUnlock()
-
-	if !exists {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Event not found. Use `!events` to see active events."))
-		return
-	}
-
-	success, msg := PlaceBet(m.Author.ID, m.Author.Username, eventID, optNum, amount)
-	if !success {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(msg))
-		return
-	}
-
-	event.mu.RLock()
-	optName := "Option"
-	if optNum <= len(event.Options) {
-		optName = event.Options[optNum-1].Name
-	}
-	msgID := event.MessageID
-	chID := event.ChannelID
-	embed := event.ToEmbed()
-	event.mu.RUnlock()
-
-	s.ChannelMessageSendEmbed(m.ChannelID, utils.SuccessEmbed("Bet Placed!",
-		fmt.Sprintf("You bet **%d %s** on **%d. %s**!", amount, config.Bot.CurrencySymbol, optNum, optName)))
-
-	if msgID != "" && chID != "" {
-		_, _ = s.ChannelMessageEditEmbed(chID, msgID, embed)
-	}
-}
-
-// CmdSetResult declares the winning option and distributes prizes (admin or creator only)
-func CmdSetResult(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
-	if len(args) < 2 {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(
-			"**Usage:** `!result <event_id> <option_number>`\n"+
-				"**Example:** `!result evt_4821 1` (sets option 1 as winner)"))
-		return
-	}
-
-	eventID := strings.TrimSpace(args[0])
-	optNum, err := strconv.Atoi(args[1])
-	if err != nil || optNum < 1 {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Invalid option number."))
-		return
-	}
-
-	eventsMu.RLock()
-	event, exists := activeEvents[eventID]
-	eventsMu.RUnlock()
-
-	if !exists {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Event not found."))
-		return
-	}
-
-	if !canManageEvent(s, m, event) {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Only the event creator or a server administrator can declare results."))
-		return
-	}
-
-	success, msg, payouts := SetResult(m.Author.ID, eventID, optNum)
-	if !success {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(msg))
-		return
-	}
-
-	event.mu.RLock()
-	winnerName := "Unknown"
-	if optNum <= len(event.Options) {
-		winnerName = event.Options[optNum-1].Name
-	}
-	question := event.Question
-	msgID := event.MessageID
-	chID := event.ChannelID
-	embed := event.ToEmbed()
-	event.mu.RUnlock()
-
-	winnersText := "No winners this time."
-	if len(payouts) > 0 {
-		var sb strings.Builder
-		for userID, profit := range payouts {
-			sb.WriteString(fmt.Sprintf("<@%s>: **+%d %s** (profit)\n", userID, profit, config.Bot.CurrencySymbol))
-		}
-		winnersText = sb.String()
-	}
-
-	resultEmbed := &discordgo.MessageEmbed{
-		Title:       "🏆 Event Result!",
-		Description: fmt.Sprintf("**%s**\n\n**Winner:** **%d. %s**", question, optNum, winnerName),
-		Color:       0xFFD700,
-		Fields: []*discordgo.MessageEmbedField{
-			{
-				Name:   "💰 Winners",
-				Value:  winnersText,
-				Inline: false,
-			},
-			{
-				Name:   "📊 Summary",
-				Value:  msg,
-				Inline: false,
-			},
-		},
-	}
-	s.ChannelMessageSendEmbed(m.ChannelID, resultEmbed)
-
-	if msgID != "" && chID != "" {
-		_, _ = s.ChannelMessageEditEmbed(chID, msgID, embed)
-	}
-}
-
-// CmdCancelEvent cancels an event and refunds all bets (admin or creator only)
-func CmdCancelEvent(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
-	if len(args) < 1 {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(
-			"**Usage:** `!cancelevent <event_id>`\n"+
-				"**Example:** `!cancelevent evt_4821` (cancels event and refunds all bets)"))
-		return
-	}
-
-	eventID := strings.TrimSpace(args[0])
-
-	eventsMu.RLock()
-	event, exists := activeEvents[eventID]
-	eventsMu.RUnlock()
-
-	if !exists {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Event not found."))
-		return
-	}
-
-	if !canManageEvent(s, m, event) {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Only the event creator or a server administrator can cancel this event."))
-		return
-	}
-
-	success, msg, _ := CancelEvent(m.Author.ID, eventID)
-	if !success {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(msg))
-		return
-	}
-
-	event.mu.RLock()
-	msgID := event.MessageID
-	chID := event.ChannelID
-	embed := event.ToEmbed()
-	question := event.Question
-	event.mu.RUnlock()
-
-	cancelEmbed := &discordgo.MessageEmbed{
-		Title:       "❌ Event Cancelled",
-		Description: fmt.Sprintf("**%s**\n\n%s\n\nAll bets have been returned to user balances.", question, msg),
-		Color:       0xFF0000,
-	}
-	s.ChannelMessageSendEmbed(m.ChannelID, cancelEmbed)
-
-	if msgID != "" && chID != "" {
-		_, _ = s.ChannelMessageEditEmbed(chID, msgID, embed)
-	}
-}
-
-// CmdCloseEvent closes betting early (admin or creator only)
-func CmdCloseEvent(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
-	if len(args) < 1 {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Usage: `!closeevent <event_id>`"))
-		return
-	}
-
-	eventID := strings.TrimSpace(args[0])
-	eventsMu.RLock()
-	event, exists := activeEvents[eventID]
-	eventsMu.RUnlock()
-
-	if !exists {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Event not found."))
-		return
-	}
-
-	if !canManageEvent(s, m, event) {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Only the event creator or a server administrator can close it early."))
-		return
-	}
-
-	if err := database.CloseBettingEventDB(eventID); err != nil {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Error closing event: "+err.Error()))
-		return
-	}
-
-	event.mu.Lock()
-	event.Status = "closed"
-	msgID := event.MessageID
-	chID := event.ChannelID
-	embed := event.ToEmbed()
-	event.mu.Unlock()
-
-	if msgID != "" && chID != "" {
-		_, _ = s.ChannelMessageEditEmbed(chID, msgID, embed)
-	}
-
-	s.ChannelMessageSendEmbed(m.ChannelID, utils.SuccessEmbed("Event Closed", "Betting is now closed. Use `!result <event_id> <option>` to declare the winner."))
-}
-
-// CmdListEvents lists active and closed events
-func CmdListEvents(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
-	eventsMu.RLock()
-	defer eventsMu.RUnlock()
-
-	if len(activeEvents) == 0 {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("Active Events", "No active betting events right now."))
-		return
-	}
-
-	var sb strings.Builder
-	count := 0
-	for _, event := range activeEvents {
-		event.mu.RLock()
-		if event.Status == "resolved" || event.Status == "cancelled" {
-			event.mu.RUnlock()
-			continue
-		}
-		count++
-
-		status := "🟢 Open"
-		timeLeft := time.Until(event.EndTime)
-		if event.Status == "closed" || timeLeft <= 0 {
-			status = "🔒 Closed (Awaiting Result)"
-		}
-
-		timeStr := fmt.Sprintf("Ends in %dm", int(timeLeft.Minutes())+1)
-		if event.Status == "closed" || timeLeft <= 0 {
-			timeStr = "Awaiting Result"
-		}
-
-		sb.WriteString(fmt.Sprintf("**%s** — %s\nID: `%s` | Pool: **%d %s** | %s\n\n",
-			event.Question, status, event.ID, event.TotalPool, config.Bot.CurrencySymbol, timeStr))
-		event.mu.RUnlock()
-	}
-
-	if count == 0 {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("Active Events", "No active betting events right now."))
-		return
-	}
-
-	s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("🎲 Active Betting Events", sb.String()))
-}
-
-// CmdViewEvent views details for a specific event
-func CmdViewEvent(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
-	if len(args) < 1 {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Usage: `!event <event_id>`"))
-		return
-	}
-
-	eventID := strings.TrimSpace(args[0])
-	eventsMu.RLock()
-	event, exists := activeEvents[eventID]
-	eventsMu.RUnlock()
-
-	if !exists {
-		// Attempt to load from database
-		dbEvt, err := database.GetBettingEventByID(eventID)
-		if err != nil || dbEvt == nil {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Event not found."))
-			return
-		}
-		event = fromDBEvent(dbEvt)
-		eventsMu.Lock()
-		activeEvents[eventID] = event
-		eventsMu.Unlock()
-	}
-
-	embed := event.ToEmbed()
-	s.ChannelMessageSendEmbed(m.ChannelID, embed)
 }

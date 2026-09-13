@@ -1,6 +1,7 @@
 package gacha
 
 import (
+	"bot/internal/locale"
 	"context"
 	"database/sql"
 	"errors"
@@ -10,9 +11,9 @@ import (
 	"time"
 )
 
-var ErrLimit = errors.New("No rolls left in this hourly window. Check !gacha status for the reset.")
-var ErrEmpty = errors.New("No enabled characters with approved images match this pool. No roll was spent.")
-var ErrClaim = errors.New("This character is owned, the roll expired, or your claim is on cooldown.")
+var ErrLimit = errors.New(locale.Text("gacha.game.no_rolls_left_in_this_hourly_window"))
+var ErrEmpty = errors.New(locale.Text("gacha.game.no_enabled_characters_with_approved_images_match"))
+var ErrClaim = errors.New(locale.Text("gacha.game.this_character_is_owned_the_roll_expired"))
 
 type Card struct {
 	Value, Keys, Claimed                          int64
@@ -38,7 +39,7 @@ func scanCard(row scanner) (Card, error) {
 }
 func ensurePlayer(ctx context.Context, tx *sql.Tx, guild, user string) error {
 	if guild == "" || user == "" {
-		return userError("Use this command in a server.")
+		return userError(locale.Text("gacha.discord.use_this_command_in_a_server"))
 	}
 	if _, e := tx.ExecContext(ctx, `INSERT INTO users(id,balance) VALUES($1,0) ON CONFLICT DO NOTHING`, user); e != nil {
 		return e
@@ -194,7 +195,7 @@ func (s *Store) Claim(ctx context.Context, guild, channel, user, roll string) er
 }
 func (s *Store) Cards(ctx context.Context, guild, user, search string, page int) ([]Card, error) {
 	if page < 1 || page > 100000 {
-		return nil, userError("Invalid page.")
+		return nil, userError(locale.Text("gacha.discord.invalid_page"))
 	}
 	rows, e := s.DB.QueryContext(ctx, cardSelect+` LEFT JOIN gacha_collection valued ON valued.character_id=c.id AND valued.guild_id=$2 CROSS JOIN (SELECT gacha_claimed_count($2) AS claimed) population WHERE ($1='' OR EXISTS(SELECT 1 FROM gacha_collection col WHERE col.character_id=c.id AND col.guild_id=$2 AND col.user_id=$1)) AND ($3='' OR c.name ILIKE '%'||$3||'%' OR c.id::text=$3 OR c.native_name ILIKE '%'||$3||'%' OR EXISTS(SELECT 1 FROM jsonb_array_elements_text(c.aliases) alias WHERE alias ILIKE '%'||$3||'%')) ORDER BY gacha_character_value(c.favourites,population.claimed,COALESCE(valued.keys,0)) DESC,c.id LIMIT 10 OFFSET $4`, user, guild, search, (page-1)*10)
 	if e != nil {
@@ -244,7 +245,7 @@ func (s *Store) Wish(ctx context.Context, guild, user string, id int64, remove b
 			return e
 		}
 		if n >= 20 {
-			return userError("Your wishlist is full (20 characters). Remove a wish first.")
+			return userError(locale.Text("gacha.game.your_wishlist_is_full_characters_remove_a"))
 		}
 		var res sql.Result
 		res, e = tx.ExecContext(ctx, `INSERT INTO gacha_wishes(guild_id,user_id,character_id) SELECT $1,$2,id FROM gacha_characters WHERE id=$3 ON CONFLICT(guild_id,user_id,character_id) DO UPDATE SET character_id=excluded.character_id`, guild, user, id)
@@ -254,7 +255,7 @@ func (s *Store) Wish(ctx context.Context, guild, user string, id int64, remove b
 				return err
 			}
 			if n == 0 {
-				return userError("Character not found.")
+				return userError(locale.Text("gacha.discord.character_not_found"))
 			}
 		}
 	}
@@ -314,7 +315,7 @@ func (s *Store) CancelDelivery(ctx context.Context, request string) error {
 func (s *Store) FindCharacter(ctx context.Context, guild string, query string) (Card, []Card, error) {
 	query = strings.TrimSpace(query)
 	if query == "" {
-		return Card{}, nil, userError("Enter a character name or ID.")
+		return Card{}, nil, userError(locale.Text("gacha.game.enter_a_character_name_or_id"))
 	}
 
 	if id, err := strconv.ParseInt(query, 10, 64); err == nil && id > 0 {

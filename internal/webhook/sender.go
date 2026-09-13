@@ -1,10 +1,12 @@
 package webhook
 
 import (
+	"bot/internal/database"
+	"bot/internal/locale"
+	"bot/pkg/config"
 	"bytes"
 	"encoding/json"
-	"bot/internal/database"
-	"bot/pkg/config"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -32,33 +34,33 @@ type Payload struct {
 func ValidateWebhookURL(rawURL string) error {
 	rawURL = strings.TrimSpace(rawURL)
 	if len(rawURL) > 2048 {
-		return fmt.Errorf("URL exceeds maximum allowed length of 2048 characters")
+		return errors.New(locale.Text("webhook.sender.url_exceeds_maximum_allowed_length_of_characters"))
 	}
 	parsed, err := url.ParseRequestURI(rawURL)
 	if err != nil {
-		return fmt.Errorf("invalid URL format: %w", err)
+		return fmt.Errorf(locale.Text("webhook.sender.invalid_url_format"), err)
 	}
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return fmt.Errorf("URL scheme must be http or https")
+		return errors.New(locale.Text("webhook.sender.url_scheme_must_be_http_or_https"))
 	}
 
 	host := parsed.Hostname()
 	if host == "" {
-		return fmt.Errorf("URL hostname cannot be empty")
+		return errors.New(locale.Text("webhook.sender.url_hostname_cannot_be_empty"))
 	}
 
 	// Verify hostname does not resolve to private/loopback/cloud-metadata IPs
 	ips, err := net.LookupIP(host)
 	if err != nil {
-		return fmt.Errorf("could not resolve hostname: %w", err)
+		return fmt.Errorf(locale.Text("webhook.sender.could_not_resolve_hostname"), err)
 	}
 	if len(ips) == 0 {
-		return fmt.Errorf("no IP address found for host")
+		return errors.New(locale.Text("webhook.sender.no_ip_address_found_for_host"))
 	}
 
 	for _, ip := range ips {
 		if isDisallowedIP(ip) {
-			return fmt.Errorf("webhook URL targets an unauthorized local or private IP address")
+			return errors.New(locale.Text("webhook.sender.webhook_url_targets_an_unauthorized_local_or"))
 		}
 	}
 	return nil
@@ -110,7 +112,7 @@ func SendTransferNotification(fromID, toID string, amount int) {
 		return
 	}
 
-	content := fmt.Sprintf("💰 **Transfer Received!** You received **%d %s** from <@%s>.", amount, config.Bot.CurrencyName, fromID)
+	content := locale.Text("webhook.sender.transfer_received_you_received_from.formatted", locale.Data{"Amount": amount, "CurrencyName": config.Bot.CurrencyName, "FromID": fromID})
 	payload := Payload{
 		Event:     "transfer_received",
 		Content:   content,
@@ -133,12 +135,10 @@ func SendStockNotification(userID string, isBuy bool, ticker string, shares floa
 	var event, content string
 	if isBuy {
 		event = "stock_buy"
-		content = fmt.Sprintf("📈 **Stock Purchase**\nYou bought **%.4f** shares of **%s** for **%d %s** (at $%.2f/share).",
-			shares, ticker, amount, config.Bot.CurrencyName, price)
+		content = locale.Text("webhook.sender.stock_purchase_you_bought_shares_of_for.formatted", locale.Data{"Shares": shares, "Ticker": ticker, "Amount": amount, "CurrencyName": config.Bot.CurrencyName, "Price": price})
 	} else {
 		event = "stock_sell"
-		content = fmt.Sprintf("📉 **Stock Sale**\nYou sold **%.4f** shares of **%s** for **%d %s** (at $%.2f/share).",
-			shares, ticker, amount, config.Bot.CurrencyName, price)
+		content = locale.Text("webhook.sender.stock_sale_you_sold_shares_of_for.formatted", locale.Data{"Shares": shares, "Ticker": ticker, "Amount": amount, "CurrencyName": config.Bot.CurrencyName, "Price": price})
 	}
 
 	payload := Payload{
@@ -164,12 +164,10 @@ func SendCryptoNotification(userID string, isBuy bool, symbol string, coins floa
 	var event, content string
 	if isBuy {
 		event = "crypto_buy"
-		content = fmt.Sprintf("🪙 **Crypto Purchase**\nYou bought **%.8f %s** for **%d %s** (at $%.6f/coin).",
-			coins, symbol, amount, config.Bot.CurrencyName, price)
+		content = locale.Text("webhook.sender.crypto_purchase_you_bought_for_at_coin.formatted", locale.Data{"Coins": coins, "Symbol": symbol, "Amount": amount, "CurrencyName": config.Bot.CurrencyName, "Price": price})
 	} else {
 		event = "crypto_sell"
-		content = fmt.Sprintf("💰 **Crypto Sale**\nYou sold **%.8f %s** for **%d %s** (at $%.6f/coin).",
-			coins, symbol, amount, config.Bot.CurrencyName, price)
+		content = locale.Text("webhook.sender.crypto_sale_you_sold_for_at_coin.formatted", locale.Data{"Coins": coins, "Symbol": symbol, "Amount": amount, "CurrencyName": config.Bot.CurrencyName, "Price": price})
 	}
 
 	payload := Payload{
@@ -209,7 +207,7 @@ func TestWebhook(targetURL string) error {
 
 	payload := Payload{
 		Event:     "test",
-		Content:   "🔔 **Test Notification** from Pousadinha-Chan! Your webhook is working properly.",
+		Content:   locale.Text("webhook.sender.test_notification_from_pousadinha_chan_your_webhook"),
 		Timestamp: time.Now(),
 	}
 
@@ -226,7 +224,7 @@ func TestWebhook(targetURL string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("remote endpoint returned status %d %s", resp.StatusCode, http.StatusText(resp.StatusCode))
+		return fmt.Errorf(locale.Text("webhook.sender.remote_endpoint_returned_status"), resp.StatusCode, http.StatusText(resp.StatusCode))
 	}
 	return nil
 }

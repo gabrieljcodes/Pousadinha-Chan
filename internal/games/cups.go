@@ -1,11 +1,12 @@
 package games
 
 import (
-	"crypto/rand"
-	"encoding/binary"
 	"bot/internal/database"
+	"bot/internal/locale"
 	"bot/pkg/config"
 	"bot/pkg/utils"
+	"crypto/rand"
+	"encoding/binary"
 	"fmt"
 	"strconv"
 	"strings"
@@ -30,26 +31,24 @@ func pickWinningCup(totalCups int) int {
 	return int(binary.LittleEndian.Uint32(b[:])%uint32(totalCups)) + 1
 }
 
-// --- ENTRY POINTS ---
-
 func StartCupGameInteraction(s *discordgo.Session, i *discordgo.InteractionCreate, bet int) {
 	if i.GuildID == "" {
-		respondPrivate(s, i, utils.ErrorEmbed("This game can only be played within a server."))
+		respondPrivate(s, i, utils.ErrorEmbed(locale.Text("games.aviator.this_game_can_only_be_played_within")))
 		return
 	}
 	guildID := i.GuildID
 	userID := i.Member.User.ID
 
 	if bet < MinCupBet {
-		respondPrivate(s, i, utils.ErrorEmbed(fmt.Sprintf("Minimum bet is %d %s", MinCupBet, config.Bot.CurrencySymbol)))
+		respondPrivate(s, i, utils.ErrorEmbed(locale.Text("games.cups.minimum_bet_is.formatted", locale.Data{"MinCupBet": MinCupBet, "CurrencySymbol": config.Bot.CurrencySymbol})))
 		return
 	}
 	if database.GetBalance(guildID, userID) < bet {
-		respondPrivate(s, i, utils.ErrorEmbed("Insufficient funds."))
+		respondPrivate(s, i, utils.ErrorEmbed(locale.Text("games.cups.insufficient_funds")))
 		return
 	}
 	if IsUserInGame(userID) {
-		respondPrivate(s, i, utils.ErrorEmbed("You already have an active game in progress! Finish it first."))
+		respondPrivate(s, i, utils.ErrorEmbed(locale.Text("games.aviator.you_already_have_an_active_game_in")))
 		return
 	}
 
@@ -57,7 +56,7 @@ func StartCupGameInteraction(s *discordgo.Session, i *discordgo.InteractionCreat
 		UserID: userID,
 		OnQueue: func(pos int) {
 			if pos == -1 {
-				respondPrivate(s, i, utils.ErrorEmbed("You already have an active game in progress! Finish it first."))
+				respondPrivate(s, i, utils.ErrorEmbed(locale.Text("games.aviator.you_already_have_an_active_game_in")))
 			}
 		},
 		Run: func(finishChan chan struct{}) {
@@ -65,13 +64,13 @@ func StartCupGameInteraction(s *discordgo.Session, i *discordgo.InteractionCreat
 			defer cleanupCup(userID)
 
 			if database.GetBalance(guildID, userID) < bet {
-				respondPrivate(s, i, utils.ErrorEmbed("You ran out of funds before starting."))
+				respondPrivate(s, i, utils.ErrorEmbed(locale.Text("games.cups.you_ran_out_of_funds_before_starting")))
 				return
 			}
 
 			// Deduct initial bet atomically
 			if err := database.CollectLostBet(guildID, userID, bet); err != nil {
-				respondPrivate(s, i, utils.ErrorEmbed("Error processing bet."))
+				respondPrivate(s, i, utils.ErrorEmbed(locale.Text("games.cups.error_processing_bet")))
 				return
 			}
 
@@ -79,7 +78,7 @@ func StartCupGameInteraction(s *discordgo.Session, i *discordgo.InteractionCreat
 			err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
 				Data: &discordgo.InteractionResponseData{
-					Content:    fmt.Sprintf("<@%s> It's your turn!", userID),
+					Content:    locale.Text("games.cups.it_s_your_turn.formatted", locale.Data{"UserID": userID}),
 					Embeds:     []*discordgo.MessageEmbed{embed},
 					Components: rows,
 				},
@@ -104,83 +103,16 @@ func StartCupGameInteraction(s *discordgo.Session, i *discordgo.InteractionCreat
 	Enqueue(job)
 }
 
-func StartCupGameText(s *discordgo.Session, m *discordgo.MessageCreate, bet int) {
-	if m.GuildID == "" {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("This game can only be played within a server."))
-		return
-	}
-	guildID := m.GuildID
-	userID := m.Author.ID
-
-	if bet < MinCupBet {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(fmt.Sprintf("Minimum bet is %d %s", MinCupBet, config.Bot.CurrencySymbol)))
-		return
-	}
-	if database.GetBalance(guildID, userID) < bet {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Insufficient funds."))
-		return
-	}
-	if IsUserInGame(userID) {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("You already have an active game in progress! Finish it first."))
-		return
-	}
-
-	job := GameJob{
-		UserID: userID,
-		OnQueue: func(pos int) {
-			if pos == -1 {
-				s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("You already have an active game in progress! Finish it first."))
-			}
-		},
-		Run: func(finishChan chan struct{}) {
-			defer close(finishChan)
-			defer cleanupCup(userID)
-
-			if database.GetBalance(guildID, userID) < bet {
-				s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(fmt.Sprintf("<@%s> You ran out of funds.", userID)))
-				return
-			}
-
-			// Deduct initial bet atomically
-			if err := database.CollectLostBet(guildID, userID, bet); err != nil {
-				s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Error processing bet."))
-				return
-			}
-
-			embed, rows := buildCupRoundUI(1, bet, 6, userID)
-			msg, err := s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
-				Content:    fmt.Sprintf("<@%s> It's your turn!", userID),
-				Embeds:     []*discordgo.MessageEmbed{embed},
-				Components: rows,
-			})
-
-			if err != nil {
-				_ = database.AddCoins(guildID, userID, bet)
-				return
-			}
-
-			runCupGameLoop(s, guildID, userID, bet, m.ChannelID, msg.ID)
-		},
-	}
-
-	Enqueue(job)
-}
-
-// --- CORE GAME LOOP ---
-
 func buildCupRoundUI(round int, currentPot int, numCups int, userID string) (*discordgo.MessageEmbed, []discordgo.MessageComponent) {
 	embed := utils.NewEmbed()
-	embed.Title = fmt.Sprintf("🥤 Cup Game — Round %d", round)
+	embed.Title = locale.Text("games.cups.cup_game_round.formatted", locale.Data{"Round": round})
 
 	multiplierText := "5x"
 	if round > 1 {
-		multiplierText = "2x (Double or Nothing)"
+		multiplierText = locale.Text("games.cups.x_double_or_nothing")
 	}
 
-	embed.Description = fmt.Sprintf(
-		"Current Pot: **%d %s**\nRound Multiplier: **%s**\n\n**Guess which cup contains the coin!** (1 to %d)",
-		currentPot, config.Bot.CurrencySymbol, multiplierText, numCups,
-	)
+	embed.Description = locale.Text("games.cups.current_pot_round_multiplier_guess_which_cup.formatted", locale.Data{"CurrentPot": currentPot, "CurrencySymbol": config.Bot.CurrencySymbol, "MultiplierText": multiplierText, "NumCups": numCups})
 	embed.Color = utils.ColorGold
 
 	var rows []discordgo.MessageComponent
@@ -232,7 +164,7 @@ func runCupGameLoop(s *discordgo.Session, guildID, userID string, bet int, chann
 
 		case <-time.After(2 * time.Minute):
 			// Timeout while guessing
-			timeoutEmbed := utils.ErrorEmbed(fmt.Sprintf("⏰ **Game Timed Out!**\n<@%s> took too long to pick a cup. Bet lost.", userID))
+			timeoutEmbed := utils.ErrorEmbed(locale.Text("games.cups.game_timed_out_took_too_long_to.formatted", locale.Data{"UserID": userID}))
 			_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
 				ID:         gameMsgID,
 				Channel:    channelID,
@@ -255,25 +187,20 @@ func runCupGameLoop(s *discordgo.Session, guildID, userID string, bet int, chann
 
 			// Ask to Cash Out or Continue
 			embed := utils.NewEmbed()
-			embed.Title = "✅ CORRECT!"
+			embed.Title = locale.Text("games.cups.correct")
 			embed.Color = utils.ColorGreen
 
-			embed.Description = fmt.Sprintf(
-				"The coin was in **Cup %d**!\n\n"+
-					"💰 **Current Pot:** %d %s *(+%d profit)*\n\n"+
-					"Do you want to **Cash Out** now or **Continue** for Double or Nothing (50%% chance on 2 cups)?",
-				winningCup, currentPot, config.Bot.CurrencySymbol, netProfit,
-			)
+			embed.Description = locale.Text("games.cups.the_coin_was_in_cup_current_pot.formatted", locale.Data{"WinningCup": winningCup, "CurrentPot": currentPot, "CurrencySymbol": config.Bot.CurrencySymbol, "NetProfit": netProfit})
 
 			actionRow := discordgo.ActionsRow{
 				Components: []discordgo.MessageComponent{
 					discordgo.Button{
-						Label:    "💰 Cash Out",
+						Label:    locale.Text("games.cups.cash_out"),
 						Style:    discordgo.SuccessButton,
 						CustomID: fmt.Sprintf("cup_cashout_%s", userID),
 					},
 					discordgo.Button{
-						Label:    "🎲 Continue (Double or Nothing)",
+						Label:    locale.Text("games.cups.continue_double_or_nothing"),
 						Style:    discordgo.PrimaryButton,
 						CustomID: fmt.Sprintf("cup_continue_%s", userID),
 					},
@@ -298,9 +225,8 @@ func runCupGameLoop(s *discordgo.Session, guildID, userID string, bet int, chann
 				if strings.Contains(id, "cashout") {
 					// Cash Out
 					_ = database.AddCoins(guildID, userID, currentPot)
-					winEmbed := utils.SuccessEmbed("CASHED OUT!",
-						fmt.Sprintf("🎉 **Congratulations!**\n<@%s> walked away with **%d %s**! *(Net Profit: +%d %s)*",
-							userID, currentPot, config.Bot.CurrencySymbol, netProfit, config.Bot.CurrencySymbol))
+					winEmbed := utils.SuccessEmbed(locale.Text("games.aviator.cashed_out"),
+						locale.Text("games.cups.congratulations_walked_away_with_net_profit.formatted", locale.Data{"UserID": userID, "CurrentPot": currentPot, "CurrencySymbol": config.Bot.CurrencySymbol, "NetProfit": netProfit, "CurrencySymbol5": config.Bot.CurrencySymbol}))
 
 					_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
 						ID:         gameMsgID,
@@ -324,9 +250,8 @@ func runCupGameLoop(s *discordgo.Session, guildID, userID string, bet int, chann
 			case <-time.After(1 * time.Minute):
 				// Auto Cashout on timeout
 				_ = database.AddCoins(guildID, userID, currentPot)
-				autoEmbed := utils.SuccessEmbed("AUTO CASH-OUT",
-					fmt.Sprintf("⏰ Time expired! Automatically cashed out **%d %s** for <@%s>.",
-						currentPot, config.Bot.CurrencySymbol, userID))
+				autoEmbed := utils.SuccessEmbed(locale.Text("games.cups.auto_cash_out"),
+					locale.Text("games.cups.time_expired_automatically_cashed_out_for.formatted", locale.Data{"CurrentPot": currentPot, "CurrencySymbol": config.Bot.CurrencySymbol, "UserID": userID}))
 
 				_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
 					ID:         gameMsgID,
@@ -340,12 +265,9 @@ func runCupGameLoop(s *discordgo.Session, guildID, userID string, bet int, chann
 		} else {
 			// LOSE
 			embed := utils.NewEmbed()
-			embed.Title = "❌ WRONG CUP!"
+			embed.Title = locale.Text("games.cups.wrong_cup")
 			embed.Color = utils.ColorRed
-			embed.Description = fmt.Sprintf(
-				"You picked Cup %d, but the coin was hiding in **Cup %d**!\n\n📉 You lost your initial bet of **%d %s**.",
-				choice, winningCup, bet, config.Bot.CurrencySymbol,
-			)
+			embed.Description = locale.Text("games.cups.you_picked_cup_but_the_coin_was.formatted", locale.Data{"Choice": choice, "WinningCup": winningCup, "Bet": bet, "CurrencySymbol": config.Bot.CurrencySymbol})
 
 			_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
 				ID:         gameMsgID,
@@ -357,8 +279,6 @@ func runCupGameLoop(s *discordgo.Session, guildID, userID string, bet int, chann
 		}
 	}
 }
-
-// --- HELPERS ---
 
 // HandleCupInteraction validates that the user clicking is the owner of this game
 func HandleCupInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -373,7 +293,7 @@ func HandleCupInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) 
 		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: fmt.Sprintf("❌ This is not your game! Only <@%s> can make choices here.", expectedUserID),
+				Content: locale.Text("games.cups.this_is_not_your_game_only_can.formatted", locale.Data{"ExpectedUserID": expectedUserID}),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -388,7 +308,7 @@ func HandleCupInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) 
 		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "⚠️ This game has already ended.",
+				Content: locale.Text("games.cups.this_game_has_already_ended"),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -411,7 +331,7 @@ func makeCupButtons(userID string, start, end int) []discordgo.MessageComponent 
 	btns := []discordgo.MessageComponent{}
 	for i := start; i <= end; i++ {
 		btns = append(btns, discordgo.Button{
-			Label:    fmt.Sprintf("Cup %d", i),
+			Label:    locale.Text("games.cups.cup.formatted", locale.Data{"I": i}),
 			Style:    discordgo.SecondaryButton,
 			Emoji:    &discordgo.ComponentEmoji{Name: "🥤"},
 			CustomID: fmt.Sprintf("cup_pick_%d_%s", i, userID),

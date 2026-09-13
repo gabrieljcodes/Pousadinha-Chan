@@ -1,6 +1,9 @@
 package commands
 
-import "github.com/bwmarrin/discordgo"
+import (
+	"bot/internal/locale"
+	"github.com/bwmarrin/discordgo"
+)
 
 var minAmount float64 = 1.0
 
@@ -11,44 +14,44 @@ func ptr(f float64) *float64 {
 var SlashCommands = []*discordgo.ApplicationCommand{
 	{
 		Name:        "help",
-		Description: "Show all commands and features",
+		Description: locale.Text("commands.definitions.show_all_commands_and_features"),
 	},
 	{
 		Name:        "daily",
-		Description: "Collect your daily reward",
+		Description: locale.Text("commands.definitions.collect_your_daily_reward"),
 	},
 	{
 		Name:        "balance",
-		Description: "Check your or someone else's balance",
+		Description: locale.Text("commands.definitions.check_your_or_someone_else_s_balance"),
 		Options: []*discordgo.ApplicationCommandOption{
 			{
 				Type:        discordgo.ApplicationCommandOptionUser,
 				Name:        "user",
-				Description: "The user to check",
+				Description: locale.Text("commands.definitions.the_user_to_check"),
 				Required:    false,
 			},
 		},
 	},
 	{
 		Name:        "leaderboard",
-		Description: "View rankings and leaderboards",
+		Description: locale.Text("commands.definitions.view_rankings_and_leaderboards"),
 		Options: []*discordgo.ApplicationCommandOption{
 			{
 				Type:        discordgo.ApplicationCommandOptionString,
 				Name:        "category",
-				Description: "Category of the leaderboard",
+				Description: locale.Text("commands.definitions.category_of_the_leaderboard"),
 				Required:    false,
 				Choices: []*discordgo.ApplicationCommandOptionChoice{
 					{
-						Name:  "Patrimônio Geral (Net Worth)",
+						Name:  locale.Text("commands.definitions.net_worth"),
 						Value: "networth",
 					},
 					{
-						Name:  "Saldo em Carteira (Wallet)",
+						Name:  locale.Text("commands.definitions.wallet_balance"),
 						Value: "wallet",
 					},
 					{
-						Name:  "Sequência Diária (Daily Streak)",
+						Name:  locale.Text("commands.definitions.daily_streak"),
 						Value: "streak",
 					},
 				},
@@ -57,18 +60,18 @@ var SlashCommands = []*discordgo.ApplicationCommand{
 	},
 	{
 		Name:        "pay",
-		Description: "Transfer EstudoCoins to another user",
+		Description: locale.Text("commands.definitions.transfer_estudocoins_to_another_user"),
 		Options: []*discordgo.ApplicationCommandOption{
 			{
 				Type:        discordgo.ApplicationCommandOptionUser,
 				Name:        "user",
-				Description: "Recipient of the coins",
+				Description: locale.Text("commands.definitions.recipient_of_the_coins"),
 				Required:    true,
 			},
 			{
 				Type:        discordgo.ApplicationCommandOptionInteger,
 				Name:        "amount",
-				Description: "Amount to transfer",
+				Description: locale.Text("commands.definitions.amount_to_transfer"),
 				Required:    true,
 				MinValue:    &minAmount,
 			},
@@ -76,59 +79,59 @@ var SlashCommands = []*discordgo.ApplicationCommand{
 	},
 	{
 		Name:        "shop",
-		Description: "View available items in the shop",
+		Description: locale.Text("commands.definitions.view_available_items_in_the_shop"),
 	},
 	{
 		Name:        "buy",
-		Description: "Buy items from the shop",
+		Description: locale.Text("commands.definitions.buy_items_from_the_shop"),
 		Options: []*discordgo.ApplicationCommandOption{
 			{
 				Name:        "nickname",
-				Description: "Change your own nickname",
+				Description: locale.Text("commands.definitions.change_your_own_nickname"),
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 				Options: []*discordgo.ApplicationCommandOption{
 					{
 						Type:        discordgo.ApplicationCommandOptionString,
 						Name:        "new_name",
-						Description: "The new nickname",
+						Description: locale.Text("commands.definitions.the_new_nickname"),
 						Required:    true,
 					},
 				},
 			},
 			{
 				Name:        "rename",
-				Description: "Change someone else's nickname",
+				Description: locale.Text("commands.definitions.change_someone_else_s_nickname"),
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 				Options: []*discordgo.ApplicationCommandOption{
 					{
 						Type:        discordgo.ApplicationCommandOptionUser,
 						Name:        "user",
-						Description: "The user to rename",
+						Description: locale.Text("commands.definitions.the_user_to_rename"),
 						Required:    true,
 					},
 					{
 						Type:        discordgo.ApplicationCommandOptionString,
 						Name:        "new_name",
-						Description: "The new nickname",
+						Description: locale.Text("commands.definitions.the_new_nickname"),
 						Required:    true,
 					},
 				},
 			},
 			{
 				Name:        "timeout",
-				Description: "Timeout a user from text and voice channels",
+				Description: locale.Text("commands.definitions.timeout_a_user_from_text_and_voice"),
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 				Options: []*discordgo.ApplicationCommandOption{
 					{
 						Type:        discordgo.ApplicationCommandOptionUser,
 						Name:        "user",
-						Description: "The user to timeout",
+						Description: locale.Text("commands.definitions.the_user_to_timeout"),
 						Required:    true,
 					},
 					{
 						Type:        discordgo.ApplicationCommandOptionInteger,
 						Name:        "minutes",
-						Description: "Duration in minutes (1-1440)",
+						Description: locale.Text("commands.definitions.duration_in_minutes"),
 						Required:    true,
 						MinValue:    &minAmount,
 						MaxValue:    1440.0,
@@ -137,19 +140,19 @@ var SlashCommands = []*discordgo.ApplicationCommand{
 			},
 			{
 				Name:        "mute",
-				Description: "Mute a user in voice calls",
+				Description: locale.Text("commands.definitions.mute_a_user_in_voice_calls"),
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 				Options: []*discordgo.ApplicationCommandOption{
 					{
 						Type:        discordgo.ApplicationCommandOptionUser,
 						Name:        "user",
-						Description: "The user to voice mute",
+						Description: locale.Text("commands.definitions.the_user_to_voice_mute"),
 						Required:    true,
 					},
 					{
 						Type:        discordgo.ApplicationCommandOptionInteger,
 						Name:        "minutes",
-						Description: "Duration in minutes (1-1440)",
+						Description: locale.Text("commands.definitions.duration_in_minutes"),
 						Required:    true,
 						MinValue:    &minAmount,
 						MaxValue:    1440.0,
@@ -160,35 +163,35 @@ var SlashCommands = []*discordgo.ApplicationCommand{
 	},
 	{
 		Name:        "apikey",
-		Description: "Manage your API Keys",
+		Description: locale.Text("commands.definitions.manage_your_api_keys"),
 		Options: []*discordgo.ApplicationCommandOption{
 			{
 				Name:        "create",
-				Description: "Create a new API Key (Sent via DM)",
+				Description: locale.Text("commands.definitions.create_a_new_api_key_sent_via"),
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 				Options: []*discordgo.ApplicationCommandOption{
 					{
 						Type:        discordgo.ApplicationCommandOptionString,
 						Name:        "name",
-						Description: "Optional name for the key",
+						Description: locale.Text("commands.definitions.optional_name_for_the_key"),
 						Required:    false,
 					},
 				},
 			},
 			{
 				Name:        "list",
-				Description: "List your active API Keys",
+				Description: locale.Text("commands.definitions.list_your_active_api_keys"),
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 			},
 			{
 				Name:        "delete",
-				Description: "Delete an API Key",
+				Description: locale.Text("commands.definitions.delete_an_api_key"),
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 				Options: []*discordgo.ApplicationCommandOption{
 					{
 						Type:        discordgo.ApplicationCommandOptionString,
 						Name:        "prefix",
-						Description: "The first few characters of the key to delete",
+						Description: locale.Text("commands.definitions.the_first_few_characters_of_the_key"),
 						Required:    true,
 					},
 				},
@@ -197,66 +200,66 @@ var SlashCommands = []*discordgo.ApplicationCommand{
 	},
 	{
 		Name:        "webhook",
-		Description: "Manage your Webhook for API notifications",
+		Description: locale.Text("commands.definitions.manage_your_webhook_for_api_notifications"),
 		Options: []*discordgo.ApplicationCommandOption{
 			{
 				Name:        "set",
-				Description: "Set your webhook URL",
+				Description: locale.Text("commands.definitions.set_your_webhook_url"),
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 				Options: []*discordgo.ApplicationCommandOption{
 					{
 						Type:        discordgo.ApplicationCommandOptionString,
 						Name:        "url",
-						Description: "The URL to receive POST requests",
+						Description: locale.Text("commands.definitions.the_url_to_receive_post_requests"),
 						Required:    true,
 					},
 				},
 			},
 			{
 				Name:        "test",
-				Description: "Send a test payload to your configured webhook",
+				Description: locale.Text("commands.definitions.send_a_test_payload_to_your_configured"),
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 			},
 			{
 				Name:        "delete",
-				Description: "Remove your webhook configuration",
+				Description: locale.Text("commands.definitions.remove_your_webhook_configuration"),
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 			},
 		},
 	},
 	{
 		Name:        "bet",
-		Description: "Play casino games",
+		Description: locale.Text("commands.definitions.play_casino_games"),
 		Options: []*discordgo.ApplicationCommandOption{
 			{
 				Name:        "aviator",
-				Description: "Play the Aviator crash game",
+				Description: locale.Text("commands.definitions.play_the_aviator_crash_game"),
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 				Options: []*discordgo.ApplicationCommandOption{
 					{
 						Type:        discordgo.ApplicationCommandOptionInteger,
 						Name:        "amount",
-						Description: "Amount to bet (Min 100)",
+						Description: locale.Text("commands.definitions.amount_to_bet_min"),
 						Required:    true,
 						MinValue:    &minAmount,
 					},
 					{
 						Type:        discordgo.ApplicationCommandOptionNumber,
 						Name:        "auto_cashout",
-						Description: "Optional target multiplier to automatically cash out (e.g. 2.0)",
+						Description: locale.Text("commands.definitions.optional_target_multiplier_to_automatically_cash_out"),
 						Required:    false,
 					},
 				},
 			},
 			{
 				Name:        "cups",
-				Description: "Play the Cup Game (Double or Nothing)",
+				Description: locale.Text("commands.definitions.play_the_cup_game_double_or_nothing"),
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 				Options: []*discordgo.ApplicationCommandOption{
 					{
 						Type:        discordgo.ApplicationCommandOptionInteger,
 						Name:        "amount",
-						Description: "Amount to bet (Min 50)",
+						Description: locale.Text("commands.definitions.amount_to_bet_min_fb12ba"),
 						Required:    true,
 						MinValue:    &minAmount,
 					},
@@ -264,13 +267,13 @@ var SlashCommands = []*discordgo.ApplicationCommand{
 			},
 			{
 				Name:        "slots",
-				Description: "Play the Slot Machine",
+				Description: locale.Text("commands.definitions.play_the_slot_machine"),
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 				Options: []*discordgo.ApplicationCommandOption{
 					{
 						Type:        discordgo.ApplicationCommandOptionInteger,
 						Name:        "amount",
-						Description: "Amount to bet (Min 10)",
+						Description: locale.Text("commands.definitions.amount_to_bet_min_a2c68e"),
 						Required:    true,
 						MinValue:    ptr(float64(10)),
 					},
@@ -278,20 +281,20 @@ var SlashCommands = []*discordgo.ApplicationCommand{
 			},
 			{
 				Name:        "mines",
-				Description: "Play the Mines casino game (Campo Minado)",
+				Description: locale.Text("commands.definitions.play_the_mines_casino_game"),
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 				Options: []*discordgo.ApplicationCommandOption{
 					{
 						Type:        discordgo.ApplicationCommandOptionInteger,
 						Name:        "amount",
-						Description: "Amount to bet (Min 10)",
+						Description: locale.Text("commands.definitions.amount_to_bet_min_a2c68e"),
 						Required:    true,
 						MinValue:    ptr(float64(10)),
 					},
 					{
 						Type:        discordgo.ApplicationCommandOptionInteger,
 						Name:        "mines",
-						Description: "Number of mines on the board (1 to 19, default 3)",
+						Description: locale.Text("commands.definitions.number_of_mines_on_the_board_to"),
 						Required:    false,
 						MinValue:    ptr(float64(1)),
 						MaxValue:    float64(19),
@@ -302,12 +305,12 @@ var SlashCommands = []*discordgo.ApplicationCommand{
 	},
 	{
 		Name:        "slots",
-		Description: "Play the Slot Machine",
+		Description: locale.Text("commands.definitions.play_the_slot_machine"),
 		Options: []*discordgo.ApplicationCommandOption{
 			{
 				Type:        discordgo.ApplicationCommandOptionInteger,
 				Name:        "amount",
-				Description: "Amount to bet (Min 10)",
+				Description: locale.Text("commands.definitions.amount_to_bet_min_a2c68e"),
 				Required:    true,
 				MinValue:    ptr(float64(10)),
 			},
@@ -315,12 +318,12 @@ var SlashCommands = []*discordgo.ApplicationCommand{
 	},
 	{
 		Name:        "blackjack",
-		Description: "Play a game of Blackjack",
+		Description: locale.Text("commands.definitions.play_a_game_of_blackjack"),
 		Options: []*discordgo.ApplicationCommandOption{
 			{
 				Type:        discordgo.ApplicationCommandOptionInteger,
 				Name:        "bet",
-				Description: "Amount to bet (Min 10)",
+				Description: locale.Text("commands.definitions.amount_to_bet_min_a2c68e"),
 				Required:    true,
 				MinValue:    ptr(float64(10)),
 			},
@@ -328,19 +331,19 @@ var SlashCommands = []*discordgo.ApplicationCommand{
 	},
 	{
 		Name:        "mines",
-		Description: "Play the Mines casino game (Campo Minado)",
+		Description: locale.Text("commands.definitions.play_the_mines_casino_game"),
 		Options: []*discordgo.ApplicationCommandOption{
 			{
 				Type:        discordgo.ApplicationCommandOptionInteger,
 				Name:        "bet",
-				Description: "Amount to bet (Min 10)",
+				Description: locale.Text("commands.definitions.amount_to_bet_min_a2c68e"),
 				Required:    true,
 				MinValue:    ptr(float64(10)),
 			},
 			{
 				Type:        discordgo.ApplicationCommandOptionInteger,
 				Name:        "mines",
-				Description: "Number of mines on the board (1 to 19, default 3)",
+				Description: locale.Text("commands.definitions.number_of_mines_on_the_board_to"),
 				Required:    false,
 				MinValue:    ptr(float64(1)),
 				MaxValue:    float64(19),
@@ -349,47 +352,47 @@ var SlashCommands = []*discordgo.ApplicationCommand{
 	},
 	{
 		Name:        "wheel",
-		Description: "Casino European Roulette",
+		Description: locale.Text("commands.definitions.casino_european_roulette"),
 		Options: []*discordgo.ApplicationCommandOption{
 			{
 				Name:        "status",
-				Description: "Check time until next spin and active round stats",
+				Description: locale.Text("commands.definitions.check_time_until_next_spin_and_active"),
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 			},
 			{
 				Name:        "bet",
-				Description: "Place a bet on the upcoming roulette spin",
+				Description: locale.Text("commands.definitions.place_a_bet_on_the_upcoming_roulette"),
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 				Options: []*discordgo.ApplicationCommandOption{
 					{
 						Type:        discordgo.ApplicationCommandOptionString,
 						Name:        "type",
-						Description: "Bet type (number, red, black, even, odd, low, high, dozen)",
+						Description: locale.Text("commands.definitions.bet_type_number_red_black_even_odd"),
 						Required:    true,
 						Choices: []*discordgo.ApplicationCommandOptionChoice{
-							{Name: "🔴 Red (1:1)", Value: "red"},
-							{Name: "⚫ Black (1:1)", Value: "black"},
-							{Name: "Even / Par (1:1)", Value: "even"},
-							{Name: "Odd / Ímpar (1:1)", Value: "odd"},
-							{Name: "Low 1-18 (1:1)", Value: "low"},
-							{Name: "High 19-36 (1:1)", Value: "high"},
-							{Name: "1st Dozen 1-12 (2:1)", Value: "1st"},
-							{Name: "2nd Dozen 13-24 (2:1)", Value: "2nd"},
-							{Name: "3rd Dozen 25-36 (2:1)", Value: "3rd"},
-							{Name: "Specific Number 0-36 (35:1)", Value: "number"},
+							{Name: locale.Text("commands.definitions.red"), Value: "red"},
+							{Name: locale.Text("commands.definitions.black"), Value: "black"},
+							{Name: locale.Text("commands.definitions.even"), Value: "even"},
+							{Name: locale.Text("commands.definitions.odd"), Value: "odd"},
+							{Name: locale.Text("commands.definitions.low"), Value: "low"},
+							{Name: locale.Text("commands.definitions.high"), Value: "high"},
+							{Name: locale.Text("commands.definitions.st_dozen"), Value: "1st"},
+							{Name: locale.Text("commands.definitions.nd_dozen"), Value: "2nd"},
+							{Name: locale.Text("commands.definitions.rd_dozen"), Value: "3rd"},
+							{Name: locale.Text("commands.definitions.specific_number"), Value: "number"},
 						},
 					},
 					{
 						Type:        discordgo.ApplicationCommandOptionInteger,
 						Name:        "amount",
-						Description: "Amount to bet (Min 50)",
+						Description: locale.Text("commands.definitions.amount_to_bet_min_fb12ba"),
 						Required:    true,
 						MinValue:    ptr(float64(50)),
 					},
 					{
 						Type:        discordgo.ApplicationCommandOptionInteger,
 						Name:        "number",
-						Description: "Number to bet on (0-36, only required if type is number)",
+						Description: locale.Text("commands.definitions.number_to_bet_on_only_required_if"),
 						Required:    false,
 						MinValue:    ptr(float64(0)),
 						MaxValue:    36,
@@ -400,23 +403,23 @@ var SlashCommands = []*discordgo.ApplicationCommand{
 	},
 	{
 		Name:        "roulette",
-		Description: "Russian Roulette PvP duel",
+		Description: locale.Text("commands.definitions.russian_roulette_pvp_duel"),
 		Options: []*discordgo.ApplicationCommandOption{
 			{
 				Name:        "challenge",
-				Description: "Challenge another user to Russian Roulette (Winner takes all)",
+				Description: locale.Text("commands.definitions.challenge_another_user_to_russian_roulette_winner"),
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 				Options: []*discordgo.ApplicationCommandOption{
 					{
 						Type:        discordgo.ApplicationCommandOptionUser,
 						Name:        "user",
-						Description: "User to challenge",
+						Description: locale.Text("commands.definitions.user_to_challenge"),
 						Required:    true,
 					},
 					{
 						Type:        discordgo.ApplicationCommandOptionInteger,
 						Name:        "amount",
-						Description: "Amount to bet (Min 50)",
+						Description: locale.Text("commands.definitions.amount_to_bet_min_fb12ba"),
 						Required:    true,
 						MinValue:    ptr(float64(50)),
 					},
@@ -426,30 +429,30 @@ var SlashCommands = []*discordgo.ApplicationCommand{
 	},
 	{
 		Name:        "loan",
-		Description: "Loan system - Lend or borrow money",
+		Description: locale.Text("commands.definitions.loan_system_lend_or_borrow_money"),
 		Options: []*discordgo.ApplicationCommandOption{
 			{
 				Name:        "offer",
-				Description: "Offer a loan to another user",
+				Description: locale.Text("commands.definitions.offer_a_loan_to_another_user"),
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 				Options: []*discordgo.ApplicationCommandOption{
 					{
 						Type:        discordgo.ApplicationCommandOptionUser,
 						Name:        "user",
-						Description: "The user to lend money to",
+						Description: locale.Text("commands.definitions.the_user_to_lend_money_to"),
 						Required:    true,
 					},
 					{
 						Type:        discordgo.ApplicationCommandOptionInteger,
 						Name:        "amount",
-						Description: "Amount to lend",
+						Description: locale.Text("commands.definitions.amount_to_lend"),
 						Required:    true,
 						MinValue:    &minAmount,
 					},
 					{
 						Type:        discordgo.ApplicationCommandOptionNumber,
 						Name:        "interest",
-						Description: "Interest rate percentage (0-100)",
+						Description: locale.Text("commands.definitions.interest_rate_percentage"),
 						Required:    true,
 						MinValue:    ptr(0.0),
 						MaxValue:    100.0,
@@ -457,7 +460,7 @@ var SlashCommands = []*discordgo.ApplicationCommand{
 					{
 						Type:        discordgo.ApplicationCommandOptionInteger,
 						Name:        "days",
-						Description: "Days until payment is due (1-365)",
+						Description: locale.Text("commands.definitions.days_until_payment_is_due"),
 						Required:    true,
 						MinValue:    ptr(1.0),
 						MaxValue:    365.0,
@@ -466,48 +469,48 @@ var SlashCommands = []*discordgo.ApplicationCommand{
 			},
 			{
 				Name:        "pay",
-				Description: "Pay an active loan",
+				Description: locale.Text("commands.definitions.pay_an_active_loan"),
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 				Options: []*discordgo.ApplicationCommandOption{
 					{
 						Type:        discordgo.ApplicationCommandOptionString,
 						Name:        "loan_id",
-						Description: "The loan ID to pay (optional - pays oldest if not specified)",
+						Description: locale.Text("commands.definitions.the_loan_id_to_pay_optional_pays"),
 						Required:    false,
 					},
 				},
 			},
 			{
 				Name:        "list",
-				Description: "List your active loans",
+				Description: locale.Text("commands.definitions.list_your_active_loans"),
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 			},
 		},
 	},
 	{
 		Name:        "stock",
-		Description: "Stock market trading commands",
+		Description: locale.Text("commands.definitions.stock_market_trading_commands"),
 		Options: []*discordgo.ApplicationCommandOption{
 			{
 				Name:        "market",
-				Description: "View current stock market prices",
+				Description: locale.Text("commands.definitions.view_current_stock_market_prices"),
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 			},
 			{
 				Name:        "buy",
-				Description: "Buy shares of a company",
+				Description: locale.Text("commands.definitions.buy_shares_of_a_company"),
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 				Options: []*discordgo.ApplicationCommandOption{
 					{
 						Type:        discordgo.ApplicationCommandOptionString,
 						Name:        "ticker",
-						Description: "Company ticker symbol (e.g., NVDA, AAPL, BTC)",
+						Description: locale.Text("commands.definitions.company_ticker_symbol_e_g_nvda_aapl"),
 						Required:    true,
 					},
 					{
 						Type:        discordgo.ApplicationCommandOptionInteger,
 						Name:        "amount",
-						Description: "Amount of EC to invest",
+						Description: locale.Text("commands.definitions.amount_of_ec_to_invest"),
 						Required:    true,
 						MinValue:    &minAmount,
 					},
@@ -515,54 +518,54 @@ var SlashCommands = []*discordgo.ApplicationCommand{
 			},
 			{
 				Name:        "sell",
-				Description: "Sell shares of a company",
+				Description: locale.Text("commands.definitions.sell_shares_of_a_company"),
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 				Options: []*discordgo.ApplicationCommandOption{
 					{
 						Type:        discordgo.ApplicationCommandOptionString,
 						Name:        "ticker",
-						Description: "Company ticker symbol (e.g., NVDA, AAPL, BTC)",
+						Description: locale.Text("commands.definitions.company_ticker_symbol_e_g_nvda_aapl"),
 						Required:    true,
 					},
 					{
 						Type:        discordgo.ApplicationCommandOptionString,
 						Name:        "shares",
-						Description: "Number of shares to sell or 'all'",
+						Description: locale.Text("commands.definitions.number_of_shares_to_sell_or_all"),
 						Required:    true,
 					},
 				},
 			},
 			{
 				Name:        "portfolio",
-				Description: "View your stock portfolio, cost basis, and returns",
+				Description: locale.Text("commands.definitions.view_your_stock_portfolio_cost_basis_and"),
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 			},
 		},
 	},
 	{
 		Name:        "crypto",
-		Description: "Cryptocurrency trading commands",
+		Description: locale.Text("commands.definitions.cryptocurrency_trading_commands"),
 		Options: []*discordgo.ApplicationCommandOption{
 			{
 				Name:        "market",
-				Description: "View current crypto prices",
+				Description: locale.Text("commands.definitions.view_current_crypto_prices"),
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 			},
 			{
 				Name:        "buy",
-				Description: "Buy cryptocurrency",
+				Description: locale.Text("commands.definitions.buy_cryptocurrency"),
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 				Options: []*discordgo.ApplicationCommandOption{
 					{
 						Type:        discordgo.ApplicationCommandOptionString,
 						Name:        "symbol",
-						Description: "Crypto symbol (e.g., BTC, ETH, SOL, DOGE)",
+						Description: locale.Text("commands.definitions.crypto_symbol_e_g_btc_eth_sol"),
 						Required:    true,
 					},
 					{
 						Type:        discordgo.ApplicationCommandOptionInteger,
 						Name:        "amount",
-						Description: "Amount of EC to invest",
+						Description: locale.Text("commands.definitions.amount_of_ec_to_invest"),
 						Required:    true,
 						MinValue:    &minAmount,
 					},
@@ -570,146 +573,146 @@ var SlashCommands = []*discordgo.ApplicationCommand{
 			},
 			{
 				Name:        "sell",
-				Description: "Sell cryptocurrency",
+				Description: locale.Text("commands.definitions.sell_cryptocurrency"),
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 				Options: []*discordgo.ApplicationCommandOption{
 					{
 						Type:        discordgo.ApplicationCommandOptionString,
 						Name:        "symbol",
-						Description: "Crypto symbol (e.g., BTC, ETH, SOL, DOGE)",
+						Description: locale.Text("commands.definitions.crypto_symbol_e_g_btc_eth_sol"),
 						Required:    true,
 					},
 					{
 						Type:        discordgo.ApplicationCommandOptionString,
 						Name:        "amount",
-						Description: "Coins amount to sell or 'all'",
+						Description: locale.Text("commands.definitions.coins_amount_to_sell_or_all"),
 						Required:    true,
 					},
 				},
 			},
 			{
 				Name:        "portfolio",
-				Description: "View your crypto portfolio, cost basis, and returns",
+				Description: locale.Text("commands.definitions.view_your_crypto_portfolio_cost_basis_and"),
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 			},
 		},
 	},
 	{
 		Name:        "poly",
-		Description: "Polymarket Prediction Markets - Trade shares on real-world events",
+		Description: locale.Text("commands.definitions.polymarket_prediction_markets_trade_shares_on_real"),
 		Options: []*discordgo.ApplicationCommandOption{
 			{
 				Name:        "trending",
-				Description: "View top volume trending markets on Polymarket",
+				Description: locale.Text("commands.definitions.view_top_volume_trending_markets_on_polymarket"),
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 			},
 			{
 				Name:        "search",
-				Description: "Search for real-world prediction markets on Polymarket",
+				Description: locale.Text("commands.definitions.search_for_real_world_prediction_markets_on"),
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 				Options: []*discordgo.ApplicationCommandOption{
 					{
 						Type:        discordgo.ApplicationCommandOptionString,
 						Name:        "query",
-						Description: "Search keywords (e.g. Bitcoin, Trump, Champions League)",
+						Description: locale.Text("commands.definitions.search_keywords_e_g_bitcoin_trump_champions"),
 						Required:    true,
 					},
 				},
 			},
 			{
 				Name:        "import",
-				Description: "Import a Polymarket event into the server's betting channel",
+				Description: locale.Text("commands.definitions.import_a_polymarket_event_into_the_server"),
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 				Options: []*discordgo.ApplicationCommandOption{
 					{
 						Type:        discordgo.ApplicationCommandOptionString,
 						Name:        "query",
-						Description: "Polymarket slug, ID, or full URL",
+						Description: locale.Text("commands.definitions.polymarket_slug_id_or_full_url"),
 						Required:    true,
 					},
 					{
 						Type:        discordgo.ApplicationCommandOptionString,
 						Name:        "candidate",
-						Description: "Candidate or option name (e.g. 'lula' or 'bolsonaro' for multi-candidate events)",
+						Description: locale.Text("commands.definitions.candidate_or_option_name_e_g_lula"),
 						Required:    false,
 					},
 				},
 			},
 			{
 				Name:        "suggest",
-				Description: "Suggest a Polymarket event for admin approval",
+				Description: locale.Text("commands.definitions.suggest_a_polymarket_event_for_admin_approval"),
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 				Options: []*discordgo.ApplicationCommandOption{
 					{
 						Type:        discordgo.ApplicationCommandOptionString,
 						Name:        "query",
-						Description: "Polymarket slug, ID, or full URL",
+						Description: locale.Text("commands.definitions.polymarket_slug_id_or_full_url"),
 						Required:    true,
 					},
 					{
 						Type:        discordgo.ApplicationCommandOptionString,
 						Name:        "candidate",
-						Description: "Candidate or option name (e.g. 'lula' or 'bolsonaro' for multi-candidate events)",
+						Description: locale.Text("commands.definitions.candidate_or_option_name_e_g_lula"),
 						Required:    false,
 					},
 				},
 			},
 			{
 				Name:        "cancel",
-				Description: "Cancel an imported market and refund all bettors (Admin only)",
+				Description: locale.Text("commands.definitions.cancel_an_imported_market_and_refund_all"),
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 				Options: []*discordgo.ApplicationCommandOption{
 					{
 						Type:        discordgo.ApplicationCommandOptionString,
 						Name:        "market_id",
-						Description: "Market ID (e.g. poly_601818 or 601818)",
+						Description: locale.Text("commands.definitions.market_id_e_g_poly_or"),
 						Required:    true,
 					},
 				},
 			},
 			{
 				Name:        "view",
-				Description: "View details and live odds for an imported market",
+				Description: locale.Text("commands.definitions.view_details_and_live_odds_for_an"),
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 				Options: []*discordgo.ApplicationCommandOption{
 					{
 						Type:        discordgo.ApplicationCommandOptionString,
 						Name:        "id",
-						Description: "Market ID (e.g. poly_559651)",
+						Description: locale.Text("commands.definitions.market_id_e_g_poly"),
 						Required:    true,
 					},
 				},
 			},
 			{
 				Name:        "portfolio",
-				Description: "View your Polymarket shares, positions, and unrealized profit",
+				Description: locale.Text("commands.definitions.view_your_polymarket_shares_positions_and_unrealized"),
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 			},
 			{
 				Name:        "config",
-				Description: "Configure Polymarket settings (Admin only)",
+				Description: locale.Text("commands.definitions.configure_polymarket_settings_admin_only"),
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 				Options: []*discordgo.ApplicationCommandOption{
 					{
 						Type:        discordgo.ApplicationCommandOptionChannel,
 						Name:        "channel",
-						Description: "Dedicated channel for Polymarket prediction markets",
+						Description: locale.Text("commands.definitions.dedicated_channel_for_polymarket_prediction_markets"),
 						Required:    false,
 					},
 					{
 						Type:        discordgo.ApplicationCommandOptionString,
 						Name:        "import_mode",
-						Description: "Who can import markets",
+						Description: locale.Text("commands.definitions.who_can_import_markets"),
 						Required:    false,
 						Choices: []*discordgo.ApplicationCommandOptionChoice{
-							{Name: "Admins Only", Value: "admin_only"},
-							{Name: "All Users", Value: "all_users"},
+							{Name: locale.Text("commands.definitions.admins_only"), Value: "admin_only"},
+							{Name: locale.Text("commands.definitions.all_users"), Value: "all_users"},
 						},
 					},
 					{
 						Type:        discordgo.ApplicationCommandOptionNumber,
 						Name:        "house_edge",
-						Description: "House edge fee percentage (e.g. 0.03 for 3%)",
+						Description: locale.Text("commands.definitions.house_edge_fee_percentage_e_g_for"),
 						Required:    false,
 					},
 				},
@@ -718,104 +721,104 @@ var SlashCommands = []*discordgo.ApplicationCommand{
 	},
 	{
 		Name:        "bicho",
-		Description: "Daily Brazilian animal lottery (Jogo do Bicho)",
+		Description: locale.Text("commands.definitions.daily_brazilian_animal_lottery_jogo_do_bicho"),
 		Options: []*discordgo.ApplicationCommandOption{
 			{
 				Name:        "panel",
-				Description: "Display the active round panel with betting buttons",
+				Description: locale.Text("commands.definitions.display_the_active_round_panel_with_betting"),
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 			},
 			{
 				Name:        "table",
-				Description: "View the table of 25 animals, groups, and tens",
+				Description: locale.Text("commands.definitions.view_the_table_of_animals_groups_and"),
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 			},
 			{
 				Name:        "my-bets",
-				Description: "View your active tickets in the current round",
+				Description: locale.Text("commands.definitions.view_your_active_tickets_in_the_current"),
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 			},
 			{
 				Name:        "bet",
-				Description: "Place a bet in Jogo do Bicho",
+				Description: locale.Text("commands.definitions.place_a_bet_in_jogo_do_bicho"),
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 				Options: []*discordgo.ApplicationCommandOption{
 					{
 						Type:        discordgo.ApplicationCommandOptionString,
 						Name:        "modality",
-						Description: "Betting modality",
+						Description: locale.Text("commands.definitions.betting_modality"),
 						Required:    true,
 						Choices: []*discordgo.ApplicationCommandOptionChoice{
-							{Name: "Group (18x head / 3.6x board)", Value: "group"},
-							{Name: "Tens (60x head / 12x board)", Value: "tens"},
-							{Name: "Hundreds (600x head / 120x board)", Value: "hundreds"},
-							{Name: "Thousands (4,000x head / 800x board)", Value: "thousands"},
-							{Name: "Animal Pair (18.5x)", Value: "pair"},
-							{Name: "Animal Trio (130x)", Value: "trio"},
+							{Name: locale.Text("commands.definitions.group_x_head_x_board"), Value: "group"},
+							{Name: locale.Text("commands.definitions.tens_x_head_x_board"), Value: "tens"},
+							{Name: locale.Text("commands.definitions.hundreds_x_head_x_board"), Value: "hundreds"},
+							{Name: locale.Text("commands.definitions.thousands_x_head_x_board"), Value: "thousands"},
+							{Name: locale.Text("commands.definitions.animal_pair_x"), Value: "pair"},
+							{Name: locale.Text("commands.definitions.animal_trio_x"), Value: "trio"},
 						},
 					},
 					{
 						Type:        discordgo.ApplicationCommandOptionString,
 						Name:        "target",
-						Description: "Animal or number (E.g. Monkey, 28, 528, 4528, or Monkey Lion)",
+						Description: locale.Text("commands.definitions.animal_or_number_e_g_monkey_or"),
 						Required:    true,
 					},
 					{
 						Type:        discordgo.ApplicationCommandOptionInteger,
 						Name:        "amount",
-						Description: "Amount to bet in EC",
+						Description: locale.Text("commands.definitions.amount_to_bet_in_ec"),
 						Required:    true,
 					},
 					{
 						Type:        discordgo.ApplicationCommandOptionString,
 						Name:        "position",
-						Description: "Head (1st prize) or Board (1st to 5th prizes)",
+						Description: locale.Text("commands.definitions.head_st_prize_or_board_st_to"),
 						Required:    false,
 						Choices: []*discordgo.ApplicationCommandOptionChoice{
-							{Name: "Head (1st Prize)", Value: "head"},
-							{Name: "Board (1st to 5th Prizes)", Value: "board"},
+							{Name: locale.Text("commands.bicho_cmd.head_st_prize"), Value: "head"},
+							{Name: locale.Text("commands.bicho_cmd.board_st_to_th_prizes"), Value: "board"},
 						},
 					},
 				},
 			},
 			{
 				Name:        "draw",
-				Description: "Trigger the lottery draw immediately (Admin only)",
+				Description: locale.Text("commands.definitions.trigger_the_lottery_draw_immediately_admin_only"),
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 			},
 			{
 				Name:        "config",
-				Description: "Configure lottery channel and daily schedule (Admin only)",
+				Description: locale.Text("commands.definitions.configure_lottery_channel_and_daily_schedule_admin"),
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
 				Options: []*discordgo.ApplicationCommandOption{
 					{
 						Type:        discordgo.ApplicationCommandOptionChannel,
 						Name:        "channel",
-						Description: "Dedicated channel for Jogo do Bicho",
+						Description: locale.Text("commands.definitions.dedicated_channel_for_jogo_do_bicho"),
 						Required:    false,
 					},
 					{
 						Type:        discordgo.ApplicationCommandOptionInteger,
 						Name:        "hour",
-						Description: "Daily draw hour (0 to 23)",
+						Description: locale.Text("commands.definitions.daily_draw_hour_to"),
 						Required:    false,
 					},
 					{
 						Type:        discordgo.ApplicationCommandOptionInteger,
 						Name:        "minute",
-						Description: "Daily draw minute (0 to 59)",
+						Description: locale.Text("commands.definitions.daily_draw_minute_to"),
 						Required:    false,
 					},
 					{
 						Type:        discordgo.ApplicationCommandOptionInteger,
 						Name:        "min_bet",
-						Description: "Minimum bet amount allowed",
+						Description: locale.Text("commands.definitions.minimum_bet_amount_allowed"),
 						Required:    false,
 					},
 					{
 						Type:        discordgo.ApplicationCommandOptionBoolean,
 						Name:        "enabled",
-						Description: "Enable or disable Jogo do Bicho",
+						Description: locale.Text("commands.definitions.enable_or_disable_jogo_do_bicho"),
 						Required:    false,
 					},
 				},

@@ -1,0 +1,1379 @@
+{
+  "commands.apikey.api_key_created": {
+    "other": "🔑 API Key Created"
+  },
+  "commands.apikey.api_key_matching_has_been_revoked.formatted": {
+    "other": "API key matching `{{printf \"%s\" .Prefix}}...` has been revoked."
+  },
+  "commands.apikey.api_keys": {
+    "other": "API Keys"
+  },
+  "commands.apikey.could_not_create_api_key.formatted": {
+    "other": "Could not create API key: {{printf \"%v\" .Err}}"
+  },
+  "commands.apikey.created.formatted": {
+    "other": "• **{{printf \"%s\" .Name}}**: `{{printf \"%s\" .KeyPrefix}}...` (Created: {{printf \"%s\" .CreatedAt}})\n"
+  },
+  "commands.apikey.default_key": {
+    "other": "Default Key"
+  },
+  "commands.apikey.error_listing_api_keys": {
+    "other": "Error listing API keys."
+  },
+  "commands.apikey.key_revoked": {
+    "other": "Key Revoked"
+  },
+  "commands.apikey.name_your_secret_key_save_this_key.formatted": {
+    "other": "**Name:** {{printf \"%s\" .Name}}\n\n**Your Secret Key:**\n`{{printf \"%s\" .Key}}`\n\n⚠️ **Save this key now!** It will not be shown again.\nUse `/apikey list` to see active key prefixes."
+  },
+  "commands.apikey.no_active_api_key_found_matching_that": {
+    "other": "No active API key found matching that prefix."
+  },
+  "commands.apikey.please_provide_at_least_characters_of_the": {
+    "other": "Please provide at least 3 characters of the key prefix."
+  },
+  "commands.apikey.use_apikey_delete_prefix_to_revoke_a": {
+    "other": "Use `/apikey delete <prefix>` to revoke a key.\n\n"
+  },
+  "commands.apikey.you_don_t_have_any_api_keys": {
+    "other": "You don't have any API keys. Use `/apikey create` to generate one."
+  },
+  "commands.apikey.your_api_keys": {
+    "other": "🔑 Your API Keys"
+  },
+  "commands.bicho_cmd.animals_and_tens_each_animal_rules_consecutive": {
+    "other": "• **25 Animals and 100 Tens:** Each animal rules 4 consecutive tens.\n• **Daily Draw:** Every day 5 four-digit numbers (1st to 5th prizes) are drawn.\n• **Head:** Top payout if your pick hits the **1st prize**.\n• **Board:** Splits payout across all 5 prizes (1st to 5th).\n\n**Examples:**\n• If `4528` is drawn as 1st prize, the tens are `28`, which belongs to **Ram (Group 07)**.\n• Betting on Ram on Head pays **18x**!\n• Betting on tens 28 on Head pays **60x**!"
+  },
+  "commands.bicho_cmd.bet_amount_ec": {
+    "other": "Bet Amount (EC)"
+  },
+  "commands.bicho_cmd.bettor_good_luck.formatted": {
+    "other": "Bettor: {{printf \"%s\" .Username}} • Good luck!"
+  },
+  "commands.bicho_cmd.board": {
+    "other": "Board"
+  },
+  "commands.bicho_cmd.board_st_to_th_prizes": {
+    "other": "Board (1st to 5th Prizes)"
+  },
+  "commands.bicho_cmd.draw_triggered_successfully_results_will_be_published": {
+    "other": "🎲 Draw triggered successfully! Results will be published in the official channel."
+  },
+  "commands.bicho_cmd.e_g_monkey_or_monkey_lion": {
+    "other": "E.g. Monkey, 28, 528, 4528, or Monkey Lion"
+  },
+  "commands.bicho_cmd.error_registering_bet.formatted": {
+    "other": "❌ Error registering bet: {{printf \"%s\" .Err}}"
+  },
+  "commands.bicho_cmd.error_registering_ticket.formatted": {
+    "other": "❌ Error registering ticket: {{printf \"%s\" .Err}}"
+  },
+  "commands.bicho_cmd.error_triggering_draw.formatted": {
+    "other": "❌ Error triggering draw: {{printf \"%s\" .Err}}"
+  },
+  "commands.bicho_cmd.group_tens_hundreds_thousands_pair_trio": {
+    "other": "group, tens, hundreds, thousands, pair, trio"
+  },
+  "commands.bicho_cmd.head": {
+    "other": "Head"
+  },
+  "commands.bicho_cmd.head_st_prize": {
+    "other": "Head (1st Prize)"
+  },
+  "commands.bicho_cmd.head_st_prize_or_board_st_to": {
+    "other": "head (1st prize) or board (1st to 5th)"
+  },
+  "commands.bicho_cmd.invalid_bet_amount_enter_an_integer_greater": {
+    "other": "❌ Invalid bet amount! Enter an integer greater than 0."
+  },
+  "commands.bicho_cmd.jogo_do_bicho_place_bet": {
+    "other": "Jogo do Bicho - Place Bet"
+  },
+  "commands.bicho_cmd.jogo_do_bicho_rules": {
+    "other": "📜 Jogo do Bicho Rules"
+  },
+  "commands.bicho_cmd.modality_group_tens_hundreds_thousands": {
+    "other": "Modality (group, tens, hundreds, thousands)"
+  },
+  "commands.bicho_cmd.no_active_round_open_at_this_time": {
+    "other": "No active round open at this time."
+  },
+  "commands.bicho_cmd.on_target.formatted": {
+    "other": "`{{printf \"%d\" .Idx}}.` **{{printf \"%s\" .Strings}}** ({{printf \"%s\" .PosStr}}) on target **{{printf \"%s\" .Target}}** | `{{printf \"%d\" .Amount}} {{printf \"%s\" .CurrencySymbol}}`"
+  },
+  "commands.bicho_cmd.on_target.formatted1": {
+    "other": "`{{printf \"%d\" .Idx}}.` **{{printf \"%s\" .Strings}}** ({{printf \"%s\" .Pos}}) on target **{{printf \"%s\" .Target}}** | `{{printf \"%d\" .Amount}} {{printf \"%s\" .CurrencySymbol}}`"
+  },
+  "commands.bicho_cmd.only_administrators_can_configure_jogo_do_bicho": {
+    "other": "❌ Only administrators can configure Jogo do Bicho."
+  },
+  "commands.bicho_cmd.only_administrators_can_trigger_the_draw": {
+    "other": "❌ Only administrators can trigger the draw."
+  },
+  "commands.bicho_cmd.position_head_or_board": {
+    "other": "Position (head or board)"
+  },
+  "commands.bicho_cmd.settings_saved_channel_schedule_min_bet.formatted": {
+    "other": "✅ Settings saved! Channel: <#{{printf \"%s\" .ChannelID}}>, Schedule: `{{printf \"%02d\" .DrawHour}}:{{printf \"%02d\" .DrawMinute}}`, Min Bet: `{{printf \"%d\" .MinBet}} {{printf \"%s\" .CurrencySymbol}}`."
+  },
+  "commands.bicho_cmd.target_animal_or_number": {
+    "other": "Target (Animal or Number)"
+  },
+  "commands.bicho_cmd.ticket_registered_round.formatted": {
+    "other": "🎫 Ticket Registered! - Round #{{printf \"%d\" .RoundNumber}}"
+  },
+  "commands.bicho_cmd.you_don_t_have_any_tickets_in": {
+    "other": "🎫 You don't have any tickets in this round yet. Use the **Place Bet** button to play!"
+  },
+  "commands.bicho_cmd.you_don_t_have_any_tickets_in_c41e41": {
+    "other": "You don't have any tickets in this round yet."
+  },
+  "commands.bicho_cmd.your_bet_was_successfully_recorded_in_the.formatted": {
+    "other": "Your bet was successfully recorded in the official lottery system!\n\n📌 **Pick:** {{printf \"%s\" .Description}}\n🎯 **Position:** `{{printf \"%s\" .PosStr}}`\n💰 **Amount Wagered:** `{{printf \"%d\" .Amount}} {{printf \"%s\" .CurrencySymbol}}`\n📈 **Potential Payout:** `{{printf \"%s\" .Multiplier}}`\n\n⏰ **Draw:** <t:{{printf \"%d\" .DrawTime}}:R> (<t:{{printf \"%d\" .DrawTime7}}:t>)"
+  },
+  "commands.bicho_cmd.your_tickets_in_round_total_wagered.formatted": {
+    "other": "🎫 **Your Tickets in Round #{{printf \"%d\" .RoundNumber}}:**\n{{printf \"%s\" .Strings}}\n\n💰 **Total Wagered:** `{{printf \"%d\" .TotalInvested}} {{printf \"%s\" .CurrencySymbol}}`"
+  },
+  "commands.bicho_cmd.your_tickets_in_the_current_round_total.formatted": {
+    "other": "🎫 **Your Tickets in the Current Round:**\n{{printf \"%s\" .Strings}}\n\n💰 **Total Wagered:** `{{printf \"%d\" .TotalInvested}} {{printf \"%s\" .CurrencySymbol}}`"
+  },
+  "commands.components.this_bot_can_only_be_used_in": {
+    "other": "❌ This bot can only be used in designated channels."
+  },
+  "commands.definitions.admins_only": {
+    "other": "Admins Only"
+  },
+  "commands.definitions.all_users": {
+    "other": "All Users"
+  },
+  "commands.definitions.amount_of_ec_to_invest": {
+    "other": "Amount of EC to invest"
+  },
+  "commands.definitions.amount_to_bet_in_ec": {
+    "other": "Amount to bet in EC"
+  },
+  "commands.definitions.amount_to_bet_min": {
+    "other": "Amount to bet (Min 100)"
+  },
+  "commands.definitions.amount_to_bet_min_a2c68e": {
+    "other": "Amount to bet (Min 10)"
+  },
+  "commands.definitions.amount_to_bet_min_fb12ba": {
+    "other": "Amount to bet (Min 50)"
+  },
+  "commands.definitions.amount_to_lend": {
+    "other": "Amount to lend"
+  },
+  "commands.definitions.amount_to_transfer": {
+    "other": "Amount to transfer"
+  },
+  "commands.definitions.animal_or_number_e_g_monkey_or": {
+    "other": "Animal or number (E.g. Monkey, 28, 528, 4528, or Monkey Lion)"
+  },
+  "commands.definitions.animal_pair_x": {
+    "other": "Animal Pair (18.5x)"
+  },
+  "commands.definitions.animal_trio_x": {
+    "other": "Animal Trio (130x)"
+  },
+  "commands.definitions.bet_type_number_red_black_even_odd": {
+    "other": "Bet type (number, red, black, even, odd, low, high, dozen)"
+  },
+  "commands.definitions.betting_modality": {
+    "other": "Betting modality"
+  },
+  "commands.definitions.black": {
+    "other": "⚫ Black (1:1)"
+  },
+  "commands.definitions.buy_cryptocurrency": {
+    "other": "Buy cryptocurrency"
+  },
+  "commands.definitions.buy_items_from_the_shop": {
+    "other": "Buy items from the shop"
+  },
+  "commands.definitions.buy_shares_of_a_company": {
+    "other": "Buy shares of a company"
+  },
+  "commands.definitions.cancel_an_imported_market_and_refund_all": {
+    "other": "Cancel an imported market and refund all bettors (Admin only)"
+  },
+  "commands.definitions.candidate_or_option_name_e_g_lula": {
+    "other": "Candidate or option name (e.g. 'lula' or 'bolsonaro' for multi-candidate events)"
+  },
+  "commands.definitions.casino_european_roulette": {
+    "other": "Casino European Roulette"
+  },
+  "commands.definitions.category_of_the_leaderboard": {
+    "other": "Category of the leaderboard"
+  },
+  "commands.definitions.challenge_another_user_to_russian_roulette_winner": {
+    "other": "Challenge another user to Russian Roulette (Winner takes all)"
+  },
+  "commands.definitions.change_someone_else_s_nickname": {
+    "other": "Change someone else's nickname"
+  },
+  "commands.definitions.change_your_own_nickname": {
+    "other": "Change your own nickname"
+  },
+  "commands.definitions.check_time_until_next_spin_and_active": {
+    "other": "Check time until next spin and active round stats"
+  },
+  "commands.definitions.check_your_or_someone_else_s_balance": {
+    "other": "Check your or someone else's balance"
+  },
+  "commands.definitions.coins_amount_to_sell_or_all": {
+    "other": "Coins amount to sell or 'all'"
+  },
+  "commands.definitions.collect_your_daily_reward": {
+    "other": "Collect your daily reward"
+  },
+  "commands.definitions.company_ticker_symbol_e_g_nvda_aapl": {
+    "other": "Company ticker symbol (e.g., NVDA, AAPL, BTC)"
+  },
+  "commands.definitions.configure_lottery_channel_and_daily_schedule_admin": {
+    "other": "Configure lottery channel and daily schedule (Admin only)"
+  },
+  "commands.definitions.configure_polymarket_settings_admin_only": {
+    "other": "Configure Polymarket settings (Admin only)"
+  },
+  "commands.definitions.create_a_new_api_key_sent_via": {
+    "other": "Create a new API Key (Sent via DM)"
+  },
+  "commands.definitions.crypto_symbol_e_g_btc_eth_sol": {
+    "other": "Crypto symbol (e.g., BTC, ETH, SOL, DOGE)"
+  },
+  "commands.definitions.cryptocurrency_trading_commands": {
+    "other": "Cryptocurrency trading commands"
+  },
+  "commands.definitions.daily_brazilian_animal_lottery_jogo_do_bicho": {
+    "other": "Daily Brazilian animal lottery (Jogo do Bicho)"
+  },
+  "commands.definitions.daily_draw_hour_to": {
+    "other": "Daily draw hour (0 to 23)"
+  },
+  "commands.definitions.daily_draw_minute_to": {
+    "other": "Daily draw minute (0 to 59)"
+  },
+  "commands.definitions.daily_streak": {
+    "other": "Daily streak"
+  },
+  "commands.definitions.days_until_payment_is_due": {
+    "other": "Days until payment is due (1-365)"
+  },
+  "commands.definitions.dedicated_channel_for_jogo_do_bicho": {
+    "other": "Dedicated channel for Jogo do Bicho"
+  },
+  "commands.definitions.dedicated_channel_for_polymarket_prediction_markets": {
+    "other": "Dedicated channel for Polymarket prediction markets"
+  },
+  "commands.definitions.delete_an_api_key": {
+    "other": "Delete an API Key"
+  },
+  "commands.definitions.display_the_active_round_panel_with_betting": {
+    "other": "Display the active round panel with betting buttons"
+  },
+  "commands.definitions.duration_in_minutes": {
+    "other": "Duration in minutes (1-1440)"
+  },
+  "commands.definitions.enable_or_disable_jogo_do_bicho": {
+    "other": "Enable or disable Jogo do Bicho"
+  },
+  "commands.definitions.even": {
+    "other": "Even (1:1)"
+  },
+  "commands.definitions.group_x_head_x_board": {
+    "other": "Group (18x head / 3.6x board)"
+  },
+  "commands.definitions.head_st_prize_or_board_st_to": {
+    "other": "Head (1st prize) or Board (1st to 5th prizes)"
+  },
+  "commands.definitions.high": {
+    "other": "High 19-36 (1:1)"
+  },
+  "commands.definitions.house_edge_fee_percentage_e_g_for": {
+    "other": "House edge fee percentage (e.g. 0.03 for 3%)"
+  },
+  "commands.definitions.hundreds_x_head_x_board": {
+    "other": "Hundreds (600x head / 120x board)"
+  },
+  "commands.definitions.import_a_polymarket_event_into_the_server": {
+    "other": "Import a Polymarket event into the server's betting channel"
+  },
+  "commands.definitions.interest_rate_percentage": {
+    "other": "Interest rate percentage (0-100)"
+  },
+  "commands.definitions.list_your_active_api_keys": {
+    "other": "List your active API Keys"
+  },
+  "commands.definitions.list_your_active_loans": {
+    "other": "List your active loans"
+  },
+  "commands.definitions.loan_system_lend_or_borrow_money": {
+    "other": "Loan system - Lend or borrow money"
+  },
+  "commands.definitions.low": {
+    "other": "Low 1-18 (1:1)"
+  },
+  "commands.definitions.manage_your_api_keys": {
+    "other": "Manage your API Keys"
+  },
+  "commands.definitions.manage_your_webhook_for_api_notifications": {
+    "other": "Manage your Webhook for API notifications"
+  },
+  "commands.definitions.market_id_e_g_poly": {
+    "other": "Market ID (e.g. poly_559651)"
+  },
+  "commands.definitions.market_id_e_g_poly_or": {
+    "other": "Market ID (e.g. poly_601818 or 601818)"
+  },
+  "commands.definitions.minimum_bet_amount_allowed": {
+    "other": "Minimum bet amount allowed"
+  },
+  "commands.definitions.mute_a_user_in_voice_calls": {
+    "other": "Mute a user in voice calls"
+  },
+  "commands.definitions.nd_dozen": {
+    "other": "2nd Dozen 13-24 (2:1)"
+  },
+  "commands.definitions.net_worth": {
+    "other": "Net worth"
+  },
+  "commands.definitions.number_of_mines_on_the_board_to": {
+    "other": "Number of mines on the board (1 to 19, default 3)"
+  },
+  "commands.definitions.number_of_shares_to_sell_or_all": {
+    "other": "Number of shares to sell or 'all'"
+  },
+  "commands.definitions.number_to_bet_on_only_required_if": {
+    "other": "Number to bet on (0-36, only required if type is number)"
+  },
+  "commands.definitions.odd": {
+    "other": "Odd (1:1)"
+  },
+  "commands.definitions.offer_a_loan_to_another_user": {
+    "other": "Offer a loan to another user"
+  },
+  "commands.definitions.optional_name_for_the_key": {
+    "other": "Optional name for the key"
+  },
+  "commands.definitions.optional_target_multiplier_to_automatically_cash_out": {
+    "other": "Optional target multiplier to automatically cash out (e.g. 2.0)"
+  },
+  "commands.definitions.pay_an_active_loan": {
+    "other": "Pay an active loan"
+  },
+  "commands.definitions.place_a_bet_in_jogo_do_bicho": {
+    "other": "Place a bet in Jogo do Bicho"
+  },
+  "commands.definitions.place_a_bet_on_the_upcoming_roulette": {
+    "other": "Place a bet on the upcoming roulette spin"
+  },
+  "commands.definitions.play_a_game_of_blackjack": {
+    "other": "Play a game of Blackjack"
+  },
+  "commands.definitions.play_casino_games": {
+    "other": "Play casino games"
+  },
+  "commands.definitions.play_the_aviator_crash_game": {
+    "other": "Play the Aviator crash game"
+  },
+  "commands.definitions.play_the_cup_game_double_or_nothing": {
+    "other": "Play the Cup Game (Double or Nothing)"
+  },
+  "commands.definitions.play_the_mines_casino_game": {
+    "other": "Play the Mines casino game "
+  },
+  "commands.definitions.play_the_slot_machine": {
+    "other": "Play the Slot Machine"
+  },
+  "commands.definitions.polymarket_prediction_markets_trade_shares_on_real": {
+    "other": "Polymarket Prediction Markets - Trade shares on real-world events"
+  },
+  "commands.definitions.polymarket_slug_id_or_full_url": {
+    "other": "Polymarket slug, ID, or full URL"
+  },
+  "commands.definitions.rd_dozen": {
+    "other": "3rd Dozen 25-36 (2:1)"
+  },
+  "commands.definitions.recipient_of_the_coins": {
+    "other": "Recipient of the coins"
+  },
+  "commands.definitions.red": {
+    "other": "🔴 Red (1:1)"
+  },
+  "commands.definitions.remove_your_webhook_configuration": {
+    "other": "Remove your webhook configuration"
+  },
+  "commands.definitions.russian_roulette_pvp_duel": {
+    "other": "Russian Roulette PvP duel"
+  },
+  "commands.definitions.search_for_real_world_prediction_markets_on": {
+    "other": "Search for real-world prediction markets on Polymarket"
+  },
+  "commands.definitions.search_keywords_e_g_bitcoin_trump_champions": {
+    "other": "Search keywords (e.g. Bitcoin, Trump, Champions League)"
+  },
+  "commands.definitions.sell_cryptocurrency": {
+    "other": "Sell cryptocurrency"
+  },
+  "commands.definitions.sell_shares_of_a_company": {
+    "other": "Sell shares of a company"
+  },
+  "commands.definitions.send_a_test_payload_to_your_configured": {
+    "other": "Send a test payload to your configured webhook"
+  },
+  "commands.definitions.set_your_webhook_url": {
+    "other": "Set your webhook URL"
+  },
+  "commands.definitions.show_all_commands_and_features": {
+    "other": "Show all commands and features"
+  },
+  "commands.definitions.specific_number": {
+    "other": "Specific Number 0-36 (35:1)"
+  },
+  "commands.definitions.st_dozen": {
+    "other": "1st Dozen 1-12 (2:1)"
+  },
+  "commands.definitions.stock_market_trading_commands": {
+    "other": "Stock market trading commands"
+  },
+  "commands.definitions.suggest_a_polymarket_event_for_admin_approval": {
+    "other": "Suggest a Polymarket event for admin approval"
+  },
+  "commands.definitions.tens_x_head_x_board": {
+    "other": "Tens (60x head / 12x board)"
+  },
+  "commands.definitions.the_first_few_characters_of_the_key": {
+    "other": "The first few characters of the key to delete"
+  },
+  "commands.definitions.the_loan_id_to_pay_optional_pays": {
+    "other": "The loan ID to pay (optional - pays oldest if not specified)"
+  },
+  "commands.definitions.the_new_nickname": {
+    "other": "The new nickname"
+  },
+  "commands.definitions.the_url_to_receive_post_requests": {
+    "other": "The URL to receive POST requests"
+  },
+  "commands.definitions.the_user_to_check": {
+    "other": "The user to check"
+  },
+  "commands.definitions.the_user_to_lend_money_to": {
+    "other": "The user to lend money to"
+  },
+  "commands.definitions.the_user_to_rename": {
+    "other": "The user to rename"
+  },
+  "commands.definitions.the_user_to_timeout": {
+    "other": "The user to timeout"
+  },
+  "commands.definitions.the_user_to_voice_mute": {
+    "other": "The user to voice mute"
+  },
+  "commands.definitions.thousands_x_head_x_board": {
+    "other": "Thousands (4,000x head / 800x board)"
+  },
+  "commands.definitions.timeout_a_user_from_text_and_voice": {
+    "other": "Timeout a user from text and voice channels"
+  },
+  "commands.definitions.transfer_estudocoins_to_another_user": {
+    "other": "Transfer EstudoCoins to another user"
+  },
+  "commands.definitions.trigger_the_lottery_draw_immediately_admin_only": {
+    "other": "Trigger the lottery draw immediately (Admin only)"
+  },
+  "commands.definitions.user_to_challenge": {
+    "other": "User to challenge"
+  },
+  "commands.definitions.view_available_items_in_the_shop": {
+    "other": "View available items in the shop"
+  },
+  "commands.definitions.view_current_crypto_prices": {
+    "other": "View current crypto prices"
+  },
+  "commands.definitions.view_current_stock_market_prices": {
+    "other": "View current stock market prices"
+  },
+  "commands.definitions.view_details_and_live_odds_for_an": {
+    "other": "View details and live odds for an imported market"
+  },
+  "commands.definitions.view_rankings_and_leaderboards": {
+    "other": "View rankings and leaderboards"
+  },
+  "commands.definitions.view_the_table_of_animals_groups_and": {
+    "other": "View the table of 25 animals, groups, and tens"
+  },
+  "commands.definitions.view_top_volume_trending_markets_on_polymarket": {
+    "other": "View top volume trending markets on Polymarket"
+  },
+  "commands.definitions.view_your_active_tickets_in_the_current": {
+    "other": "View your active tickets in the current round"
+  },
+  "commands.definitions.view_your_crypto_portfolio_cost_basis_and": {
+    "other": "View your crypto portfolio, cost basis, and returns"
+  },
+  "commands.definitions.view_your_polymarket_shares_positions_and_unrealized": {
+    "other": "View your Polymarket shares, positions, and unrealized profit"
+  },
+  "commands.definitions.view_your_stock_portfolio_cost_basis_and": {
+    "other": "View your stock portfolio, cost basis, and returns"
+  },
+  "commands.definitions.wallet_balance": {
+    "other": "Wallet balance"
+  },
+  "commands.definitions.who_can_import_markets": {
+    "other": "Who can import markets"
+  },
+  "commands.discovery.accept": {
+    "other": "Accept an offer"
+  },
+  "commands.discovery.action": {
+    "other": "Offer action (defaults to listing offers)"
+  },
+  "commands.discovery.cancel": {
+    "other": "Cancel your offer"
+  },
+  "commands.discovery.character_id": {
+    "other": "Character ID"
+  },
+  "commands.discovery.decline": {
+    "other": "Decline an offer"
+  },
+  "commands.discovery.keys": {
+    "other": "View a character’s keys, value and next milestone"
+  },
+  "commands.discovery.list": {
+    "other": "List pending offers"
+  },
+  "commands.discovery.offer_id": {
+    "other": "Offer ID (required when accepting, declining or cancelling)"
+  },
+  "commands.discovery.offers": {
+    "other": "List or respond to character offers"
+  },
+  "commands.discovery.page": {
+    "other": "Page number"
+  },
+  "commands.discovery.query": {
+    "other": "Character name, alias or internal ID"
+  },
+  "commands.discovery.ranking": {
+    "other": "Rank this server’s harems by total character value"
+  },
+  "commands.discovery.search": {
+    "other": "Search the character catalog by name or ID"
+  },
+  "commands.economy.could_not_retrieve_leaderboard": {
+    "other": "Could not retrieve leaderboard."
+  },
+  "commands.economy.could_not_retrieve_streak_leaderboard": {
+    "other": "Could not retrieve streak leaderboard."
+  },
+  "commands.economy.could_not_retrieve_wallet_leaderboard": {
+    "other": "Could not retrieve wallet leaderboard."
+  },
+  "commands.economy.daily_collected": {
+    "other": "Daily Collected!"
+  },
+  "commands.economy.daily_streak_leaderboard": {
+    "other": "🔥 Daily Streak Leaderboard"
+  },
+  "commands.economy.daily_streak_leaderboard_009686": {
+    "other": "Daily Streak Leaderboard"
+  },
+  "commands.economy.days_record.formatted": {
+    "other": "{{printf \"%s\" .Medal}} {{printf \"%s\" .Name}} • **🔥 {{printf \"%d\" .Streak}} days** (Record: {{printf \"%d\" .MaxStreak}})\n"
+  },
+  "commands.economy.error_claiming_daily_reward_please_try_again": {
+    "other": "Error claiming daily reward. Please try again."
+  },
+  "commands.economy.leaderboard": {
+    "other": "Leaderboard"
+  },
+  "commands.economy.max": {
+    "other": " (MAX)"
+  },
+  "commands.economy.max_streak_days.formatted": {
+    "other": "\n🏆 Max Streak: {{printf \"%d\" .MaxStreak}} days"
+  },
+  "commands.economy.new_personal_record": {
+    "other": " 🏆 **New Personal Record!**"
+  },
+  "commands.economy.no_active_streaks_found": {
+    "other": "No active streaks found."
+  },
+  "commands.economy.no_users_found": {
+    "other": "No users found."
+  },
+  "commands.economy.richest_users_net_worth": {
+    "other": "🏆 Richest Users (Net Worth)"
+  },
+  "commands.economy.streak.formatted": {
+    "other": "\n\n🔥 **Streak: {{printf \"%d\" .Streak}} {{printf \"%s\" .DayUnit}}**"
+  },
+  "commands.economy.this_command_can_only_be_used_within": {
+    "other": "This command can only be used within a server."
+  },
+  "commands.economy.wallet_balance_leaderboard": {
+    "other": "🪙 Wallet Balance Leaderboard"
+  },
+  "commands.economy.wallet_balance_leaderboard_d0e097": {
+    "other": "Wallet Balance Leaderboard"
+  },
+  "commands.economy.wallet_stocks_crypto": {
+    "other": "🪙 = Wallet | 📈 = Stocks | 💎 = Crypto"
+  },
+  "commands.economy.you_already_collected_your_daily_reward_come.formatted": {
+    "other": "You already collected your daily reward! Come back {{printf \"%s\" .DiscordTime}}."
+  },
+  "commands.economy.you_received.formatted": {
+    "other": "You received **{{printf \"%d\" .Reward}} {{printf \"%s\" .CurrencyName}}**!{{printf \"%s\" .StreakText}}"
+  },
+  "commands.economy.your_previous_streak_was_reset_because_more": {
+    "other": "\n⚠️ *Your previous streak was reset because more than 48 hours passed.*"
+  },
+  "commands.economy.your_rank_active_streak_days.formatted": {
+    "other": "Your Rank: #{{printf \"%d\" .Rank}} • Active Streak: 🔥 {{printf \"%d\" .Streak}} days"
+  },
+  "commands.economy.your_rank_net_worth.formatted": {
+    "other": "Your Rank: #{{printf \"%d\" .Rank}} • Net Worth: {{printf \"%s\" .Value2}} {{printf \"%s\" .Sym}}"
+  },
+  "commands.event_definitions.bet_on_an_event_option": {
+    "other": "Bet on an event option"
+  },
+  "commands.event_definitions.cancel_an_event_and_refund_bets": {
+    "other": "Cancel an event and refund bets"
+  },
+  "commands.event_definitions.close_an_event_to_new_bets": {
+    "other": "Close an event to new bets"
+  },
+  "commands.event_definitions.coins_to_bet": {
+    "other": "Coins to bet"
+  },
+  "commands.event_definitions.create_a_betting_event_administrator_or_manage": {
+    "other": "Create a betting event (administrator or Manage Server)"
+  },
+  "commands.event_definitions.create_browse_and_manage_server_betting_events": {
+    "other": "Create, browse and manage server betting events"
+  },
+  "commands.event_definitions.duration_in_minutes_default": {
+    "other": "Duration in minutes (default 60)"
+  },
+  "commands.event_definitions.event_id": {
+    "other": "Event ID"
+  },
+  "commands.event_definitions.list_active_events_in_this_server": {
+    "other": "List active events in this server"
+  },
+  "commands.event_definitions.option_number_displayed_in_the_event": {
+    "other": "Option number displayed in the event"
+  },
+  "commands.event_definitions.question_for_the_event": {
+    "other": "Question for the event"
+  },
+  "commands.event_definitions.resolve_an_event_and_pay_winners": {
+    "other": "Resolve an event and pay winners"
+  },
+  "commands.event_definitions.two_or_more_choices_separated_by": {
+    "other": "Two or more choices separated by |"
+  },
+  "commands.event_definitions.view_a_betting_event": {
+    "other": "View a betting event"
+  },
+  "commands.gacha.add_a_character": {
+    "other": "➕ Add a character"
+  },
+  "commands.gacha.all_anime_characters": {
+    "other": "🌟 All anime characters"
+  },
+  "commands.gacha.all_characters": {
+    "other": "🎲 All characters"
+  },
+  "commands.gacha.all_characters_b9180c": {
+    "other": "✨ All characters"
+  },
+  "commands.gacha.all_female_characters": {
+    "other": "💖 All female characters"
+  },
+  "commands.gacha.all_game_characters": {
+    "other": "👾 All game characters"
+  },
+  "commands.gacha.all_genders": {
+    "other": "👑 All genders"
+  },
+  "commands.gacha.all_male_characters": {
+    "other": "🖤 All male characters"
+  },
+  "commands.gacha.browse_a_character_s_approved_images": {
+    "other": "Browse a character’s approved images"
+  },
+  "commands.gacha.browse_the_most_popular_characters_in_the": {
+    "other": "Browse the most popular characters in the catalog"
+  },
+  "commands.gacha.browse_your_character_collection_or_another_member": {
+    "other": "Browse your character collection or another member’s"
+  },
+  "commands.gacha.character_id_required_to_add_or_remove": {
+    "other": "Character ID (required to add or remove a wish)"
+  },
+  "commands.gacha.character_name_or_id": {
+    "other": "Character name or ID"
+  },
+  "commands.gacha.character_pool_female_male_anime_or_games": {
+    "other": "Character pool (female, male, anime or games)"
+  },
+  "commands.gacha.claimed_characters": {
+    "other": "💍 Claimed characters"
+  },
+  "commands.gacha.compact_list": {
+    "other": "📋 Compact list"
+  },
+  "commands.gacha.display_format_list_or_photos": {
+    "other": "Display format (list or photos)"
+  },
+  "commands.gacha.female_characters": {
+    "other": "🌸 Female characters"
+  },
+  "commands.gacha.filter_by_character_gender": {
+    "other": "Filter by character gender"
+  },
+  "commands.gacha.filter_by_ownership_in_this_server": {
+    "other": "Filter by ownership in this server"
+  },
+  "commands.gacha.gift_recipient": {
+    "other": "Gift recipient"
+  },
+  "commands.gacha.husbandos_anime": {
+    "other": "⚔️ Husbandos (Anime)"
+  },
+  "commands.gacha.husbandos_games": {
+    "other": "🕹️ Husbandos (Games)"
+  },
+  "commands.gacha.id_of_the_character_to_release": {
+    "other": "ID of the character to release"
+  },
+  "commands.gacha.id_of_the_character_you_offer": {
+    "other": "ID of the character you offer"
+  },
+  "commands.gacha.id_of_the_character_you_want_in": {
+    "other": "ID of the character you want in return"
+  },
+  "commands.gacha.id_of_the_character_you_want_to": {
+    "other": "ID of the character you want to give"
+  },
+  "commands.gacha.male_characters": {
+    "other": "⚔️ Male characters"
+  },
+  "commands.gacha.manage_your_character_wishlist": {
+    "other": "Manage your character wishlist"
+  },
+  "commands.gacha.member_to_trade_with": {
+    "other": "Member to trade with"
+  },
+  "commands.gacha.offer_a_character_from_your_harem_as": {
+    "other": "Offer a character from your harem as a gift"
+  },
+  "commands.gacha.offer_a_character_trade_to_another_member": {
+    "other": "Offer a character trade to another member"
+  },
+  "commands.gacha.photo_view": {
+    "other": "📷 Photo view"
+  },
+  "commands.gacha.release_a_character_in_exchange_for_server": {
+    "other": "Release a character in exchange for server coins"
+  },
+  "commands.gacha.remove_a_character": {
+    "other": "➖ Remove a character"
+  },
+  "commands.gacha.roll_an_anime_or_game_character_to": {
+    "other": "Roll an anime or game character to collect"
+  },
+  "commands.gacha.server_member_defaults_to_you": {
+    "other": "Server member (defaults to you)"
+  },
+  "commands.gacha.unclaimed_characters": {
+    "other": "🔓 Unclaimed characters"
+  },
+  "commands.gacha.view_a_character_s_official_image_work": {
+    "other": "View a character’s official image, work, value and owner"
+  },
+  "commands.gacha.view_remaining_rolls_claim_cooldown_and_gacha": {
+    "other": "View remaining rolls, claim cooldown and gacha stats"
+  },
+  "commands.gacha.view_wishlist": {
+    "other": "📜 View wishlist"
+  },
+  "commands.gacha.waifus_anime": {
+    "other": "🌸 Waifus (Anime)"
+  },
+  "commands.gacha.waifus_games": {
+    "other": "🎮 Waifus (Games)"
+  },
+  "commands.gacha.wishlist_action": {
+    "other": "Wishlist action"
+  },
+  "commands.general.animal_lottery": {
+    "other": "Animal Lottery"
+  },
+  "commands.general.apikey_create_apikey_list_manage_api_access": {
+    "other": "`/apikey create` · `/apikey list` — Manage API access.\n`/webhook set` — Configure coin notifications."
+  },
+  "commands.general.bet_aviator_crash_game_with_optional_automatic": {
+    "other": "`/bet aviator` — Crash game with optional automatic cash-out.\n`/bet cups` — Find the coin.\n`/blackjack` — Play against the dealer.\n`/mines` — Find gems and avoid mines.\n`/slots` — Spin the slots.\n`/roulette challenge` — Challenge a member to a duel.\n`/wheel status` · `/wheel bet` — European roulette.\nUse the buttons on your game to play or cash out."
+  },
+  "commands.general.bicho_panel_active_round_bicho_table_animals": {
+    "other": "`/bicho panel` — Active round.\n`/bicho table` — Animals and numbers.\n`/bicho bet` — Place a ticket.\n`/bicho my-bets` — Your tickets.\n`/bicho config` · `/bicho draw` — Administrator tools."
+  },
+  "commands.general.casino_games": {
+    "other": "Casino Games"
+  },
+  "commands.general.character_gacha": {
+    "other": "Character Gacha"
+  },
+  "commands.general.daily_claim_your_daily_streak_reward_balance": {
+    "other": "`/daily` — Claim your daily streak reward.\n`/balance` — Check a wallet.\n`/leaderboard` — Compare wealth or daily streaks.\n`/pay` — Transfer coins to another member."
+  },
+  "commands.general.developer_tools": {
+    "other": "Developer Tools"
+  },
+  "commands.general.earn_min_in_voice_channels_with_at.formatted": {
+    "other": "Earn **{{printf \"%d\" .VoiceCoinsPerMinute}} {{printf \"%s\" .CurrencySymbol}}/min** in voice channels with at least two eligible members. Muted or deafened members do not earn rewards."
+  },
+  "commands.general.economy": {
+    "other": "Economy"
+  },
+  "commands.general.event_betting": {
+    "other": "Event Betting"
+  },
+  "commands.general.event_list_event_view_browse_server_events": {
+    "other": "`/event list` · `/event view` — Browse server events.\n`/event bet` — Bet on an option.\n`/event create` — Create an event (administrator or Manage Server).\n`/event close` · `/event result` · `/event cancel` — Manage events you created, or any event as an administrator."
+  },
+  "commands.general.loan_offer_offer_a_loan_with_interest": {
+    "other": "`/loan offer` — Offer a loan with interest and a due date.\n`/loan pay` — Repay a loan.\n`/loan list` — Your active loans.\nOverdue loans are collected automatically."
+  },
+  "commands.general.loans": {
+    "other": "Loans"
+  },
+  "commands.general.markets": {
+    "other": "Markets"
+  },
+  "commands.general.next": {
+    "other": "➡️ Next"
+  },
+  "commands.general.page.formatted": {
+    "other": "{{printf \"%s\" .Emoji}} {{printf \"%s\" .Name}} - Page {{printf \"%d\" .SectionIdx}}/{{printf \"%d\" .Value4}}"
+  },
+  "commands.general.previous": {
+    "other": "⬅️ Previous"
+  },
+  "commands.general.roll_pool_roll_anime_or_game_characters": {
+    "other": "`/roll [pool]` — Roll anime or game characters.\n`/top` — Browse popular characters with filters.\n`/info character:<name or ID>` — Character details.\n`/harem` — Browse your collection.\n`/profile` — Rolls, claim cooldown and collection stats.\n`/gallery` — Approved character images.\n`/wishlist` — Manage wishes.\n`/trade` · `/gift` · `/divorce` — Manage character ownership.\n`/search` · `/keys` — Catalog search and key milestones.\n`/harem-ranking` — Server collection ranking.\n`/offers` — View and respond to pending offers."
+  },
+  "commands.general.shop": {
+    "other": "Shop"
+  },
+  "commands.general.shop_browse_items_and_current_prices_buy": {
+    "other": "`/shop` — Browse items and current prices.\n`/buy nickname` — Change your nickname.\n`/buy rename` — Change another member's nickname.\n`/buy timeout` — Apply a timeout.\n`/buy mute` — Mute a member in voice."
+  },
+  "commands.general.stock_market_stock_buy_stock_sell_stock": {
+    "other": "`/stock market` · `/stock buy` · `/stock sell` · `/stock portfolio` — Virtual stock investments.\n`/crypto market` · `/crypto buy` · `/crypto sell` · `/crypto portfolio` — Virtual cryptocurrency investments.\n`/poly trending` · `/poly search` · `/poly portfolio` — Prediction markets.\n`/poly import` · `/poly suggest` — Open or suggest markets.\n`/poly config` · `/poly cancel` — Administrator tools."
+  },
+  "commands.general.use_the_buttons_to_browse_command_categories": {
+    "other": "Use the buttons to browse command categories."
+  },
+  "commands.general.voice_rewards": {
+    "other": "Voice Rewards"
+  },
+  "commands.loans.accept": {
+    "other": "Accept"
+  },
+  "commands.loans.active_loans": {
+    "other": "📋 Active Loans"
+  },
+  "commands.loans.active_loans_for.formatted": {
+    "other": "**Active Loans for {{printf \"%s\" .Username}}**\n\n"
+  },
+  "commands.loans.amount": {
+    "other": "💵 Amount"
+  },
+  "commands.loans.auto_payment_executed": {
+    "other": "Auto Payment Executed"
+  },
+  "commands.loans.borrower": {
+    "other": "Borrower"
+  },
+  "commands.loans.borrower_must_click_accept_to_confirm_the": {
+    "other": "Borrower must click Accept to confirm the loan."
+  },
+  "commands.loans.days_overdue.formatted": {
+    "other": "{{printf \"%d\" .Value1}} days overdue"
+  },
+  "commands.loans.decline": {
+    "other": "Decline"
+  },
+  "commands.loans.did_not_have_enough_funds_to_repay.formatted": {
+    "other": "⚠️ <@{{printf \"%s\" .BorrowerID}}> did not have enough funds to repay loan `{{printf \"%s\" .ID}}` in full!\n• Collected: **{{printf \"%d\" .Collected}} {{printf \"%s\" .CurrencySymbol}}**\n• Remaining Debt: **{{printf \"%d\" .Remaining}} {{printf \"%s\" .CurrencySymbol6}}**\nThe loan remains **OVERDUE** until fully settled. 💸"
+  },
+  "commands.loans.doesn_t_have_any_active_loans.formatted": {
+    "other": "{{printf \"%s\" .Username}} doesn't have any active loans!"
+  },
+  "commands.loans.due_date": {
+    "other": "📅 Due Date"
+  },
+  "commands.loans.expires_in": {
+    "other": "⏱️ Expires In"
+  },
+  "commands.loans.insufficient_balance_you_have.formatted": {
+    "other": "Insufficient balance! You have {{printf \"%d\" .LenderBalance}} {{printf \"%s\" .CurrencySymbol}}"
+  },
+  "commands.loans.interest_rate": {
+    "other": "📈 Interest Rate"
+  },
+  "commands.loans.lender": {
+    "other": "Lender"
+  },
+  "commands.loans.loan_accepted_received_from_total_to_repay.formatted": {
+    "other": "✅ **Loan Accepted!**\n<@{{printf \"%s\" .BorrowerID}}> received **{{printf \"%d\" .Amount}} {{printf \"%s\" .CurrencySymbol}}** from <@{{printf \"%s\" .LenderID}}>.\nTotal to repay: **{{printf \"%d\" .TotalOwed}} {{printf \"%s\" .CurrencySymbol6}}** by <t:{{printf \"%d\" .DueDate}}:f>\nLoan ID: `{{printf \"%s\" .ID}}`"
+  },
+  "commands.loans.loan_auto_collected_paid_to_loan_is.formatted": {
+    "other": "💰 **Loan auto-collected!**\n<@{{printf \"%s\" .BorrowerID}}> paid **{{printf \"%d\" .Collected}} {{printf \"%s\" .CurrencySymbol}}** to <@{{printf \"%s\" .LenderID}}>.\nLoan `{{printf \"%s\" .ID}}` is now fully repaid! ✅"
+  },
+  "commands.loans.loan_could_not_be_completed_lender_may.formatted": {
+    "other": "❌ Loan could not be completed: lender may no longer have sufficient balance ({{printf \"%v\" .Err}})"
+  },
+  "commands.loans.loan_id": {
+    "other": "🆔 Loan ID"
+  },
+  "commands.loans.loan_id_not_found_among_your_active": {
+    "other": "Loan ID not found among your active unpaid loans!"
+  },
+  "commands.loans.loan_offer": {
+    "other": "💰 Loan Offer"
+  },
+  "commands.loans.loan_offer_expired_did_not_respond_in.formatted": {
+    "other": "⏰ **Loan offer expired!** <@{{printf \"%s\" .BorrowerID}}> did not respond in time."
+  },
+  "commands.loans.loan_offer_sent_to.formatted": {
+    "other": "📩 Loan offer sent to <@{{printf \"%s\" .ID}}>!"
+  },
+  "commands.loans.loan_repaid": {
+    "other": "Loan Repaid!"
+  },
+  "commands.loans.overdue": {
+    "other": "🔴 OVERDUE"
+  },
+  "commands.loans.paid_to_loan_is_now_fully_settled.formatted": {
+    "other": "🎉 <@{{printf \"%s\" .BorrowerID}}> paid **{{printf \"%d\" .TotalOwed}} {{printf \"%s\" .CurrencySymbol}}** to <@{{printf \"%s\" .LenderID}}>!\nLoan `{{printf \"%s\" .ID}}` is now fully settled."
+  },
+  "commands.loans.partial_loan_collection": {
+    "other": "⚠️ Partial Loan Collection"
+  },
+  "commands.loans.payment_failed.formatted": {
+    "other": "Payment failed: {{printf \"%v\" .Err}}"
+  },
+  "commands.loans.role_other_borrowed_debt_due.formatted": {
+    "other": "**{{printf \"%d\" .Idx}}.** `{{printf \"%s\" .ID}}`\n• Role: **{{printf \"%s\" .Role}}** | Other: <@{{printf \"%s\" .OtherParty}}>\n• Borrowed: **{{printf \"%d\" .Amount}} {{printf \"%s\" .CurrencySymbol}}** | Debt: **{{printf \"%d\" .TotalOwed}} {{printf \"%s\" .CurrencySymbol8}}**\n• Due: {{printf \"%s\" .StatusEmoji}} ({{printf \"%s\" .Value10}})\n\n"
+  },
+  "commands.loans.seconds": {
+    "other": "60 seconds"
+  },
+  "commands.loans.starting_background_loan_overdue_collector_worker_minute": {
+    "other": "Starting background loan overdue collector worker (1-minute interval)..."
+  },
+  "commands.loans.t_r_days.formatted": {
+    "other": "<t:{{printf \"%d\" .DueDate}}:R> ({{printf \"%d\" .Days}} days)"
+  },
+  "commands.loans.the_loan_offer.formatted": {
+    "other": "❌ <@{{printf \"%s\" .UserID}}> {{printf \"%s\" .ActionText}} the loan offer."
+  },
+  "commands.loans.this_loan_offer_has_expired_or_does": {
+    "other": "❌ This loan offer has expired or does not exist!"
+  },
+  "commands.loans.this_loan_offer_is_not_for_you": {
+    "other": "❌ This loan offer is not for you!"
+  },
+  "commands.loans.to_pay_a_loan_use_loan_pay": {
+    "other": "💡 *To pay a loan, use `/loan pay <id>` or `/loan pay loan_id:<id>`*"
+  },
+  "commands.loans.total_to_repay": {
+    "other": "💰 Total to Repay"
+  },
+  "commands.loans.wants_to_lend_money_to.formatted": {
+    "other": "<@{{printf \"%s\" .ID}}> wants to lend money to <@{{printf \"%s\" .ID2}}>!"
+  },
+  "commands.loans.you_already_have_an_active_loan_offer.formatted": {
+    "other": "You already have an active loan offer pending for <@{{printf \"%s\" .ID}}>!"
+  },
+  "commands.loans.you_cannot_decline_this_loan_offer": {
+    "other": "❌ You cannot decline this loan offer."
+  },
+  "commands.loans.you_cannot_lend_money_to_bots": {
+    "other": "You cannot lend money to bots!"
+  },
+  "commands.loans.you_cannot_lend_money_to_yourself": {
+    "other": "You cannot lend money to yourself!"
+  },
+  "commands.loans.you_don_t_have_any_active_loans": {
+    "other": "You don't have any active loans to pay!"
+  },
+  "commands.loans.you_don_t_have_any_active_loans_4c56a6": {
+    "other": "You don't have any active loans!"
+  },
+  "commands.loans.you_have_received_a_loan_offer_from.formatted": {
+    "other": "<@{{printf \"%s\" .ID}}>, you have received a loan offer from <@{{printf \"%s\" .ID2}}>!"
+  },
+  "commands.polymarket_cmd.approve_and_import": {
+    "other": "Approve and Import"
+  },
+  "commands.polymarket_cmd.automatic_settlement_using_official_polymarket_data": {
+    "other": "Automatic settlement using official Polymarket data"
+  },
+  "commands.polymarket_cmd.cancelling_market": {
+    "other": "Cancelling Market..."
+  },
+  "commands.polymarket_cmd.checking_the_market_and_issuing_refunds": {
+    "other": "Checking the market and issuing refunds..."
+  },
+  "commands.polymarket_cmd.choose_a_candidate": {
+    "other": "Choose a candidate..."
+  },
+  "commands.polymarket_cmd.choose_a_candidate_bf376c": {
+    "other": "Choose a Candidate"
+  },
+  "commands.polymarket_cmd.fetching_polymarket_data": {
+    "other": "Fetching Polymarket data..."
+  },
+  "commands.polymarket_cmd.general": {
+    "other": "General"
+  },
+  "commands.polymarket_cmd.importing": {
+    "other": "Importing..."
+  },
+  "commands.polymarket_cmd.invalid_share_quantity_enter_a_whole_number": {
+    "other": "❌ Invalid share quantity. Enter a whole number greater than zero."
+  },
+  "commands.polymarket_cmd.market_already_active": {
+    "other": "Market Already Active"
+  },
+  "commands.polymarket_cmd.market_cancelled_and_refunded": {
+    "other": "Market Cancelled and Refunded"
+  },
+  "commands.polymarket_cmd.market_imported": {
+    "other": "Market Imported"
+  },
+  "commands.polymarket_cmd.market_not_found_in_the_local_catalog": {
+    "other": "Market not found in the local catalog."
+  },
+  "commands.polymarket_cmd.market_was_not_found.formatted": {
+    "other": "Market `{{printf \"%s\" .Query}}` was not found."
+  },
+  "commands.polymarket_cmd.no_active_markets_found_for.formatted": {
+    "other": "No active markets found for `{{printf \"%s\" .Query}}`."
+  },
+  "commands.polymarket_cmd.no_results": {
+    "other": "No Results"
+  },
+  "commands.polymarket_cmd.only_administrators_can_approve_market_suggestions": {
+    "other": "❌ Only administrators can approve market suggestions."
+  },
+  "commands.polymarket_cmd.only_administrators_can_cancel_markets": {
+    "other": "Only administrators can cancel markets."
+  },
+  "commands.polymarket_cmd.only_administrators_can_import_directly_use_poly": {
+    "other": "Only administrators can import directly. Use /poly suggest."
+  },
+  "commands.polymarket_cmd.only_administrators_can_import_markets_into_the": {
+    "other": "❌ Only administrators can import markets into the official channel."
+  },
+  "commands.polymarket_cmd.only_administrators_can_reject_suggestions": {
+    "other": "❌ Only administrators can reject suggestions."
+  },
+  "commands.polymarket_cmd.only_administrators_can_use_this_command": {
+    "other": "Only administrators can use this command."
+  },
+  "commands.polymarket_cmd.polymarket_id_suggested_by.formatted": {
+    "other": "Polymarket ID: {{printf \"%s\" .ID}} | Suggested by {{printf \"%s\" .Username}}"
+  },
+  "commands.polymarket_cmd.polymarket_settings_saved": {
+    "other": "Polymarket settings saved."
+  },
+  "commands.polymarket_cmd.polymarket_suggestion": {
+    "other": "💡 Polymarket Suggestion"
+  },
+  "commands.polymarket_cmd.price_yes_no_volume.formatted": {
+    "other": "**{{printf \"%d\" .Idx}}. {{printf \"%s\" .Title}}**\n• Price: 🟢 `{{printf \"%.0f\" .YesP}}% Yes` | 🔴 `{{printf \"%.0f\" .NoP}}% No` | Volume: `{{printf \"%s\" .M}}`"
+  },
+  "commands.polymarket_cmd.probability_yes_no_volume_slug_import_poly.formatted": {
+    "other": "**{{printf \"%d\" .I}}. {{printf \"%s\" .Question}}**\n• Probability: 🟢 `{{printf \"%d\" .YesPct}}% Yes` | 🔴 `{{printf \"%d\" .NoPct}}% No`\n• Volume: `{{printf \"%s\" .M}}` | Slug: `{{printf \"%s\" .Slug}}`\n• *Import:* `/poly import query:{{printf \"%s\" .Slug7}}`\n"
+  },
+  "commands.polymarket_cmd.processing_your_request": {
+    "other": "Processing your request..."
+  },
+  "commands.polymarket_cmd.reject": {
+    "other": "Reject"
+  },
+  "commands.polymarket_cmd.results_for.formatted": {
+    "other": "🔍 Results for: \"{{printf \"%s\" .Query}}\""
+  },
+  "commands.polymarket_cmd.search_failed.formatted": {
+    "other": "Search failed: {{printf \"%v\" .Err}}"
+  },
+  "commands.polymarket_cmd.select_a_candidate.formatted": {
+    "other": "🗳️ Select a Candidate: {{printf \"%s\" .Title}}"
+  },
+  "commands.polymarket_cmd.selected_by_publishing_the_market.formatted": {
+    "other": "✅ **{{printf \"%s\" .CandidateName}}** selected by <@{{printf \"%s\" .ID}}>. Publishing the market..."
+  },
+  "commands.polymarket_cmd.settings_updated": {
+    "other": "Settings Updated"
+  },
+  "commands.polymarket_cmd.shares_average_price_ec_invested_potential_payout.formatted": {
+    "other": "• **{{printf \"%s\" .Outcome}}:** {{printf \"%d\" .Shares}} shares (Average price: `{{printf \"%.1f\" .Avg}} EC` | Invested: `{{printf \"%d\" .TotalInvested}} {{printf \"%s\" .CurrencySymbol}}` | Potential payout: `+{{printf \"%d\" .Shares6}} {{printf \"%s\" .CurrencySymbol7}}`)"
+  },
+  "commands.polymarket_cmd.shares_purchased_market_outcome_quantity_shares_total.formatted": {
+    "other": "✅ **Shares Purchased**\n\n📌 **Market:** {{printf \"%s\" .Question}}\n🎯 **Outcome:** {{printf \"%s\" .Emoji}} **{{printf \"%s\" .Outcome}}**\n📦 **Quantity:** **{{printf \"%d\" .Shares}} shares**\n💵 **Total Paid:** **{{printf \"%d\" .TotalCost}} {{printf \"%s\" .CurrencySymbol}}** *(Cost: {{printf \"%d\" .RawCost}} EC + Fee: {{printf \"%d\" .Fee}} EC)*\n🏆 **Return if You Win:** **{{printf \"%d\" .PotentialPayout}} {{printf \"%s\" .CurrencySymbol10}}** *(Profit: +{{printf \"%d\" .PotentialProfit}} {{printf \"%s\" .CurrencySymbol12}})*\n\nYour shares are in `/poly portfolio`."
+  },
+  "commands.polymarket_cmd.submitting_suggestion": {
+    "other": "Submitting Suggestion..."
+  },
+  "commands.polymarket_cmd.suggested_opening_this_market_current_prices_yes.formatted": {
+    "other": "<@{{printf \"%s\" .ID}}> suggested opening this market:\n\n### {{printf \"%s\" .Question}}\n• Current Prices: 🟢 **{{printf \"%.0f\" .YesPrice}}% Yes** | 🔴 **{{printf \"%.0f\" .NoPrice}}% No**\n• Global Volume: `{{printf \"%s\" .GammaMarket}}`\n• Slug: `{{printf \"%s\" .Slug}}`\n\nAdministrators can approve it to open trading in the official channel."
+  },
+  "commands.polymarket_cmd.suggestion_approved_by_publishing_the_market.formatted": {
+    "other": "✅ Suggestion approved by <@{{printf \"%s\" .ID}}>. Publishing the market..."
+  },
+  "commands.polymarket_cmd.suggestion_rejected_by.formatted": {
+    "other": "❌ Suggestion rejected by <@{{printf \"%s\" .ID}}>."
+  },
+  "commands.polymarket_cmd.suggestion_submitted": {
+    "other": "Suggestion Submitted"
+  },
+  "commands.polymarket_cmd.the_event_has_multiple_candidates_choose_one.formatted": {
+    "other": "The event **{{printf \"%s\" .Title}}** has multiple candidates.\nChoose one using:\n`/poly suggest query:{{printf \"%s\" .Slug}} candidate:<name>`"
+  },
+  "commands.polymarket_cmd.the_market_is_now_open_in_id.formatted": {
+    "other": "The market **{{printf \"%s\" .Question}}** is now open in <#{{printf \"%s\" .TargetChannelID}}>.\nID: `{{printf \"%s\" .ID}}`"
+  },
+  "commands.polymarket_cmd.the_market_was_cancelled_refunded_to_bettors.formatted": {
+    "other": "The market **{{printf \"%s\" .Question}}** (`{{printf \"%s\" .ID}}`) was cancelled.\nRefunded **{{printf \"%d\" .TotalRefunded}} {{printf \"%s\" .CurrencySymbol}}** to **{{printf \"%d\" .Value5}}** bettors."
+  },
+  "commands.polymarket_cmd.the_polymarket_channel_is_not_configured": {
+    "other": "⚠️ The Polymarket channel is not configured."
+  },
+  "commands.polymarket_cmd.the_polymarket_channel_is_not_configured_an": {
+    "other": "The Polymarket channel is not configured. An administrator can set it with /poly config."
+  },
+  "commands.polymarket_cmd.the_polymarket_channel_is_not_configured_ask": {
+    "other": "The Polymarket channel is not configured. Ask a server administrator to set it up."
+  },
+  "commands.polymarket_cmd.the_polymarket_channel_is_not_configured_use": {
+    "other": "⚠️ The Polymarket channel is not configured. Use /poly config channel:<channel>."
+  },
+  "commands.polymarket_cmd.this_event_has_markets_candidates_on_polymarket.formatted": {
+    "other": "This event has **{{printf \"%d\" .Value1}} markets/candidates** on Polymarket.\n\n{{printf \"%s\" .Strings}}\n\n👇 **Select a candidate below to open their market:**\n*You can also use `/poly import query:{{printf \"%s\" .Slug}} candidate:<name>`.*"
+  },
+  "commands.polymarket_cmd.this_market_already_has_status.formatted": {
+    "other": "This market already has status `{{printf \"%s\" .Status}}`."
+  },
+  "commands.polymarket_cmd.this_market_has_closed_or_no_longer": {
+    "other": "❌ This market has closed or no longer accepts bets."
+  },
+  "commands.polymarket_cmd.this_market_is_already_open_in_market.formatted": {
+    "other": "This market is already open in <#{{printf \"%s\" .ChannelID}}>.\nMarket ID: `{{printf \"%s\" .ID}}`"
+  },
+  "commands.polymarket_cmd.this_market_is_no_longer_open_for": {
+    "other": "❌ This market is no longer open for trading."
+  },
+  "commands.polymarket_cmd.trending_polymarket_markets": {
+    "other": "🔥 Trending Polymarket Markets"
+  },
+  "commands.polymarket_cmd.unable_to_cancel_the_market.formatted": {
+    "other": "Unable to cancel the market: {{printf \"%v\" .Err}}"
+  },
+  "commands.polymarket_cmd.unable_to_complete_the_purchase.formatted": {
+    "other": "❌ Unable to complete the purchase: {{printf \"%v\" .Err}}"
+  },
+  "commands.polymarket_cmd.unable_to_find_this_event_on_polymarket.formatted": {
+    "other": "Unable to find this event on Polymarket: {{printf \"%v\" .Err}}"
+  },
+  "commands.polymarket_cmd.unable_to_load_positions": {
+    "other": "Unable to load positions."
+  },
+  "commands.polymarket_cmd.unable_to_publish_the_market_in.formatted": {
+    "other": "Unable to publish the market in <#{{printf \"%s\" .TargetChannelID}}>: {{printf \"%v\" .Err}}"
+  },
+  "commands.polymarket_cmd.unable_to_query_polymarket.formatted": {
+    "other": "Unable to query Polymarket: {{printf \"%v\" .Err}}"
+  },
+  "commands.polymarket_cmd.unable_to_query_the_selected_market.formatted": {
+    "other": "❌ Unable to query the selected market: {{printf \"%v\" .Err}}"
+  },
+  "commands.polymarket_cmd.use_poly_import_to_open_a_market": {
+    "other": "Use /poly import to open a market in this server."
+  },
+  "commands.polymarket_cmd.yes_no_vol.formatted": {
+    "other": "{{printf \"%.0f\" .YesP}}% Yes | {{printf \"%.0f\" .NoP}}% No | Vol: {{printf \"%s\" .M}}"
+  },
+  "commands.polymarket_cmd.you_do_not_own_any_shares_in": {
+    "other": "💼 You do not own any shares in this market."
+  },
+  "commands.polymarket_cmd.your_market_suggestion_was_sent_for_review.formatted": {
+    "other": "Your market suggestion was sent for review in <#{{printf \"%s\" .ChannelID}}>."
+  },
+  "commands.polymarket_cmd.your_shares_in_this_market.formatted": {
+    "other": "💼 **Your shares in this market:**\n{{printf \"%s\" .Strings}}"
+  },
+  "commands.shop.available_items_change_own_nickname_cost_command.formatted": {
+    "other": "**Available Items:**\n\n1. **Change Own Nickname**\n   Cost: {{printf \"%d\" .CostNicknameSelf}} {{printf \"%s\" .Sym}}\n   Command: `/buy nickname`\n\n2. **Change Other's Nickname**\n   Cost: {{printf \"%d\" .CostNicknameOther}} {{printf \"%s\" .Sym4}}\n   Command: `/buy rename`\n\n3. **Timeout User (Text & Voice)**\n   Cost: {{printf \"%d\" .CostTimeout}} {{printf \"%s\" .Sym6}} per minute (max 1440 min / 24h)\n   Command: `/buy timeout`\n\n4. **Voice Mute User (Call Only)**\n   Cost: {{printf \"%d\" .CostMute}} {{printf \"%s\" .Sym8}} per minute (max 1440 min / 24h)\n   Command: `/buy mute`\n"
+  },
+  "commands.shop.could_not_apply_timeout_check_my_permissions": {
+    "other": "Could not apply timeout. Check my permissions and role hierarchy."
+  },
+  "commands.shop.could_not_change_nickname_check_my_permissions": {
+    "other": "Could not change nickname. Check my permissions and role hierarchy."
+  },
+  "commands.shop.could_not_mute_user_in_voice_check": {
+    "other": "Could not mute user in voice. Check my permissions and role hierarchy."
+  },
+  "commands.shop.has_been_muted_in_voice_for_minute.formatted": {
+    "other": "**{{printf \"%s\" .Username}}** has been muted in voice for {{printf \"%d\" .Minutes}} minute(s)."
+  },
+  "commands.shop.has_been_timed_out_until_min.formatted": {
+    "other": "**{{printf \"%s\" .Username}}** has been timed out until {{printf \"%s\" .Until}} ({{printf \"%d\" .Minutes}} min)."
+  },
+  "commands.shop.insufficient_funds": {
+    "other": "Insufficient funds."
+  },
+  "commands.shop.insufficient_funds_cost.formatted": {
+    "other": "Insufficient funds. Cost: {{printf \"%d\" .Cost}} {{printf \"%s\" .CurrencySymbol}}."
+  },
+  "commands.shop.is_not_in_a_voice_channel_you.formatted": {
+    "other": "**{{printf \"%s\" .Username}}** is not in a voice channel! You can only mute users who are currently in a call."
+  },
+  "commands.shop.member_not_found_in_this_server": {
+    "other": "Member not found in this server."
+  },
+  "commands.shop.mute_duration_must_be_between_and_minutes": {
+    "other": "Mute duration must be between 1 and 1440 minutes (max 24 hours)."
+  },
+  "commands.shop.nickname_must_be_between_and_characters": {
+    "other": "Nickname must be between 1 and 32 characters."
+  },
+  "commands.shop.nickname_of_changed_to.formatted": {
+    "other": "Nickname of **{{printf \"%s\" .Username}}** changed to **{{printf \"%s\" .NewName}}**!"
+  },
+  "commands.shop.punishment_applied": {
+    "other": "Punishment Applied!"
+  },
+  "commands.shop.purchase_successful": {
+    "other": "Purchase Successful"
+  },
+  "commands.shop.shop.formatted": {
+    "other": "🛒 {{printf \"%s\" .BotName}} Shop"
+  },
+  "commands.shop.target_user_not_found": {
+    "other": "Target user not found."
+  },
+  "commands.shop.timeout_duration_must_be_between_and_minutes": {
+    "other": "Timeout duration must be between 1 and 1440 minutes (max 24 hours)."
+  },
+  "commands.shop.user_muted": {
+    "other": "User Muted!"
+  },
+  "commands.shop.you_cannot_mute_bot_accounts": {
+    "other": "You cannot mute bot accounts."
+  },
+  "commands.shop.you_cannot_mute_yourself": {
+    "other": "You cannot mute yourself."
+  },
+  "commands.shop.you_cannot_rename_bot_accounts": {
+    "other": "You cannot rename bot accounts."
+  },
+  "commands.shop.you_cannot_timeout_bot_accounts": {
+    "other": "You cannot timeout bot accounts."
+  },
+  "commands.shop.you_cannot_timeout_yourself": {
+    "other": "You cannot timeout yourself."
+  },
+  "commands.shop.your_nickname_has_been_changed_to.formatted": {
+    "other": "Your nickname has been changed to **{{printf \"%s\" .NewName}}**!"
+  },
+  "commands.slash_handlers.balance": {
+    "other": "Balance"
+  },
+  "commands.slash_handlers.bet_placed": {
+    "other": "Bet Placed!"
+  },
+  "commands.slash_handlers.casino_roulette": {
+    "other": "Casino Roulette"
+  },
+  "commands.slash_handlers.casino_roulette_status": {
+    "other": "🎰 Casino Roulette - Status"
+  },
+  "commands.slash_handlers.has.formatted": {
+    "other": "**{{printf \"%s\" .Username}}** has **{{printf \"%d\" .Balance}} {{printf \"%s\" .CurrencyName}}**."
+  },
+  "commands.slash_handlers.insufficient_funds_or_transaction_error": {
+    "other": "Insufficient funds or transaction error."
+  },
+  "commands.slash_handlers.invalid_bet_type": {
+    "other": "Invalid bet type."
+  },
+  "commands.slash_handlers.next_spin_t_r_t_t_bets.formatted": {
+    "other": "Next spin <t:{{printf \"%d\" .EndTime}}:R> (<t:{{printf \"%d\" .EndTime2}}:T>).\n\n**Bets Placed:** {{printf \"%d\" .BetsCount}}\n**Total Wagered:** {{printf \"%d\" .TotalAmount}} {{printf \"%s\" .CurrencySymbol}}"
+  },
+  "commands.slash_handlers.place_your_bets_with_wheel_bet_or": {
+    "other": "Place your bets with /wheel bet"
+  },
+  "commands.slash_handlers.please_provide_a_valid_number_between_and": {
+    "other": "Please provide a valid number between 0 and 36 for number bets!"
+  },
+  "commands.slash_handlers.the_wheel_is_currently_spinning_please_wait": {
+    "other": "The wheel is currently spinning! Please wait for the next round."
+  },
+  "commands.slash_handlers.transfer_successful": {
+    "other": "Transfer Successful"
+  },
+  "commands.slash_handlers.you_bet_on_next_spin_t_r.formatted": {
+    "other": "You bet **{{printf \"%d\" .Amount}} {{printf \"%s\" .CurrencySymbol}}** on **{{printf \"%s\" .Value}}**.\nNext spin: <t:{{printf \"%d\" .EndTime}}:R>"
+  },
+  "commands.slash_handlers.you_cannot_pay_yourself": {
+    "other": "You cannot pay yourself."
+  },
+  "commands.slash_handlers.you_sent_to.formatted": {
+    "other": "You sent **{{printf \"%d\" .Amount}} {{printf \"%s\" .CurrencyName}}** to **{{printf \"%s\" .Username}}**."
+  },
+  "commands.webhook_cmd.database_error_saving_webhook": {
+    "other": "Database error saving webhook."
+  },
+  "commands.webhook_cmd.error_removing_webhook": {
+    "other": "Error removing webhook."
+  },
+  "commands.webhook_cmd.invalid_webhook_url": {
+    "other": "Invalid Webhook URL: "
+  },
+  "commands.webhook_cmd.test_failed": {
+    "other": "Test Failed: "
+  },
+  "commands.webhook_cmd.test_sent": {
+    "other": "Test Sent"
+  },
+  "commands.webhook_cmd.we_sent_a_test_payload_to_your": {
+    "other": "We sent a test payload to your URL."
+  },
+  "commands.webhook_cmd.webhook_configured": {
+    "other": "Webhook Configured"
+  },
+  "commands.webhook_cmd.webhook_removed": {
+    "other": "Webhook Removed"
+  },
+  "commands.webhook_cmd.you_don_t_have_a_webhook_configured": {
+    "other": "You don't have a webhook configured."
+  },
+  "commands.webhook_cmd.you_will_no_longer_receive_notifications": {
+    "other": "You will no longer receive notifications."
+  },
+  "commands.webhook_cmd.your_webhook_url_has_been_saved": {
+    "other": "Your webhook URL has been saved."
+  }
+}

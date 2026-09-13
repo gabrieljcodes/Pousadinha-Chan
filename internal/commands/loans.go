@@ -1,15 +1,16 @@
 package commands
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"bot/internal/database"
+	"bot/internal/locale"
 	"bot/pkg/config"
 	"bot/pkg/utils"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"math"
-	"strconv"
+
 	"strings"
 	"sync"
 	"time"
@@ -37,65 +38,17 @@ func generateLoanID() string {
 	return fmt.Sprintf("ln_%d_%s", time.Now().Unix()%1000000, hex.EncodeToString(b))
 }
 
-// CmdLoanOffer creates a loan offer for another user
-// Usage: !loan offer @user <amount> <interest_rate> <days>
-func CmdLoanOffer(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
-	if len(args) < 5 {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("Loan System",
-			"**Usage:** `!loan offer @user <amount> <interest_rate> <days>`\n\n"+
-				"**Parameters:**\n"+
-				"• `@user` - The user you want to lend money to\n"+
-				"• `amount` - Amount to lend\n"+
-				"• `interest_rate` - Interest percentage (e.g., 10 for 10%)\n"+
-				"• `days` - Days until payment is due\n\n"+
-				"**Example:** `!loan offer @John 1000 10 7`\n"+
-				"(Lend 1000 with 10% interest, due in 7 days)"))
-		return
-	}
-
-	// Check mention
-	if len(m.Mentions) == 0 {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Please mention a user to lend money to."))
-		return
-	}
-
-	borrower := m.Mentions[0]
-
-	// Parse amount (args[2] because args[0]=offer, args[1]=@user)
-	amount, err := strconv.Atoi(args[2])
-	if err != nil || amount <= 0 {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Invalid amount. Must be a positive number."))
-		return
-	}
-
-	// Parse interest rate
-	interestRate, err := strconv.ParseFloat(args[3], 64)
-	if err != nil || interestRate < 0 || interestRate > 100 {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Invalid interest rate. Must be between 0 and 100."))
-		return
-	}
-
-	// Parse days
-	days, err := strconv.Atoi(args[4])
-	if err != nil || days <= 0 || days > 365 {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Invalid number of days. Must be between 1 and 365."))
-		return
-	}
-
-	ExecuteLoanOffer(s, m.ChannelID, m.GuildID, m.Author, borrower, amount, interestRate, days, nil)
-}
-
 // ExecuteLoanOffer handles loan creation and sends the interactive confirmation message
 func ExecuteLoanOffer(s *discordgo.Session, channelID, guildID string, lender *discordgo.User, borrower *discordgo.User, amount int, interestRate float64, days int, i *discordgo.InteractionCreate) {
 	// Cannot lend to oneself
 	if borrower.ID == lender.ID {
-		sendLoanResponse(s, channelID, i, utils.ErrorEmbed("You cannot lend money to yourself!"))
+		sendLoanResponse(s, i, utils.ErrorEmbed(locale.Text("commands.loans.you_cannot_lend_money_to_yourself")))
 		return
 	}
 
 	// Cannot lend to bots
 	if borrower.Bot {
-		sendLoanResponse(s, channelID, i, utils.ErrorEmbed("You cannot lend money to bots!"))
+		sendLoanResponse(s, i, utils.ErrorEmbed(locale.Text("commands.loans.you_cannot_lend_money_to_bots")))
 		return
 	}
 
@@ -104,7 +57,7 @@ func ExecuteLoanOffer(s *discordgo.Session, channelID, guildID string, lender *d
 	for _, req := range pendingLoans {
 		if req.Loan.BorrowerID == borrower.ID && req.Loan.LenderID == lender.ID {
 			pendingMu.Unlock()
-			sendLoanResponse(s, channelID, i, utils.ErrorEmbed(fmt.Sprintf("You already have an active loan offer pending for <@%s>!", borrower.ID)))
+			sendLoanResponse(s, i, utils.ErrorEmbed(locale.Text("commands.loans.you_already_have_an_active_loan_offer.formatted", locale.Data{"ID": borrower.ID})))
 			return
 		}
 	}
@@ -113,7 +66,7 @@ func ExecuteLoanOffer(s *discordgo.Session, channelID, guildID string, lender *d
 	// Check lender balance
 	lenderBalance := database.GetBalance(guildID, lender.ID)
 	if lenderBalance < amount {
-		sendLoanResponse(s, channelID, i, utils.ErrorEmbed(fmt.Sprintf("Insufficient balance! You have %d %s", lenderBalance, config.Bot.CurrencySymbol)))
+		sendLoanResponse(s, i, utils.ErrorEmbed(locale.Text("commands.loans.insufficient_balance_you_have.formatted", locale.Data{"LenderBalance": lenderBalance, "CurrencySymbol": config.Bot.CurrencySymbol})))
 		return
 	}
 
@@ -142,43 +95,43 @@ func ExecuteLoanOffer(s *discordgo.Session, channelID, guildID string, lender *d
 
 	// Confirmation embed
 	embed := &discordgo.MessageEmbed{
-		Title:       "💰 Loan Offer",
-		Description: fmt.Sprintf("<@%s> wants to lend money to <@%s>!", lender.ID, borrower.ID),
+		Title:       locale.Text("commands.loans.loan_offer"),
+		Description: locale.Text("commands.loans.wants_to_lend_money_to.formatted", locale.Data{"ID": lender.ID, "ID2": borrower.ID}),
 		Color:       0xFFD700,
 		Fields: []*discordgo.MessageEmbedField{
 			{
-				Name:   "💵 Amount",
+				Name:   locale.Text("commands.loans.amount"),
 				Value:  fmt.Sprintf("%d %s", amount, config.Bot.CurrencySymbol),
 				Inline: true,
 			},
 			{
-				Name:   "📈 Interest Rate",
+				Name:   locale.Text("commands.loans.interest_rate"),
 				Value:  fmt.Sprintf("%.1f%% (+%d %s)", interestRate, interest, config.Bot.CurrencySymbol),
 				Inline: true,
 			},
 			{
-				Name:   "💰 Total to Repay",
+				Name:   locale.Text("commands.loans.total_to_repay"),
 				Value:  fmt.Sprintf("%d %s", totalOwed, config.Bot.CurrencySymbol),
 				Inline: true,
 			},
 			{
-				Name:   "📅 Due Date",
-				Value:  fmt.Sprintf("<t:%d:R> (%d days)", dueDate.Unix(), days),
+				Name:   locale.Text("commands.loans.due_date"),
+				Value:  locale.Text("commands.loans.t_r_days.formatted", locale.Data{"DueDate": dueDate.Unix(), "Days": days}),
 				Inline: true,
 			},
 			{
-				Name:   "🆔 Loan ID",
+				Name:   locale.Text("commands.loans.loan_id"),
 				Value:  fmt.Sprintf("`%s`", loan.ID),
 				Inline: true,
 			},
 			{
-				Name:   "⏱️ Expires In",
-				Value:  "60 seconds",
+				Name:   locale.Text("commands.loans.expires_in"),
+				Value:  locale.Text("commands.loans.seconds"),
 				Inline: true,
 			},
 		},
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: "Borrower must click Accept to confirm the loan.",
+			Text: locale.Text("commands.loans.borrower_must_click_accept_to_confirm_the"),
 		},
 	}
 
@@ -187,13 +140,13 @@ func ExecuteLoanOffer(s *discordgo.Session, channelID, guildID string, lender *d
 		discordgo.ActionsRow{
 			Components: []discordgo.MessageComponent{
 				discordgo.Button{
-					Label:    "Accept",
+					Label:    locale.Text("commands.loans.accept"),
 					Style:    discordgo.SuccessButton,
 					CustomID: fmt.Sprintf("loan_accept_%s", loan.ID),
 					Emoji:    &discordgo.ComponentEmoji{Name: "✅"},
 				},
 				discordgo.Button{
-					Label:    "Decline",
+					Label:    locale.Text("commands.loans.decline"),
 					Style:    discordgo.DangerButton,
 					CustomID: fmt.Sprintf("loan_decline_%s", loan.ID),
 					Emoji:    &discordgo.ComponentEmoji{Name: "❌"},
@@ -202,19 +155,18 @@ func ExecuteLoanOffer(s *discordgo.Session, channelID, guildID string, lender *d
 		},
 	}
 
-	// If slash command, acknowledge first
-	if i != nil {
-		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Content: fmt.Sprintf("📩 Loan offer sent to <@%s>!", borrower.ID),
-				Flags:   discordgo.MessageFlagsEphemeral,
-			},
-		})
-	}
+	// Acknowledge before publishing the public offer.
+
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: locale.Text("commands.loans.loan_offer_sent_to.formatted", locale.Data{"ID": borrower.ID}),
+			Flags:   discordgo.MessageFlagsEphemeral,
+		},
+	})
 
 	msg, err := s.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{
-		Content:    fmt.Sprintf("<@%s>, you have received a loan offer from <@%s>!", borrower.ID, lender.ID),
+		Content:    locale.Text("commands.loans.you_have_received_a_loan_offer_from.formatted", locale.Data{"ID": borrower.ID, "ID2": lender.ID}),
 		Embed:      embed,
 		Components: components,
 	})
@@ -237,35 +189,23 @@ func ExecuteLoanOffer(s *discordgo.Session, channelID, guildID string, lender *d
 	pendingMu.Unlock()
 }
 
-func sendLoanResponse(s *discordgo.Session, channelID string, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) {
-	if i != nil {
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Embeds: []*discordgo.MessageEmbed{embed},
-				Flags:  discordgo.MessageFlagsEphemeral,
-			},
-		})
-	} else {
-		s.ChannelMessageSendEmbed(channelID, embed)
-	}
-}
+func sendLoanResponse(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) {
 
-// CmdLoanPay allows the borrower to pay an active loan
-// Usage: !loan pay [loan_id] or !loan pay (pays the earliest active loan)
-func CmdLoanPay(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
-	loanID := ""
-	if len(args) >= 2 {
-		loanID = strings.TrimSpace(args[1])
-	}
-	ExecuteLoanPay(s, m.ChannelID, m.Author.ID, loanID, nil)
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Embeds: []*discordgo.MessageEmbed{embed},
+			Flags:  discordgo.MessageFlagsEphemeral,
+		},
+	})
+
 }
 
 // ExecuteLoanPay executes repayment for an active loan
-func ExecuteLoanPay(s *discordgo.Session, channelID, borrowerID, loanID string, i *discordgo.InteractionCreate) {
+func ExecuteLoanPay(s *discordgo.Session, borrowerID, loanID string, i *discordgo.InteractionCreate) {
 	userLoans, err := database.GetActiveLoansByBorrower(borrowerID)
 	if err != nil || len(userLoans) == 0 {
-		sendLoanResponse(s, channelID, i, utils.ErrorEmbed("You don't have any active loans to pay!"))
+		sendLoanResponse(s, i, utils.ErrorEmbed(locale.Text("commands.loans.you_don_t_have_any_active_loans")))
 		return
 	}
 
@@ -279,7 +219,7 @@ func ExecuteLoanPay(s *discordgo.Session, channelID, borrowerID, loanID string, 
 			}
 		}
 		if targetLoanID == "" {
-			sendLoanResponse(s, channelID, i, utils.ErrorEmbed("Loan ID not found among your active unpaid loans!"))
+			sendLoanResponse(s, i, utils.ErrorEmbed(locale.Text("commands.loans.loan_id_not_found_among_your_active")))
 			return
 		}
 	} else {
@@ -290,60 +230,42 @@ func ExecuteLoanPay(s *discordgo.Session, channelID, borrowerID, loanID string, 
 	// Process atomic payment
 	paidLoan, err := database.PayLoanAtomic(targetLoanID, borrowerID)
 	if err != nil {
-		sendLoanResponse(s, channelID, i, utils.ErrorEmbed(fmt.Sprintf("Payment failed: %v", err)))
+		sendLoanResponse(s, i, utils.ErrorEmbed(locale.Text("commands.loans.payment_failed.formatted", locale.Data{"Err": err})))
 		return
 	}
 
-	successEmbed := utils.SuccessEmbed("Loan Repaid!",
-		fmt.Sprintf("🎉 <@%s> paid **%d %s** to <@%s>!\nLoan `%s` is now fully settled.",
-			paidLoan.BorrowerID, paidLoan.TotalOwed, config.Bot.CurrencySymbol, paidLoan.LenderID, paidLoan.ID))
+	successEmbed := utils.SuccessEmbed(locale.Text("commands.loans.loan_repaid"),
+		locale.Text("commands.loans.paid_to_loan_is_now_fully_settled.formatted", locale.Data{"BorrowerID": paidLoan.BorrowerID, "TotalOwed": paidLoan.TotalOwed, "CurrencySymbol": config.Bot.CurrencySymbol, "LenderID": paidLoan.LenderID, "ID": paidLoan.ID}))
 
-	if i != nil {
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Embeds: []*discordgo.MessageEmbed{successEmbed},
-			},
-		})
-	} else {
-		s.ChannelMessageSendEmbed(channelID, successEmbed)
-	}
-}
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Embeds: []*discordgo.MessageEmbed{successEmbed},
+		},
+	})
 
-// CmdLoanList lists active loans for the user
-// Usage: !loan list or !loan list @user
-func CmdLoanList(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
-	targetUser := m.Author
-	isOwn := true
-
-	if len(m.Mentions) > 0 {
-		targetUser = m.Mentions[0]
-		isOwn = false
-	}
-
-	ExecuteLoanList(s, m.ChannelID, targetUser, isOwn, nil)
 }
 
 // ExecuteLoanList lists active loans directly from PostgreSQL
-func ExecuteLoanList(s *discordgo.Session, channelID string, targetUser *discordgo.User, isOwn bool, i *discordgo.InteractionCreate) {
+func ExecuteLoanList(s *discordgo.Session, targetUser *discordgo.User, isOwn bool, i *discordgo.InteractionCreate) {
 	userLoans, err := database.GetActiveLoansByUser(targetUser.ID, 15)
 	if err != nil || len(userLoans) == 0 {
-		msg := "You don't have any active loans!"
+		msg := locale.Text("commands.loans.you_don_t_have_any_active_loans_4c56a6")
 		if !isOwn {
-			msg = fmt.Sprintf("%s doesn't have any active loans!", targetUser.Username)
+			msg = locale.Text("commands.loans.doesn_t_have_any_active_loans.formatted", locale.Data{"Username": targetUser.Username})
 		}
-		sendLoanResponse(s, channelID, i, utils.InfoEmbed("Loans", msg))
+		sendLoanResponse(s, i, utils.InfoEmbed(locale.Text("commands.general.loans"), msg))
 		return
 	}
 
 	var description strings.Builder
-	description.WriteString(fmt.Sprintf("**Active Loans for %s**\n\n", targetUser.Username))
+	description.WriteString(locale.Text("commands.loans.active_loans_for.formatted", locale.Data{"Username": targetUser.Username}))
 
 	for idx, loan := range userLoans {
-		role := "Borrower"
+		role := locale.Text("commands.loans.borrower")
 		otherParty := loan.LenderID
 		if loan.LenderID == targetUser.ID {
-			role = "Lender"
+			role = locale.Text("commands.loans.lender")
 			otherParty = loan.BorrowerID
 		}
 
@@ -353,34 +275,22 @@ func ExecuteLoanList(s *discordgo.Session, channelID string, targetUser *discord
 			statusEmoji = "🟡"
 		}
 		if timeLeft < 0 {
-			statusEmoji = "🔴 OVERDUE"
+			statusEmoji = locale.Text("commands.loans.overdue")
 		}
 
-		description.WriteString(fmt.Sprintf(
-			"**%d.** `%s`\n"+
-				"• Role: **%s** | Other: <@%s>\n"+
-				"• Borrowed: **%d %s** | Debt: **%d %s**\n"+
-				"• Due: %s (%s)\n\n",
-			idx+1, loan.ID, // Full un-truncated ID in code block
-			role, otherParty,
-			loan.Amount, config.Bot.CurrencySymbol, loan.TotalOwed, config.Bot.CurrencySymbol,
-			statusEmoji, formatDuration(timeLeft),
-		))
+		description.WriteString(locale.Text("commands.loans.role_other_borrowed_debt_due.formatted", locale.Data{"Idx": idx + 1, "ID": loan.ID, "Role": role, "OtherParty": otherParty, "Amount": loan.Amount, "CurrencySymbol": config.Bot.CurrencySymbol, "TotalOwed": loan.TotalOwed, "CurrencySymbol8": config.Bot.CurrencySymbol, "StatusEmoji": statusEmoji, "Value10": formatDuration(timeLeft)}))
 	}
 
-	description.WriteString("💡 *To pay a loan, use `!loan pay <id>` or `/loan pay loan_id:<id>`*")
-	embed := utils.GoldEmbed("📋 Active Loans", description.String())
+	description.WriteString(locale.Text("commands.loans.to_pay_a_loan_use_loan_pay"))
+	embed := utils.GoldEmbed(locale.Text("commands.loans.active_loans"), description.String())
 
-	if i != nil {
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Embeds: []*discordgo.MessageEmbed{embed},
-			},
-		})
-	} else {
-		s.ChannelMessageSendEmbed(channelID, embed)
-	}
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Embeds: []*discordgo.MessageEmbed{embed},
+		},
+	})
+
 }
 
 // HandleLoanAccept accepts a loan offer atomically
@@ -394,7 +304,7 @@ func HandleLoanAccept(s *discordgo.Session, i *discordgo.InteractionCreate, loan
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "❌ This loan offer has expired or does not exist!",
+				Content: locale.Text("commands.loans.this_loan_offer_has_expired_or_does"),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -407,7 +317,7 @@ func HandleLoanAccept(s *discordgo.Session, i *discordgo.InteractionCreate, loan
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "❌ This loan offer is not for you!",
+				Content: locale.Text("commands.loans.this_loan_offer_is_not_for_you"),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -426,7 +336,7 @@ func HandleLoanAccept(s *discordgo.Session, i *discordgo.InteractionCreate, loan
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseUpdateMessage,
 			Data: &discordgo.InteractionResponseData{
-				Content:    fmt.Sprintf("❌ Loan could not be completed: lender may no longer have sufficient balance (%v)", err),
+				Content:    locale.Text("commands.loans.loan_could_not_be_completed_lender_may.formatted", locale.Data{"Err": err}),
 				Embeds:     []*discordgo.MessageEmbed{},
 				Components: []discordgo.MessageComponent{},
 			},
@@ -438,9 +348,7 @@ func HandleLoanAccept(s *discordgo.Session, i *discordgo.InteractionCreate, loan
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseUpdateMessage,
 		Data: &discordgo.InteractionResponseData{
-			Content: fmt.Sprintf("✅ **Loan Accepted!**\n<@%s> received **%d %s** from <@%s>.\nTotal to repay: **%d %s** by <t:%d:f>\nLoan ID: `%s`",
-				loan.BorrowerID, loan.Amount, config.Bot.CurrencySymbol, loan.LenderID,
-				loan.TotalOwed, config.Bot.CurrencySymbol, loan.DueDate.Unix(), loan.ID),
+			Content:    locale.Text("commands.loans.loan_accepted_received_from_total_to_repay.formatted", locale.Data{"BorrowerID": loan.BorrowerID, "Amount": loan.Amount, "CurrencySymbol": config.Bot.CurrencySymbol, "LenderID": loan.LenderID, "TotalOwed": loan.TotalOwed, "CurrencySymbol6": config.Bot.CurrencySymbol, "DueDate": loan.DueDate.Unix(), "ID": loan.ID}),
 			Embeds:     []*discordgo.MessageEmbed{},
 			Components: []discordgo.MessageComponent{},
 		},
@@ -458,7 +366,7 @@ func HandleLoanDecline(s *discordgo.Session, i *discordgo.InteractionCreate, loa
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "❌ This loan offer has expired or does not exist!",
+				Content: locale.Text("commands.loans.this_loan_offer_has_expired_or_does"),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -470,7 +378,7 @@ func HandleLoanDecline(s *discordgo.Session, i *discordgo.InteractionCreate, loa
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "❌ You cannot decline this loan offer.",
+				Content: locale.Text("commands.loans.you_cannot_decline_this_loan_offer"),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -489,7 +397,7 @@ func HandleLoanDecline(s *discordgo.Session, i *discordgo.InteractionCreate, loa
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseUpdateMessage,
 		Data: &discordgo.InteractionResponseData{
-			Content:    fmt.Sprintf("❌ <@%s> %s the loan offer.", userID, actionText),
+			Content:    locale.Text("commands.loans.the_loan_offer.formatted", locale.Data{"UserID": userID, "ActionText": actionText}),
 			Embeds:     []*discordgo.MessageEmbed{},
 			Components: []discordgo.MessageComponent{},
 		},
@@ -508,7 +416,7 @@ func expireLoanOffer(s *discordgo.Session, loanID, channelID, messageID string) 
 	borrowerID := req.Loan.BorrowerID
 	pendingMu.Unlock()
 
-	content := fmt.Sprintf("⏰ **Loan offer expired!** <@%s> did not respond in time.", borrowerID)
+	content := locale.Text("commands.loans.loan_offer_expired_did_not_respond_in.formatted", locale.Data{"BorrowerID": borrowerID})
 	embeds := []*discordgo.MessageEmbed{}
 	components := []discordgo.MessageComponent{}
 	_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
@@ -522,7 +430,7 @@ func expireLoanOffer(s *discordgo.Session, loanID, channelID, messageID string) 
 
 // StartLoanWorker starts the background ticker that periodically processes overdue loans.
 func StartLoanWorker(s *discordgo.Session) {
-	log.Println("Starting background loan overdue collector worker (1-minute interval)...")
+	log.Println(locale.Text("commands.loans.starting_background_loan_overdue_collector_worker_minute"))
 	ticker := time.NewTicker(1 * time.Minute)
 
 	go func() {
@@ -549,17 +457,12 @@ func processOverdueLoans(s *discordgo.Session) {
 		}
 
 		if fullyPaid {
-			embed := utils.SuccessEmbed("Auto Payment Executed",
-				fmt.Sprintf("💰 **Loan auto-collected!**\n<@%s> paid **%d %s** to <@%s>.\nLoan `%s` is now fully repaid! ✅",
-					updatedLoan.BorrowerID, collected, config.Bot.CurrencySymbol, updatedLoan.LenderID, updatedLoan.ID))
+			embed := utils.SuccessEmbed(locale.Text("commands.loans.auto_payment_executed"),
+				locale.Text("commands.loans.loan_auto_collected_paid_to_loan_is.formatted", locale.Data{"BorrowerID": updatedLoan.BorrowerID, "Collected": collected, "CurrencySymbol": config.Bot.CurrencySymbol, "LenderID": updatedLoan.LenderID, "ID": updatedLoan.ID}))
 			_, _ = s.ChannelMessageSendEmbed(loan.ChannelID, embed)
 		} else if collected > 0 {
-			embed := utils.GoldEmbed("⚠️ Partial Loan Collection",
-				fmt.Sprintf("⚠️ <@%s> did not have enough funds to repay loan `%s` in full!\n"+
-					"• Collected: **%d %s**\n"+
-					"• Remaining Debt: **%d %s**\n"+
-					"The loan remains **OVERDUE** until fully settled. 💸",
-					updatedLoan.BorrowerID, updatedLoan.ID, collected, config.Bot.CurrencySymbol, remaining, config.Bot.CurrencySymbol))
+			embed := utils.GoldEmbed(locale.Text("commands.loans.partial_loan_collection"),
+				locale.Text("commands.loans.did_not_have_enough_funds_to_repay.formatted", locale.Data{"BorrowerID": updatedLoan.BorrowerID, "ID": updatedLoan.ID, "Collected": collected, "CurrencySymbol": config.Bot.CurrencySymbol, "Remaining": remaining, "CurrencySymbol6": config.Bot.CurrencySymbol}))
 			_, _ = s.ChannelMessageSendEmbed(loan.ChannelID, embed)
 		}
 	}
@@ -574,7 +477,7 @@ func LoadActiveLoans(s *discordgo.Session) {
 func formatDuration(d time.Duration) string {
 	if d < 0 {
 		d = -d
-		return fmt.Sprintf("%d days overdue", int(d.Hours()/24))
+		return locale.Text("commands.loans.days_overdue.formatted", locale.Data{"Value1": int(d.Hours() / 24)})
 	}
 
 	days := int(d.Hours() / 24)

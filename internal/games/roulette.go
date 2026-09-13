@@ -1,11 +1,12 @@
 package games
 
 import (
-	"crypto/rand"
-	"encoding/binary"
 	"bot/internal/database"
+	"bot/internal/locale"
 	"bot/pkg/config"
 	"bot/pkg/utils"
+	"crypto/rand"
+	"encoding/binary"
 	"fmt"
 	"log"
 	"strings"
@@ -74,7 +75,7 @@ type UserRoundStats struct {
 
 var (
 	currentRound    *RouletteRound
-	wheelMu      sync.RWMutex
+	wheelMu         sync.RWMutex
 	rouletteSession *discordgo.Session
 	rouletteTicker  *time.Ticker
 	rouletteStop    chan bool
@@ -90,12 +91,12 @@ func spinWheelCrypto() int {
 
 func StartRoulette(s *discordgo.Session) {
 	if !config.Economy.RouletteEnabled {
-		log.Println("Roulette is disabled in configuration")
+		log.Println(locale.Text("games.roulette.roulette_is_disabled_in_configuration"))
 		return
 	}
 
 	if config.Bot.RouletteChannelID == "" {
-		log.Println("Roulette channel ID not configured. Set 'roulette_channel_id' in config.json")
+		log.Println(locale.Text("games.roulette.roulette_channel_id_not_configured_set_roulette"))
 		return
 	}
 
@@ -107,7 +108,7 @@ func StartRoulette(s *discordgo.Session) {
 		interval = 10
 	}
 
-	log.Printf("Starting Roulette with %d minute intervals in channel %s", interval, config.Bot.RouletteChannelID)
+	log.Printf(locale.Text("games.roulette.starting_roulette_with_minute_intervals_in_channel"), interval, config.Bot.RouletteChannelID)
 
 	startNewRound()
 
@@ -116,11 +117,11 @@ func StartRoulette(s *discordgo.Session) {
 		for {
 			select {
 			case <-rouletteTicker.C:
-				log.Println("Roulette ticker triggered - spinning wheel")
+				log.Println(locale.Text("games.roulette.roulette_ticker_triggered_spinning_wheel"))
 				spinRoulette()
 				startNewRound()
 			case <-rouletteStop:
-				log.Println("Roulette stopped")
+				log.Println(locale.Text("games.roulette.roulette_stopped"))
 				return
 			}
 		}
@@ -142,7 +143,7 @@ func StopRoulette() {
 			for _, bet := range currentRound.Bets {
 				_ = database.AddCoins(bet.GuildID, bet.UserID, bet.Amount)
 			}
-			log.Printf("Refunded %d bets on roulette shutdown", len(currentRound.Bets))
+			log.Printf(locale.Text("games.roulette.refunded_bets_on_roulette_shutdown"), len(currentRound.Bets))
 			currentRound.Bets = nil
 		}
 		currentRound.mu.Unlock()
@@ -168,7 +169,7 @@ func startNewRound() {
 	currentRound = round
 	wheelMu.Unlock()
 
-	log.Printf("Starting new roulette round. Next spin at %s", round.EndTime.Format("15:04:05"))
+	log.Printf(locale.Text("games.roulette.starting_new_roulette_round_next_spin_at"), round.EndTime.Format("15:04:05"))
 
 	postBettingOpenEmbed(round)
 }
@@ -178,7 +179,7 @@ func spinRoulette() {
 	round := currentRound
 	if round == nil {
 		wheelMu.Unlock()
-		log.Println("No active roulette round to spin")
+		log.Println(locale.Text("games.roulette.no_active_roulette_round_to_spin"))
 		return
 	}
 
@@ -186,7 +187,7 @@ func spinRoulette() {
 	if round.Spinning {
 		round.mu.Unlock()
 		wheelMu.Unlock()
-		log.Println("Roulette already spinning")
+		log.Println(locale.Text("games.roulette.roulette_already_spinning"))
 		return
 	}
 	round.Spinning = true
@@ -209,7 +210,7 @@ func spinRoulette() {
 	}
 	wheelMu.Unlock()
 
-	log.Printf("Roulette result: %d (%s)", result, resultColor)
+	log.Printf(locale.Text("games.roulette.roulette_result"), result, resultColor)
 
 	userStats := processPayouts(round)
 	postResultEmbed(round, userStats)
@@ -317,7 +318,7 @@ func processPayouts(round *RouletteRound) map[string]*UserRoundStats {
 
 func PlaceRouletteBet(guildID, userID, username string, betType BetType, value string, amount int) (bool, string) {
 	if guildID == "" {
-		return false, "This command can only be used within a server."
+		return false, locale.Text("games.roulette.this_command_can_only_be_used_within")
 	}
 
 	wheelMu.RLock()
@@ -325,31 +326,31 @@ func PlaceRouletteBet(guildID, userID, username string, betType BetType, value s
 	wheelMu.RUnlock()
 
 	if round == nil {
-		return false, "No active roulette round. The casino wheel may be initializing."
+		return false, locale.Text("games.roulette.no_active_roulette_round_the_casino_wheel")
 	}
 
 	if amount < MinRouletteBet {
-		return false, fmt.Sprintf("Minimum bet is %d %s", MinRouletteBet, config.Bot.CurrencySymbol)
+		return false, locale.Text("games.cups.minimum_bet_is.formatted2", locale.Data{"MinRouletteBet": MinRouletteBet, "CurrencySymbol": config.Bot.CurrencySymbol})
 	}
 
 	if !isValidBet(betType, value) {
-		return false, "Invalid bet type or value. Use `!wheel` to see valid options."
+		return false, locale.Text("games.roulette.invalid_bet_type_or_value_use_wheel")
 	}
 
 	balance := database.GetBalance(guildID, userID)
 	if balance < amount {
-		return false, fmt.Sprintf("Insufficient balance! You have %d %s", balance, config.Bot.CurrencySymbol)
+		return false, locale.Text("games.blackjack.insufficient_balance_you_have.formatted", locale.Data{"Balance": balance, "CurrencySymbol": config.Bot.CurrencySymbol})
 	}
 
 	round.mu.Lock()
 	defer round.mu.Unlock()
 
 	if round.Spinning || time.Now().After(round.EndTime) {
-		return false, "Too late! The wheel is already spinning for this round."
+		return false, locale.Text("games.roulette.too_late_the_wheel_is_already_spinning")
 	}
 
 	if err := database.CollectLostBet(guildID, userID, amount); err != nil {
-		return false, "Error deducting bet coins."
+		return false, locale.Text("games.roulette.error_deducting_bet_coins")
 	}
 
 	round.Bets = append(round.Bets, RouletteBet{
@@ -387,7 +388,7 @@ func formatRecentHistory() string {
 	defer wheelMu.RUnlock()
 
 	if len(recentHistory) == 0 {
-		return "None yet"
+		return locale.Text("games.roulette.none_yet")
 	}
 
 	var parts []string
@@ -410,43 +411,39 @@ func postBettingOpenEmbed(round *RouletteRound) {
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title:       "🎰 ROULETTE - Betting Open!",
-		Description: fmt.Sprintf("Place your bets! The wheel spins <t:%d:R>.", round.EndTime.Unix()),
+		Title:       locale.Text("games.roulette.roulette_betting_open"),
+		Description: locale.Text("games.roulette.place_your_bets_the_wheel_spins_t.formatted", locale.Data{"EndTime": round.EndTime.Unix()}),
 		Color:       utils.ColorGreen,
 		Fields: []*discordgo.MessageEmbedField{
 			{
-				Name: "📋 Available Bets",
-				Value: "• `!wheel number <0-36> <amount>` - **35:1**\n" +
-					"• `!wheel red <amount>` or `!wheel black <amount>` - **1:1**\n" +
-					"• `!wheel even <amount>` or `!wheel odd <amount>` - **1:1**\n" +
-					"• `!wheel low <amount>` (1-18) or `!wheel high <amount>` (19-36) - **1:1**\n" +
-					"• `!wheel dozen <1st/2nd/3rd> <amount>` - **2:1**",
+				Name:   locale.Text("games.roulette.available_bets"),
+				Value:  locale.Text("games.roulette.wheel_bet_type_number_number_amount_coins"),
 				Inline: false,
 			},
 			{
-				Name:   "💰 Minimum Bet",
+				Name:   locale.Text("games.roulette.minimum_bet"),
 				Value:  fmt.Sprintf("%d %s", MinRouletteBet, config.Bot.CurrencySymbol),
 				Inline: true,
 			},
 			{
-				Name:   "⏰ Spin Time",
+				Name:   locale.Text("games.roulette.spin_time"),
 				Value:  fmt.Sprintf("<t:%d:T>", round.EndTime.Unix()),
 				Inline: true,
 			},
 			{
-				Name:   "📜 Recent Spins",
+				Name:   locale.Text("games.roulette.recent_spins"),
 				Value:  formatRecentHistory(),
 				Inline: false,
 			},
 		},
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: "🍀 Use !wheel time to check countdown from any channel!",
+			Text: locale.Text("games.roulette.use_wheel_status_to_check_countdown_from"),
 		},
 	}
 
 	_, err := rouletteSession.ChannelMessageSendEmbed(channelID, embed)
 	if err != nil {
-		log.Printf("Error sending roulette betting open message: %v", err)
+		log.Printf(locale.Text("games.roulette.error_sending_roulette_betting_open_message"), err)
 	}
 }
 
@@ -473,12 +470,11 @@ func postResultEmbed(round *RouletteRound, userStats map[string]*UserRoundStats)
 	for userID, stats := range userStats {
 		if stats.NetProfit > 0 {
 			winnerCount++
-			winnersSb.WriteString(fmt.Sprintf("• <@%s>: **+%d %s** *(Payout: %d %s, Bet: %d %s)*\n",
-				userID, stats.NetProfit, config.Bot.CurrencySymbol, stats.TotalPayout, config.Bot.CurrencySymbol, stats.TotalWagered, config.Bot.CurrencySymbol))
+			winnersSb.WriteString(locale.Text("games.roulette.payout_bet.formatted", locale.Data{"UserID": userID, "NetProfit": stats.NetProfit, "CurrencySymbol": config.Bot.CurrencySymbol, "TotalPayout": stats.TotalPayout, "CurrencySymbol5": config.Bot.CurrencySymbol, "TotalWagered": stats.TotalWagered, "CurrencySymbol7": config.Bot.CurrencySymbol}))
 		}
 	}
 
-	winnersList := "No winners this round."
+	winnersList := locale.Text("games.roulette.no_winners_this_round")
 	if winnerCount > 0 {
 		winnersList = winnersSb.String()
 	}
@@ -499,35 +495,35 @@ func postResultEmbed(round *RouletteRound, userStats map[string]*UserRoundStats)
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title:       "🎰 ROULETTE - Result!",
-		Description: fmt.Sprintf("# %s **%d (%s)**\n\nThe ball landed on **%s %d**!", emoji, resultNum, strings.ToUpper(resultColor), strings.ToUpper(resultColor), resultNum),
+		Title:       locale.Text("games.roulette.roulette_result_5075f4"),
+		Description: locale.Text("games.roulette.the_ball_landed_on.formatted", locale.Data{"Emoji": emoji, "ResultNum": resultNum, "Strings": strings.ToUpper(resultColor), "Strings4": strings.ToUpper(resultColor), "ResultNum5": resultNum}),
 		Color:       color,
 		Fields: []*discordgo.MessageEmbedField{
 			{
-				Name:   "🏆 Net Winners",
+				Name:   locale.Text("games.roulette.net_winners"),
 				Value:  winnersList,
 				Inline: false,
 			},
 			{
-				Name:   "📊 Round Stats",
-				Value:  fmt.Sprintf("Total Bets: %d | Total Wagered: %d %s", totalBets, totalAmount, config.Bot.CurrencySymbol),
+				Name:   locale.Text("games.roulette.round_stats"),
+				Value:  locale.Text("games.roulette.total_bets_total_wagered.formatted", locale.Data{"TotalBets": totalBets, "TotalAmount": totalAmount, "CurrencySymbol": config.Bot.CurrencySymbol}),
 				Inline: false,
 			},
 			{
-				Name:   "📜 Recent Spins",
+				Name:   locale.Text("games.roulette.recent_spins"),
 				Value:  formatRecentHistory(),
 				Inline: false,
 			},
 		},
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: "Next round starting shortly...",
+			Text: locale.Text("games.roulette.next_round_starting_shortly"),
 		},
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
 
 	_, err := rouletteSession.ChannelMessageSendEmbed(channelID, embed)
 	if err != nil {
-		log.Printf("Error sending roulette result message: %v", err)
+		log.Printf(locale.Text("games.roulette.error_sending_roulette_result_message"), err)
 	}
 }
 
@@ -552,171 +548,27 @@ func GetCurrentRoundInfo() (time.Time, bool, int, int) {
 	return round.EndTime, !round.Spinning, totalBets, totalAmount
 }
 
-// CmdRoulette processes text commands (!wheel and !roleta-cassino)
-func CmdRoulette(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
-	if m.GuildID == "" {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("This command can only be used within a server."))
-		return
-	}
-
-	if len(args) == 0 {
-		sendRouletteHelp(s, m.ChannelID)
-		return
-	}
-
-	subCmd := strings.ToLower(args[0])
-
-	// Status / Time check (!wheel time, !wheel status, !wheel tempo)
-	if subCmd == "time" || subCmd == "status" || subCmd == "tempo" {
-		endTime, active, betsCount, totalAmount := GetCurrentRoundInfo()
-		if !active {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("Casino Roulette", "The wheel is currently spinning! Please wait for the next round."))
-			return
-		}
-
-		timeLeft := time.Until(endTime)
-		if timeLeft < 0 {
-			timeLeft = 0
-		}
-
-		embed := &discordgo.MessageEmbed{
-			Title: "🎰 Casino Roulette - Status",
-			Description: fmt.Sprintf("Next spin <t:%d:R> (<t:%d:T>).\n\n"+
-				"**Bets Placed:** %d\n"+
-				"**Total Wagered:** %d %s\n\n"+
-				"**Recent History:** %s",
-				endTime.Unix(), endTime.Unix(), betsCount, totalAmount, config.Bot.CurrencySymbol, formatRecentHistory()),
-			Color: utils.ColorGold,
-			Footer: &discordgo.MessageEmbedFooter{
-				Text: "Place your bets with !wheel <type> <amount>",
-			},
-		}
-		s.ChannelMessageSendEmbed(m.ChannelID, embed)
-		return
-	}
-
-	if len(args) < 2 {
-		sendRouletteHelp(s, m.ChannelID)
-		return
-	}
-
-	endTime, active, _, _ := GetCurrentRoundInfo()
-	if !active || time.Now().After(endTime) {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Betting is currently closed! The wheel is spinning or resolving."))
-		return
-	}
-
-	var betType BetType
-	var value string
-	var amount int
-	var err error
-
-	switch subCmd {
-	case "number", "numero":
-		if len(args) < 3 {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Usage: `!wheel number <0-36> <amount>`"))
-			return
-		}
-		betType = BetNumber
-		value = args[1]
-		amount, err = parseAmount(args[2])
-	case "red", "vermelho":
-		betType = BetColor
-		value = "red"
-		amount, err = parseAmount(args[1])
-	case "black", "preto":
-		betType = BetColor
-		value = "black"
-		amount, err = parseAmount(args[1])
-	case "even", "par":
-		betType = BetEvenOdd
-		value = "even"
-		amount, err = parseAmount(args[1])
-	case "odd", "impar", "ímpar":
-		betType = BetEvenOdd
-		value = "odd"
-		amount, err = parseAmount(args[1])
-	case "low", "baixo":
-		betType = BetHalf
-		value = "1-18"
-		amount, err = parseAmount(args[1])
-	case "high", "alto":
-		betType = BetHalf
-		value = "19-36"
-		amount, err = parseAmount(args[1])
-	case "dozen", "duzia", "dúzia":
-		if len(args) < 3 {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Usage: `!wheel dozen <1st/2nd/3rd> <amount>`"))
-			return
-		}
-		betType = BetDozen
-		value = strings.ToLower(args[1])
-		if value == "1" || value == "1a" {
-			value = "1st"
-		} else if value == "2" || value == "2a" {
-			value = "2nd"
-		} else if value == "3" || value == "3a" {
-			value = "3rd"
-		}
-		amount, err = parseAmount(args[2])
-	default:
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Invalid bet type. Use `!wheel` for available options."))
-		return
-	}
-
-	if err != nil || amount <= 0 {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Invalid amount."))
-		return
-	}
-
-	success, msg := PlaceRouletteBet(m.GuildID, m.Author.ID, m.Author.Username, betType, value, amount)
-	if !success {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(msg))
-		return
-	}
-
-	s.ChannelMessageSendEmbed(m.ChannelID, utils.SuccessEmbed("Bet Placed!",
-		fmt.Sprintf("You bet **%d %s** on **%s**.\nNext spin: <t:%d:R>", amount, config.Bot.CurrencySymbol, formatBet(betType, value), endTime.Unix())))
-}
-
-func sendRouletteHelp(s *discordgo.Session, channelID string) {
-	s.ChannelMessageSendEmbed(channelID, utils.InfoEmbed("Casino Roulette (!wheel)",
-		"**Available Bets:**\n"+
-			"• `!wheel number <0-36> <amount>` - Straight up (**35:1**)\n"+
-			"• `!wheel red <amount>` / `!wheel black <amount>` - Colors (**1:1**)\n"+
-			"• `!wheel even <amount>` / `!wheel odd <amount>` - Even or Odd (**1:1**)\n"+
-			"• `!wheel low <amount>` (1-18) / `!wheel high <amount>` (19-36) - Halves (**1:1**)\n"+
-			"• `!wheel dozen <1st|2nd|3rd> <amount>` - Dozens (**2:1**)\n\n"+
-			"**Status:** Use `!wheel time` to check countdown and round stats."))
-}
-
-func parseAmount(s string) (int, error) {
-	var amount int
-	_, err := fmt.Sscanf(s, "%d", &amount)
-	return amount, err
-}
-
 func formatBet(betType BetType, value string) string {
 	switch betType {
 	case BetNumber:
-		return "number " + value
+		return locale.Text("games.roulette.number") + value
 	case BetColor:
 		if value == "red" {
-			return "🔴 Red"
+			return locale.Text("games.roulette.red")
 		}
-		return "⚫ Black"
+		return locale.Text("games.roulette.black")
 	case BetEvenOdd:
 		if value == "even" {
-			return "Even (Par)"
+			return locale.Text("games.roulette.even")
 		}
-		return "Odd (Ímpar)"
+		return locale.Text("games.roulette.odd")
 	case BetHalf:
 		if value == "1-18" {
-			return "Low (1-18)"
+			return locale.Text("games.roulette.low")
 		}
-		return "High (19-36)"
+		return locale.Text("games.roulette.high")
 	case BetDozen:
-		return value + " dozen"
+		return value + locale.Text("games.roulette.dozen")
 	}
 	return value
 }

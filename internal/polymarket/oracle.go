@@ -2,6 +2,7 @@ package polymarket
 
 import (
 	"bot/internal/database"
+	"bot/internal/locale"
 	"bot/pkg/config"
 	"fmt"
 	"log"
@@ -146,7 +147,7 @@ func syncSingleMarket(s *discordgo.Session, client *PolymarketClient, m *databas
 					Components: &components,
 				})
 
-				announcement := fmt.Sprintf("⚠️ **MERCADO CANCELADO NO POLYMARKET**\nO evento **\"%s\"** foi cancelado oficialmente. Todas as apostas de %d participantes foram reembolsadas integralmente!", m.Question, len(refunds))
+				announcement := locale.Text("polymarket.oracle.polymarket_market_cancelled_the_event_was_officially.formatted", locale.Data{"Question": m.Question, "Value2": len(refunds)})
 				_, _ = s.ChannelMessageSend(m.ChannelID, announcement)
 			}
 			return
@@ -180,7 +181,7 @@ func syncSingleMarket(s *discordgo.Session, client *PolymarketClient, m *databas
 
 func announceWinners(s *discordgo.Session, m *database.DBPolymarketMarket, winner string, payouts map[string]int64) {
 	if len(payouts) == 0 {
-		msg := fmt.Sprintf("🏆 **MERCADO RESOLVIDO NO POLYMARKET!**\nO evento **\"%s\"** foi concluído com resultado: **%s**.\nNenhum membro do servidor possuía ações vencedoras.", m.Question, strings.ToUpper(winner))
+		msg := locale.Text("polymarket.oracle.polymarket_market_resolved_the_event_ended_with.formatted", locale.Data{"Question": m.Question, "Strings": strings.ToUpper(winner)})
 		_, _ = s.ChannelMessageSend(m.ChannelID, msg)
 		return
 	}
@@ -193,21 +194,11 @@ func announceWinners(s *discordgo.Session, m *database.DBPolymarketMarket, winne
 		totalPaid += amount
 	}
 
-	announcement := fmt.Sprintf("🏆 **MERCADO POLYMARKET RESOLVIDO!**\n\n"+
-		"📌 **Evento:** %s\n"+
-		"🎯 **Resultado Oficial:** **%s**\n\n"+
-		"🎉 **Parabéns aos Vencedores (100 EC por ação):**\n%s\n\n"+
-		"💰 **Total distribuído:** **%d %s**!",
-		m.Question,
-		strings.ToUpper(winner),
-		strings.Join(winnerMentions, ", "),
-		totalPaid,
-		config.Bot.CurrencySymbol,
-	)
+	announcement := locale.Text("polymarket.oracle.polymarket_market_resolved_event_official_outcome_winners.formatted", locale.Data{"Question": m.Question, "Strings": strings.ToUpper(winner), "Strings3": strings.Join(winnerMentions, ", "), "TotalPaid": totalPaid, "CurrencySymbol": config.Bot.CurrencySymbol})
 
 	// If text too long for single message, split or truncate gracefully
 	if len(announcement) > 1950 {
-		announcement = announcement[:1940] + "...\n*(e outros vencedores!)*"
+		announcement = announcement[:1940] + locale.Text("polymarket.oracle.and_more_winners")
 	}
 
 	_, _ = s.ChannelMessageSend(m.ChannelID, announcement)

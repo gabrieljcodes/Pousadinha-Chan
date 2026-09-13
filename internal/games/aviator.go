@@ -1,12 +1,13 @@
 package games
 
 import (
-	"crypto/rand"
-	"encoding/binary"
 	"bot/internal/database"
+	"bot/internal/locale"
 	"bot/pkg/config"
 	"bot/pkg/utils"
-	"fmt"
+	"crypto/rand"
+	"encoding/binary"
+
 	"log"
 	"math"
 	"strings"
@@ -42,23 +43,21 @@ type AviatorSession struct {
 
 type MessageUpdater func(embed *discordgo.MessageEmbed, finished bool)
 
-// --- INTERACTION (SLASH) START ---
-
 func StartAviatorInteraction(s *discordgo.Session, i *discordgo.InteractionCreate, bet int, autoCashout float64) {
 	if i.GuildID == "" {
-		respondPrivate(s, i, utils.ErrorEmbed("This game can only be played within a server."))
+		respondPrivate(s, i, utils.ErrorEmbed(locale.Text("games.aviator.this_game_can_only_be_played_within")))
 		return
 	}
 	guildID := i.GuildID
 	userID := i.Member.User.ID
 
 	if !validatePreGame(guildID, userID, bet) {
-		respondPrivate(s, i, utils.ErrorEmbed(fmt.Sprintf("Cannot start game. Min bet: **%d %s**, check your balance or finish your active game.", MinBet, config.Bot.CurrencySymbol)))
+		respondPrivate(s, i, utils.ErrorEmbed(locale.Text("games.aviator.cannot_start_game_min_bet_check_your.formatted", locale.Data{"MinBet": MinBet, "CurrencySymbol": config.Bot.CurrencySymbol})))
 		return
 	}
 
 	if autoCashout > 0 && autoCashout < 1.05 {
-		respondPrivate(s, i, utils.ErrorEmbed("Auto cash-out multiplier must be at least **1.05x**."))
+		respondPrivate(s, i, utils.ErrorEmbed(locale.Text("games.aviator.auto_cash_out_multiplier_must_be_at")))
 		return
 	}
 
@@ -66,7 +65,7 @@ func StartAviatorInteraction(s *discordgo.Session, i *discordgo.InteractionCreat
 		UserID: userID,
 		OnQueue: func(pos int) {
 			if pos == -1 {
-				respondPrivate(s, i, utils.ErrorEmbed("You already have an active game in progress! Finish it first."))
+				respondPrivate(s, i, utils.ErrorEmbed(locale.Text("games.aviator.you_already_have_an_active_game_in")))
 			}
 		},
 		Run: func(finishChan chan struct{}) {
@@ -74,13 +73,13 @@ func StartAviatorInteraction(s *discordgo.Session, i *discordgo.InteractionCreat
 
 			// Validate balance
 			if database.GetBalance(guildID, userID) < bet {
-				respondPrivate(s, i, utils.ErrorEmbed("You ran out of coins before takeoff!"))
+				respondPrivate(s, i, utils.ErrorEmbed(locale.Text("games.aviator.you_ran_out_of_coins_before_takeoff")))
 				return
 			}
 
 			// Deduct bet atomically
 			if err := database.CollectLostBet(guildID, userID, bet); err != nil {
-				respondPrivate(s, i, utils.ErrorEmbed("Failed to deduct bet."))
+				respondPrivate(s, i, utils.ErrorEmbed(locale.Text("games.aviator.failed_to_deduct_bet")))
 				return
 			}
 
@@ -89,7 +88,7 @@ func StartAviatorInteraction(s *discordgo.Session, i *discordgo.InteractionCreat
 
 			// Send game board message
 			msg, err := s.ChannelMessageSendComplex(i.ChannelID, &discordgo.MessageSend{
-				Content: fmt.Sprintf("<@%s> ✈️ Your Aviator flight is taking off!", userID),
+				Content: locale.Text("games.aviator.your_aviator_flight_is_taking_off.formatted", locale.Data{"UserID": userID}),
 				Embeds:  []*discordgo.MessageEmbed{embed},
 				Components: []discordgo.MessageComponent{
 					discordgo.ActionsRow{Components: []discordgo.MessageComponent{btn}},
@@ -107,7 +106,7 @@ func StartAviatorInteraction(s *discordgo.Session, i *discordgo.InteractionCreat
 			_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
 				Data: &discordgo.InteractionResponseData{
-					Content: fmt.Sprintf("Flight started in <#%s>!", i.ChannelID),
+					Content: locale.Text("games.aviator.flight_started_in.formatted", locale.Data{"ChannelID": i.ChannelID}),
 					Flags:   discordgo.MessageFlagsEphemeral,
 				},
 			})
@@ -119,7 +118,7 @@ func StartAviatorInteraction(s *discordgo.Session, i *discordgo.InteractionCreat
 						discordgo.ActionsRow{Components: []discordgo.MessageComponent{btn}},
 					}
 				} else {
-					btn.Label = "FLIGHT ENDED"
+					btn.Label = locale.Text("games.aviator.flight_ended")
 					btn.Style = discordgo.SecondaryButton
 					btn.Disabled = true
 					comps = []discordgo.MessageComponent{
@@ -142,98 +141,6 @@ func StartAviatorInteraction(s *discordgo.Session, i *discordgo.InteractionCreat
 
 	Enqueue(job)
 }
-
-// --- TEXT COMMAND START ---
-
-func StartAviatorText(s *discordgo.Session, m *discordgo.MessageCreate, bet int, autoCashout float64) {
-	if m.GuildID == "" {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("This game can only be played within a server."))
-		return
-	}
-	guildID := m.GuildID
-	userID := m.Author.ID
-
-	if !validatePreGame(guildID, userID, bet) {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(fmt.Sprintf("Cannot start game. Min bet: **%d %s**, check your balance or finish your active game.", MinBet, config.Bot.CurrencySymbol)))
-		return
-	}
-
-	if autoCashout > 0 && autoCashout < 1.05 {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Auto cash-out multiplier must be at least **1.05x**."))
-		return
-	}
-
-	job := GameJob{
-		UserID: userID,
-		OnQueue: func(pos int) {
-			if pos == -1 {
-				s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(fmt.Sprintf("<@%s> You already have an active game in progress!", userID)))
-			}
-		},
-		Run: func(finishChan chan struct{}) {
-			defer close(finishChan)
-
-			if database.GetBalance(guildID, userID) < bet {
-				s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(fmt.Sprintf("<@%s> You don't have enough coins.", userID)))
-				return
-			}
-
-			// Deduct bet atomically
-			if err := database.CollectLostBet(guildID, userID, bet); err != nil {
-				s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Error deducting bet."))
-				return
-			}
-
-			session := setupGame(guildID, userID, bet, autoCashout)
-			embed, btn := getInitialState(bet, autoCashout, userID)
-
-			msg, err := s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
-				Content: fmt.Sprintf("<@%s> ✈️ Your Aviator flight is taking off!", userID),
-				Embeds:  []*discordgo.MessageEmbed{embed},
-				Components: []discordgo.MessageComponent{
-					discordgo.ActionsRow{Components: []discordgo.MessageComponent{btn}},
-				},
-			})
-
-			if err != nil {
-				// Refund immediately if message delivery failed
-				_ = database.AddCoins(guildID, userID, bet)
-				cleanup(userID)
-				return
-			}
-
-			updater := func(embed *discordgo.MessageEmbed, finished bool) {
-				comps := []discordgo.MessageComponent{}
-				if !finished {
-					comps = []discordgo.MessageComponent{
-						discordgo.ActionsRow{Components: []discordgo.MessageComponent{btn}},
-					}
-				} else {
-					btn.Label = "FLIGHT ENDED"
-					btn.Style = discordgo.SecondaryButton
-					btn.Disabled = true
-					comps = []discordgo.MessageComponent{
-						discordgo.ActionsRow{Components: []discordgo.MessageComponent{btn}},
-					}
-				}
-
-				embeds := []*discordgo.MessageEmbed{embed}
-				_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
-					ID:         msg.ID,
-					Channel:    m.ChannelID,
-					Embeds:     &embeds,
-					Components: &comps,
-				})
-			}
-
-			runGameLoop(session, updater)
-		},
-	}
-
-	Enqueue(job)
-}
-
-// --- CORE GAME HELPERS ---
 
 func validatePreGame(guildID, userID string, bet int) bool {
 	if bet < MinBet {
@@ -296,17 +203,17 @@ func CalculateMultiplier(elapsedSeconds float64) float64 {
 
 func getInitialState(bet int, autoCashout float64, userID string) (*discordgo.MessageEmbed, discordgo.Button) {
 	embed := utils.NewEmbed()
-	embed.Title = "✈️ Aviator Starting..."
+	embed.Title = locale.Text("games.aviator.aviator_starting")
 
-	desc := fmt.Sprintf("Bet: **%d %s**\nPreparing for takeoff...", bet, config.Bot.CurrencySymbol)
+	desc := locale.Text("games.aviator.bet_preparing_for_takeoff.formatted", locale.Data{"Bet": bet, "CurrencySymbol": config.Bot.CurrencySymbol})
 	if autoCashout > 1.0 {
-		desc += fmt.Sprintf("\nTarget Auto Cash-Out: **x%.2f**", autoCashout)
+		desc += locale.Text("games.aviator.target_auto_cash_out_x.formatted", locale.Data{"AutoCashout": autoCashout})
 	}
 	embed.Description = desc
 	embed.Color = utils.ColorBlue
 
 	btn := discordgo.Button{
-		Label:    "🛑 CASH OUT",
+		Label:    locale.Text("games.aviator.cash_out"),
 		Style:    discordgo.SuccessButton,
 		CustomID: "aviator_stop_" + userID,
 	}
@@ -343,7 +250,7 @@ func runGameLoop(session *AviatorSession, update MessageUpdater) {
 			multiplier := CalculateMultiplier(elapsed)
 
 			if multiplier >= session.CrashPoint {
-				update(utils.ErrorEmbed(fmt.Sprintf("💥 **CRASHED at x%.2f!**\nYou didn't jump in time and lost **%d %s**.", session.CrashPoint, session.Bet, config.Bot.CurrencySymbol)), true)
+				update(utils.ErrorEmbed(locale.Text("games.aviator.crashed_at_x_you_didn_t_jump.formatted", locale.Data{"CrashPoint": session.CrashPoint, "Bet": session.Bet, "CurrencySymbol": config.Bot.CurrencySymbol})), true)
 				return
 			}
 
@@ -354,9 +261,8 @@ func runGameLoop(session *AviatorSession, update MessageUpdater) {
 			log.Printf("[AVIATOR WIN] User %s cashed out at x%.2f (bet: %d, payout: %d, profit: %d)",
 				session.UserID, multiplier, session.Bet, totalPayout, netProfit)
 
-			successDesc := fmt.Sprintf("You jumped at **x%.2f**!\n\n💰 **Total Payout:** %d %s\n📈 **Net Profit:** +%d %s",
-				multiplier, totalPayout, config.Bot.CurrencySymbol, netProfit, config.Bot.CurrencySymbol)
-			update(utils.SuccessEmbed("CASHED OUT!", successDesc), true)
+			successDesc := locale.Text("games.aviator.you_jumped_at_x_total_payout_net.formatted", locale.Data{"Multiplier": multiplier, "TotalPayout": totalPayout, "CurrencySymbol": config.Bot.CurrencySymbol, "NetProfit": netProfit, "CurrencySymbol5": config.Bot.CurrencySymbol})
+			update(utils.SuccessEmbed(locale.Text("games.aviator.cashed_out"), successDesc), true)
 			return
 
 		case <-ticker.C:
@@ -375,34 +281,32 @@ func runGameLoop(session *AviatorSession, update MessageUpdater) {
 					log.Printf("[AVIATOR AUTO-WIN] User %s auto-cashed out at x%.2f (bet: %d, payout: %d)",
 						session.UserID, multiplier, session.Bet, totalPayout)
 
-					successDesc := fmt.Sprintf("Auto Cash-Out triggered at **x%.2f**!\n\n💰 **Total Payout:** %d %s\n📈 **Net Profit:** +%d %s",
-						multiplier, totalPayout, config.Bot.CurrencySymbol, netProfit, config.Bot.CurrencySymbol)
-					update(utils.SuccessEmbed("AUTO CASH-OUT SUCCESS!", successDesc), true)
+					successDesc := locale.Text("games.aviator.auto_cash_out_triggered_at_x_total.formatted", locale.Data{"Multiplier": multiplier, "TotalPayout": totalPayout, "CurrencySymbol": config.Bot.CurrencySymbol, "NetProfit": netProfit, "CurrencySymbol5": config.Bot.CurrencySymbol})
+					update(utils.SuccessEmbed(locale.Text("games.aviator.auto_cash_out_success"), successDesc), true)
 					return
 				}
 			}
 
 			// Check Crash
 			if multiplier >= session.CrashPoint {
-				update(utils.ErrorEmbed(fmt.Sprintf("💥 **CRASHED at x%.2f!**\nYou lost **%d %s**.", session.CrashPoint, session.Bet, config.Bot.CurrencySymbol)), true)
+				update(utils.ErrorEmbed(locale.Text("games.aviator.crashed_at_x_you_lost.formatted", locale.Data{"CrashPoint": session.CrashPoint, "Bet": session.Bet, "CurrencySymbol": config.Bot.CurrencySymbol})), true)
 				return
 			}
 
 			embed := utils.NewEmbed()
-			embed.Title = "✈️ Aviator Flying..."
+			embed.Title = locale.Text("games.aviator.aviator_flying")
 			potentialWin := int(float64(session.Bet) * multiplier)
 			potentialProfit := potentialWin - session.Bet
 
-			desc := fmt.Sprintf("Multiplier: **x%.2f**\nPotential Win: **%d %s** *(+%d profit)*",
-				multiplier, potentialWin, config.Bot.CurrencySymbol, potentialProfit)
+			desc := locale.Text("games.aviator.multiplier_x_potential_win_profit.formatted", locale.Data{"Multiplier": multiplier, "PotentialWin": potentialWin, "CurrencySymbol": config.Bot.CurrencySymbol, "PotentialProfit": potentialProfit})
 			if session.AutoCashout > 1.0 {
-				desc += fmt.Sprintf("\nAuto Cash-Out: **x%.2f**", session.AutoCashout)
+				desc += locale.Text("games.aviator.auto_cash_out_x.formatted", locale.Data{"AutoCashout": session.AutoCashout})
 			}
 			embed.Description = desc
 			embed.Color = utils.ColorBlue
 
 			embed.Fields = []*discordgo.MessageEmbedField{
-				{Name: "Altitude", Value: buildAltitudeGraph(multiplier)},
+				{Name: locale.Text("games.aviator.altitude"), Value: buildAltitudeGraph(multiplier)},
 			}
 
 			update(embed, false)
@@ -419,7 +323,7 @@ func HandleButton(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: fmt.Sprintf("❌ This is not your flight! Only <@%s> can cash out.", expectedUserID),
+				Content: locale.Text("games.aviator.this_is_not_your_flight_only_can.formatted", locale.Data{"ExpectedUserID": expectedUserID}),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -434,7 +338,7 @@ func HandleButton(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "⚠️ Flight already ended or not active.",
+				Content: locale.Text("games.aviator.flight_already_ended_or_not_active"),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})

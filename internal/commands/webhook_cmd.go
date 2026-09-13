@@ -2,6 +2,7 @@ package commands
 
 import (
 	"bot/internal/database"
+	"bot/internal/locale"
 	"bot/internal/webhook"
 	"bot/pkg/utils"
 
@@ -27,38 +28,38 @@ func HandleSlashWebhook(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 		// Validate URL with SSRF protection
 		if err := webhook.ValidateWebhookURL(rawURL); err != nil {
-			respondEmbed(s, i, utils.ErrorEmbed("Invalid Webhook URL: "+err.Error()))
+			respondEmbed(s, i, utils.ErrorEmbed(locale.Text("commands.webhook_cmd.invalid_webhook_url")+err.Error()))
 			return
 		}
 
 		if err := database.SetWebhook(userID, rawURL); err != nil {
-			respondEmbed(s, i, utils.ErrorEmbed("Database error saving webhook."))
+			respondEmbed(s, i, utils.ErrorEmbed(locale.Text("commands.webhook_cmd.database_error_saving_webhook")))
 			return
 		}
 
-		respondEmbed(s, i, utils.SuccessEmbed("Webhook Configured", "Your webhook URL has been saved."))
+		respondEmbed(s, i, utils.SuccessEmbed(locale.Text("commands.webhook_cmd.webhook_configured"), locale.Text("commands.webhook_cmd.your_webhook_url_has_been_saved")))
 
 	case "test":
 		targetURL, err := database.GetWebhook(userID)
 		if err != nil || targetURL == "" {
-			respondEmbed(s, i, utils.ErrorEmbed("You don't have a webhook configured."))
+			respondEmbed(s, i, utils.ErrorEmbed(locale.Text("commands.webhook_cmd.you_don_t_have_a_webhook_configured")))
 			return
 		}
 
 		err = webhook.TestWebhook(targetURL)
 		if err != nil {
-			respondEmbed(s, i, utils.ErrorEmbed("Test Failed: "+err.Error()))
+			respondEmbed(s, i, utils.ErrorEmbed(locale.Text("commands.webhook_cmd.test_failed")+err.Error()))
 			return
 		}
 
-		respondEmbed(s, i, utils.SuccessEmbed("Test Sent", "We sent a test payload to your URL."))
+		respondEmbed(s, i, utils.SuccessEmbed(locale.Text("commands.webhook_cmd.test_sent"), locale.Text("commands.webhook_cmd.we_sent_a_test_payload_to_your")))
 
 	case "delete":
 		err := database.SetWebhook(userID, "") // Setting empty removes it effectively
 		if err != nil {
-			respondEmbed(s, i, utils.ErrorEmbed("Error removing webhook."))
+			respondEmbed(s, i, utils.ErrorEmbed(locale.Text("commands.webhook_cmd.error_removing_webhook")))
 			return
 		}
-		respondEmbed(s, i, utils.SuccessEmbed("Webhook Removed", "You will no longer receive notifications."))
+		respondEmbed(s, i, utils.SuccessEmbed(locale.Text("commands.webhook_cmd.webhook_removed"), locale.Text("commands.webhook_cmd.you_will_no_longer_receive_notifications")))
 	}
 }

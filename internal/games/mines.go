@@ -1,13 +1,14 @@
 package games
 
 import (
+	"bot/internal/database"
+	"bot/internal/locale"
+	"bot/pkg/config"
+	"bot/pkg/utils"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
-	"bot/internal/database"
-	"bot/pkg/config"
-	"bot/pkg/utils"
 	"fmt"
 	"math"
 	"sort"
@@ -121,7 +122,7 @@ func StartMinesInteraction(s *discordgo.Session, i *discordgo.InteractionCreate,
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Embeds: []*discordgo.MessageEmbed{utils.ErrorEmbed("Este jogo só pode ser jogado em um servidor.")},
+				Embeds: []*discordgo.MessageEmbed{utils.ErrorEmbed(locale.Text("games.mines.this_game_can_only_be_played_in"))},
 				Flags:  discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -137,7 +138,7 @@ func StartMinesInteraction(s *discordgo.Session, i *discordgo.InteractionCreate,
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Embeds: []*discordgo.MessageEmbed{utils.ErrorEmbed(fmt.Sprintf("A aposta mínima é de %d %s", MinesMinBet, config.Bot.CurrencySymbol))},
+				Embeds: []*discordgo.MessageEmbed{utils.ErrorEmbed(locale.Text("games.mines.the_minimum_bet_is.formatted", locale.Data{"MinesMinBet": MinesMinBet, "CurrencySymbol": config.Bot.CurrencySymbol}))},
 				Flags:  discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -149,7 +150,7 @@ func StartMinesInteraction(s *discordgo.Session, i *discordgo.InteractionCreate,
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Embeds: []*discordgo.MessageEmbed{utils.ErrorEmbed(fmt.Sprintf("Saldo insuficiente! Você possui %d %s", balance, config.Bot.CurrencySymbol))},
+				Embeds: []*discordgo.MessageEmbed{utils.ErrorEmbed(locale.Text("games.mines.insufficient_funds_you_have.formatted", locale.Data{"Balance": balance, "CurrencySymbol": config.Bot.CurrencySymbol}))},
 				Flags:  discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -162,7 +163,7 @@ func StartMinesInteraction(s *discordgo.Session, i *discordgo.InteractionCreate,
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Embeds: []*discordgo.MessageEmbed{utils.ErrorEmbed("Você já tem uma partida de Mines ativa! Finalize-a antes de iniciar outra.")},
+				Embeds: []*discordgo.MessageEmbed{utils.ErrorEmbed(locale.Text("games.mines.you_already_have_an_active_mines_game"))},
 				Flags:  discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -174,7 +175,7 @@ func StartMinesInteraction(s *discordgo.Session, i *discordgo.InteractionCreate,
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Embeds: []*discordgo.MessageEmbed{utils.ErrorEmbed("Você já está participando de outro jogo no momento!")},
+				Embeds: []*discordgo.MessageEmbed{utils.ErrorEmbed(locale.Text("games.mines.you_are_already_playing_another_game"))},
 				Flags:  discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -187,7 +188,7 @@ func StartMinesInteraction(s *discordgo.Session, i *discordgo.InteractionCreate,
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Embeds: []*discordgo.MessageEmbed{utils.ErrorEmbed("Erro ao debitar a aposta.")},
+				Embeds: []*discordgo.MessageEmbed{utils.ErrorEmbed(locale.Text("games.mines.unable_to_debit_your_bet"))},
 				Flags:  discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -244,101 +245,6 @@ func StartMinesInteraction(s *discordgo.Session, i *discordgo.InteractionCreate,
 	}
 }
 
-// StartMinesText starts a Mines game from a Discord text command
-func StartMinesText(s *discordgo.Session, m *discordgo.MessageCreate, bet int, minesCount int) {
-	if m.GuildID == "" {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Este jogo só pode ser jogado em um servidor."))
-		return
-	}
-	guildID := m.GuildID
-	userID := m.Author.ID
-	if minesCount < MinesMinCount || minesCount > MinesMaxCount {
-		minesCount = MinesDefaultCount
-	}
-
-	if bet < MinesMinBet {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(fmt.Sprintf("A aposta mínima é de %d %s", MinesMinBet, config.Bot.CurrencySymbol)))
-		return
-	}
-
-	balance := database.GetBalance(guildID, userID)
-	if balance < bet {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(fmt.Sprintf("Saldo insuficiente! Você possui %d %s", balance, config.Bot.CurrencySymbol)))
-		return
-	}
-
-	minesMu.Lock()
-	if _, exists := activeMinesGames[userID]; exists {
-		minesMu.Unlock()
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Você já tem uma partida de Mines ativa! Finalize-a antes de iniciar outra."))
-		return
-	}
-
-	if !RegisterActivePlayer(userID) {
-		minesMu.Unlock()
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Você já está participando de outro jogo no momento!"))
-		return
-	}
-
-	if err := database.CollectLostBet(guildID, userID, bet); err != nil {
-		minesMu.Unlock()
-		UnregisterActivePlayer(userID)
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Erro ao debitar a aposta."))
-		return
-	}
-
-	board, minePositions := generateMinesBoard(MinesTotalTiles, minesCount)
-	seed, hash := generateProvablyFairSeed(minePositions)
-
-	game := &MinesGame{
-		GuildID:           guildID,
-		UserID:            userID,
-		Bet:               bet,
-		MinesCount:        minesCount,
-		TotalTiles:        MinesTotalTiles,
-		Board:             board,
-		Revealed:          make([]bool, MinesTotalTiles),
-		MinePositions:     minePositions,
-		PicksCount:        0,
-		CurrentMultiplier: 1.0,
-		NextMultiplier:    CalculateMinesMultiplier(MinesTotalTiles, minesCount, 1),
-		Status:            "playing",
-		ExplodedTile:      -1,
-		ServerSeed:        seed,
-		ServerHash:        hash,
-		ChannelID:         m.ChannelID,
-	}
-
-	activeMinesGames[userID] = game
-	minesMu.Unlock()
-
-	game.Timer = time.AfterFunc(MinesInactivity, func() {
-		game.handleInactivity(s)
-	})
-
-	embed := game.createMinesEmbed(false)
-	components := game.createMinesComponents(false)
-
-	msg, err := s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
-		Embeds:     []*discordgo.MessageEmbed{embed},
-		Components: components,
-	})
-
-	if err != nil {
-		game.stopTimer()
-		minesMu.Lock()
-		delete(activeMinesGames, userID)
-		minesMu.Unlock()
-		UnregisterActivePlayer(userID)
-		_ = database.AddCoins(guildID, userID, bet)
-		return
-	}
-
-	game.mu.Lock()
-	game.MessageID = msg.ID
-	game.mu.Unlock()
-}
-
 // HandleMinesInteraction processes button clicks on the Mines board
 func HandleMinesInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	customID := i.MessageComponentData().CustomID
@@ -377,7 +283,7 @@ func HandleMinesInteraction(s *discordgo.Session, i *discordgo.InteractionCreate
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "❌ Esta partida de Mines pertence a outro jogador!",
+				Content: locale.Text("games.mines.this_mines_game_belongs_to_another_player"),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -392,7 +298,7 @@ func HandleMinesInteraction(s *discordgo.Session, i *discordgo.InteractionCreate
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "❌ Nenhuma partida ativa encontrada ou a partida já foi encerrada.",
+				Content: locale.Text("games.mines.no_active_game_found_it_may_have"),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -412,7 +318,7 @@ func HandleMinesInteraction(s *discordgo.Session, i *discordgo.InteractionCreate
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
 				Data: &discordgo.InteractionResponseData{
-					Content: "⚠️ Você precisa revelar pelo menos 1 diamante para realizar o cashout!",
+					Content: locale.Text("games.mines.reveal_at_least_one_gem_before_cashing"),
 					Flags:   discordgo.MessageFlagsEphemeral,
 				},
 			})
@@ -574,8 +480,8 @@ func (g *MinesGame) handleInactivity(s *discordgo.Session) {
 // createMinesEmbed generates the rich embed for Mines
 func (g *MinesGame) createMinesEmbed(showAll bool) *discordgo.MessageEmbed {
 	embedColor := 0x2b2d31 // Dark theme
-	statusTitle := "💣 Mines - Campo Minado"
-	statusDesc := "Encontre as gemas e evite as bombas! Faça cashout a qualquer momento."
+	statusTitle := locale.Text("games.mines.mines")
+	statusDesc := locale.Text("games.mines.find_gems_and_avoid_mines_cash_out")
 
 	currentPayout := int(math.Round(float64(g.Bet) * g.CurrentMultiplier))
 	currentProfit := currentPayout - g.Bet
@@ -583,25 +489,24 @@ func (g *MinesGame) createMinesEmbed(showAll bool) *discordgo.MessageEmbed {
 	switch g.Status {
 	case "cashout":
 		embedColor = 0x2ecc71 // Emerald Green
-		statusTitle = "💰 Mines - CASHOUT COM SUCESSO!"
-		statusDesc = fmt.Sprintf("Parabéns! Você retirou com multiplicador de **%.2fx**, lucrando **+%d %s**!", g.CurrentMultiplier, currentProfit, config.Bot.CurrencySymbol)
+		statusTitle = locale.Text("games.mines.mines_cashed_out")
+		statusDesc = locale.Text("games.mines.you_cashed_out_at_x_with_a.formatted", locale.Data{"CurrentMultiplier": g.CurrentMultiplier, "CurrentProfit": currentProfit, "CurrencySymbol": config.Bot.CurrencySymbol})
 	case "timeout_cashout":
 		embedColor = 0x2ecc71
-		statusTitle = "⏰ Mines - Auto-Cashout por Inatividade"
-		statusDesc = fmt.Sprintf("Tempo limite atingido! Seu lucro de **+%d %s** (%.2fx) foi salvo automaticamente.", currentProfit, config.Bot.CurrencySymbol, g.CurrentMultiplier)
+		statusTitle = locale.Text("games.mines.mines_automatic_cash_out")
+		statusDesc = locale.Text("games.mines.time_expired_your_profit_of_x_was.formatted", locale.Data{"CurrentProfit": currentProfit, "CurrencySymbol": config.Bot.CurrencySymbol, "CurrentMultiplier": g.CurrentMultiplier})
 	case "timeout_refund":
 		embedColor = 0x95a5a6
-		statusTitle = "⏰ Mines - Cancelado por Inatividade"
-		statusDesc = fmt.Sprintf("Tempo limite atingido sem jogadas. Sua aposta de **%d %s** foi reembolsada.", g.Bet, config.Bot.CurrencySymbol)
+		statusTitle = locale.Text("games.mines.mines_cancelled_due_to_inactivity")
+		statusDesc = locale.Text("games.mines.time_expired_without_a_move_your_bet.formatted", locale.Data{"Bet": g.Bet, "CurrencySymbol": config.Bot.CurrencySymbol})
 	case "exploded":
 		embedColor = 0xe74c3c // Crimson Red
-		statusTitle = "💥 Mines - BUST! VOCÊ EXPLODIU!"
-		statusDesc = fmt.Sprintf("Você encontrou uma bomba na casa **#%d** e perdeu **%d %s**.", g.ExplodedTile+1, g.Bet, config.Bot.CurrencySymbol)
+		statusTitle = locale.Text("games.mines.mines_you_hit_a_mine")
+		statusDesc = locale.Text("games.mines.you_hit_a_mine_on_tile_and.formatted", locale.Data{"ExplodedTile": g.ExplodedTile + 1, "Bet": g.Bet, "CurrencySymbol": config.Bot.CurrencySymbol})
 	case "cleared":
 		embedColor = 0xf1c40f // Gold
-		statusTitle = "🏆 Mines - TABULEIRO LIMPO COM PERFEIÇÃO!"
-		statusDesc = fmt.Sprintf("INCRÍVEL! Você encontrou todos os **%d diamantes** com multiplicador de **%.2fx**, faturando **%d %s**!",
-			g.TotalTiles-g.MinesCount, g.CurrentMultiplier, currentPayout, config.Bot.CurrencySymbol)
+		statusTitle = locale.Text("games.mines.mines_board_cleared")
+		statusDesc = locale.Text("games.mines.you_found_all_gems_at_x_earning.formatted", locale.Data{"TotalTiles": g.TotalTiles - g.MinesCount, "CurrentMultiplier": g.CurrentMultiplier, "CurrentPayout": currentPayout, "CurrencySymbol": config.Bot.CurrencySymbol})
 	}
 
 	remainingDiamonds := (g.TotalTiles - g.MinesCount) - g.PicksCount
@@ -611,17 +516,17 @@ func (g *MinesGame) createMinesEmbed(showAll bool) *discordgo.MessageEmbed {
 
 	fields := []*discordgo.MessageEmbedField{
 		{
-			Name:   "👤 Jogador",
+			Name:   locale.Text("games.mines.player"),
 			Value:  fmt.Sprintf("<@%s>", g.UserID),
 			Inline: true,
 		},
 		{
-			Name:   "💵 Aposta Inicial",
+			Name:   locale.Text("games.mines.initial_bet"),
 			Value:  fmt.Sprintf("**%d %s**", g.Bet, config.Bot.CurrencySymbol),
 			Inline: true,
 		},
 		{
-			Name:   "💣 Minas / Diamantes",
+			Name:   locale.Text("games.mines.mines_gems"),
 			Value:  fmt.Sprintf("**%d 💣** / **%d 💎**", g.MinesCount, g.TotalTiles-g.MinesCount),
 			Inline: true,
 		},
@@ -630,39 +535,39 @@ func (g *MinesGame) createMinesEmbed(showAll bool) *discordgo.MessageEmbed {
 	if g.Status == "playing" {
 		fields = append(fields,
 			&discordgo.MessageEmbedField{
-				Name:   "📈 Multiplicador Atual",
+				Name:   locale.Text("games.mines.current_multiplier"),
 				Value:  fmt.Sprintf("**%.2fx** (+%d %s)", g.CurrentMultiplier, currentProfit, config.Bot.CurrencySymbol),
 				Inline: true,
 			},
 			&discordgo.MessageEmbedField{
-				Name:   "🚀 Próximo Passo",
+				Name:   locale.Text("games.mines.next_step"),
 				Value:  fmt.Sprintf("**%.2fx** (+%d %s)", g.NextMultiplier, int(math.Round(float64(g.Bet)*g.NextMultiplier))-g.Bet, config.Bot.CurrencySymbol),
 				Inline: true,
 			},
 			&discordgo.MessageEmbedField{
-				Name:   "💎 Restantes",
-				Value:  fmt.Sprintf("**%d** diamantes", remainingDiamonds),
+				Name:   locale.Text("games.mines.remaining"),
+				Value:  locale.Text("games.mines.gems.formatted", locale.Data{"RemainingDiamonds": remainingDiamonds}),
 				Inline: true,
 			},
 		)
 	} else if g.Status == "cashout" || g.Status == "cleared" || g.Status == "timeout_cashout" {
 		fields = append(fields,
 			&discordgo.MessageEmbedField{
-				Name:   "💸 Retorno Total",
-				Value:  fmt.Sprintf("**%d %s** (Lucro: +%d %s)", currentPayout, config.Bot.CurrencySymbol, currentProfit, config.Bot.CurrencySymbol),
+				Name:   locale.Text("games.mines.total_return"),
+				Value:  locale.Text("games.mines.profit.formatted", locale.Data{"CurrentPayout": currentPayout, "CurrencySymbol": config.Bot.CurrencySymbol, "CurrentProfit": currentProfit, "CurrencySymbol4": config.Bot.CurrencySymbol}),
 				Inline: true,
 			},
 			&discordgo.MessageEmbedField{
-				Name:   "🎯 Gemas Coletadas",
+				Name:   locale.Text("games.mines.gems_collected"),
 				Value:  fmt.Sprintf("**%d** / %d", g.PicksCount, g.TotalTiles-g.MinesCount),
 				Inline: true,
 			},
 		)
 	}
 
-	footerText := fmt.Sprintf("🔒 Provably Fair Hash: %s", g.ServerHash)
+	footerText := locale.Text("games.mines.provably_fair_hash.formatted", locale.Data{"ServerHash": g.ServerHash})
 	if showAll && g.ServerSeed != "" {
-		footerText = fmt.Sprintf("🔑 Seed: %s | Minas: %v", g.ServerSeed, g.MinePositions)
+		footerText = locale.Text("games.mines.seed_mines.formatted", locale.Data{"ServerSeed": g.ServerSeed, "MinePositions": g.MinePositions})
 	}
 
 	return &discordgo.MessageEmbed{
@@ -739,9 +644,9 @@ func (g *MinesGame) createMinesComponents(showAll bool) []discordgo.MessageCompo
 	if !showAll {
 		// Active game controls
 		currentPayout := int(math.Round(float64(g.Bet) * g.CurrentMultiplier))
-		cashoutLabel := "💰 Sacar"
+		cashoutLabel := locale.Text("games.cups.cash_out")
 		if g.PicksCount > 0 {
-			cashoutLabel = fmt.Sprintf("💰 Sacar (%.2fx • %d %s)", g.CurrentMultiplier, currentPayout, config.Bot.CurrencySymbol)
+			cashoutLabel = locale.Text("games.mines.cash_out_x.formatted", locale.Data{"CurrentMultiplier": g.CurrentMultiplier, "CurrentPayout": currentPayout, "CurrencySymbol": config.Bot.CurrencySymbol})
 		}
 
 		controlRow.Components = append(controlRow.Components,
@@ -753,7 +658,7 @@ func (g *MinesGame) createMinesComponents(showAll bool) []discordgo.MessageCompo
 			},
 			discordgo.Button{
 				CustomID: "mines_info_count",
-				Label:    fmt.Sprintf("💣 %d Minas", g.MinesCount),
+				Label:    locale.Text("games.mines.mines_f37846.formatted", locale.Data{"MinesCount": g.MinesCount}),
 				Style:    discordgo.SecondaryButton,
 				Disabled: true,
 			},
@@ -769,12 +674,12 @@ func (g *MinesGame) createMinesComponents(showAll bool) []discordgo.MessageCompo
 		controlRow.Components = append(controlRow.Components,
 			discordgo.Button{
 				CustomID: fmt.Sprintf("mines_restart_%d_%d", g.Bet, g.MinesCount),
-				Label:    "🔄 Jogar Novamente",
+				Label:    locale.Text("games.mines.play_again"),
 				Style:    discordgo.PrimaryButton,
 			},
 			discordgo.Button{
 				CustomID: "mines_end_info",
-				Label:    fmt.Sprintf("💣 %d Minas", g.MinesCount),
+				Label:    locale.Text("games.mines.mines_f37846.formatted", locale.Data{"MinesCount": g.MinesCount}),
 				Style:    discordgo.SecondaryButton,
 				Disabled: true,
 			},

@@ -1,7 +1,8 @@
 package gacha
 
 import (
-	"fmt"
+	"bot/internal/locale"
+
 	"strings"
 )
 
@@ -15,10 +16,10 @@ func CharacterValue(favourites int) int64 {
 type Pool struct{ Code, Name, Gender, Kind string }
 
 var Pools = []Pool{
-	{"roll", "All characters", "", ""},
-	{"w", "Female characters", "female", ""}, {"h", "Male characters", "male", ""},
-	{"wa", "Female anime characters", "female", "anime"}, {"ha", "Male anime characters", "male", "anime"}, {"ma", "All anime characters", "", "anime"},
-	{"wg", "Female game characters", "female", "game"}, {"hg", "Male game characters", "male", "game"}, {"mg", "All game characters", "", "game"},
+	{"roll", locale.Text("gacha.pools.all_characters"), "", ""},
+	{"w", locale.Text("gacha.pools.female_characters"), "female", ""}, {"h", locale.Text("gacha.pools.male_characters"), "male", ""},
+	{"wa", locale.Text("gacha.pools.female_anime_characters"), "female", "anime"}, {"ha", locale.Text("gacha.pools.male_anime_characters"), "male", "anime"}, {"ma", locale.Text("gacha.pools.all_anime_characters"), "", "anime"},
+	{"wg", locale.Text("gacha.pools.female_game_characters"), "female", "game"}, {"hg", locale.Text("gacha.pools.male_game_characters"), "male", "game"}, {"mg", locale.Text("gacha.pools.all_game_characters"), "", "game"},
 }
 
 func poolFor(code string) (Pool, error) {
@@ -27,21 +28,11 @@ func poolFor(code string) (Pool, error) {
 			return p, nil
 		}
 	}
-	return Pool{}, userError("Unknown roll pool. Use roll, w, h, wa, ha, ma, wg, hg or mg.")
+	return Pool{}, userError(locale.Text("gacha.pools.unknown_roll_pool_use_roll_w_h"))
 }
 func normalizeAction(action string) string {
 	action = strings.ToLower(action)
-	aliases := map[string]string{
-		"sortear": "roll", "collection": "harem", "colecao": "harem", "inventario": "harem", "mm": "harem",
-		"mmi": "harem_visual", "buscar": "search", "personagem": "character",
-		"im": "character", "char": "character", "info": "character",
-		"galeria": "gallery", "desejar": "wish", "remover": "unwish",
-		"desejos": "wishes", "wishlist": "wishes", "tu": "status", "perfil": "status",
-		"divorciar": "divorce", "divorcio": "divorce",
-		"troca": "trade", "presente": "gift",
-		"top": "topchar", "topchar": "topchar", "topc": "topchar", "topu": "topchar_unclaimed",
-		"topw": "topchar_waifu", "toph": "topchar_husbando",
-	}
+	aliases := map[string]string{"info": "character", "profile": "status", "wishlist": "wishes", "top": "topchar", "harem-ranking": "ranking"}
 	if a, ok := aliases[action]; ok {
 		return a
 	}
@@ -52,6 +43,8 @@ type userError string
 
 func (e userError) Error() string { return string(e) }
 func invalidID() error {
-	return userError("Enter a positive character ID. Find IDs with !gacha search <name>.")
+	return userError(locale.Text("gacha.pools.enter_a_positive_character_id_find_ids"))
 }
-func valueLabel(c Card) string { return fmt.Sprintf("%d coins", c.Value) }
+func valueLabel(c Card) string {
+	return locale.Text("gacha.pools.coins.formatted", locale.Data{"Value": c.Value})
+}

@@ -2,18 +2,20 @@
 
 Updated player commands, roll pools, divorce payouts and trades: [English command guide](GACHA_COMMANDS.md).
 
-Gacha com catálogo global e coleções exclusivas por servidor. Integração em Go/PostgreSQL, comandos de texto e slash, sem dependência das APIs externas durante o jogo. O recurso começa **desabilitado**, com catálogo vazio. Não altera saldos existentes.
+Gacha com catálogo global e coleções exclusivas por servidor. Integração em Go/PostgreSQL, comandos exclusivamente slash, sem dependência das APIs externas durante o jogo. O recurso começa **desabilitado**, com catálogo vazio. Não altera saldos existentes.
 
 ## Jogabilidade implementada
 
-- `!gacha sortear` ou `/gacha acao:Sortear`: 10 sorteios por hora por usuário/servidor, configuráveis. Janela de uma hora iniciada no primeiro uso; sem acúmulo.
-- Qualquer membro no canal pode clicar em **Reservar personagem** durante 45 segundos. Uma reserva a cada 3 horas por usuário/servidor. Uma única pessoa pode possuir cada personagem naquele servidor.
-- `!gacha colecao [página]`: coleção pessoal; 10 por página, ordenada por favoritos do AniList.
-- `!gacha buscar <nome ou ID>` e `!gacha personagem <ID>`: catálogo e detalhes, incluindo obras, gêneros e estúdios.
-- `!gacha galeria <ID> [página]`: cada página mostra uma imagem aprovada.
-- `!gacha desejar <ID>`, `remover <ID>` e `desejos`: até 20 desejos. Sorteios sinalizam personagens desejados, sem menções em massa nem bônus oculto de chance.
-- `!gacha status`: sorteios restantes e disponibilidade da reserva.
-- `/gacha` oferece as mesmas operações, com `busca` para nome/ID e `pagina` para paginação.
+- `/roll`: sorteios com pools por gênero e tipo de obra.
+- **Claim character**: botão para reservar o personagem durante 45 segundos.
+- `/harem`: coleção pessoal ou de outro membro, em lista ou fotos.
+- `/search` e `/info`: pesquisa e detalhes de personagens.
+- `/gallery`: imagens aprovadas.
+- `/wishlist`: até 20 desejos; não altera a chance de sorteio.
+- `/profile`: cotas e disponibilidade de claim.
+- `/keys`, `/top`, `/harem-ranking`, `/trade`, `/gift`, `/divorce` e `/offers`: progressão, rankings e gerenciamento da coleção.
+
+Nomes, opções e mensagens do bot usam inglês via go-i18n. Consulte o [guia de comandos](GACHA_COMMANDS.md) e a [documentação de tradução](I18N.md).
 
 Sorteios têm chances uniformes entre personagens habilitados com ao menos uma imagem aprovada. Personagens já possuídos continuam no sorteio, mas não podem ser reservados de novo. Favoritos são metadados de popularidade, não um valor monetário. Sorteios não cobram moedas. Agora há divórcio com pagamento, trocas e presentes com aceite; veja o guia de comandos acima.
 

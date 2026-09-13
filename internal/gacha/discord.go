@@ -1,6 +1,7 @@
 package gacha
 
 import (
+	"bot/internal/locale"
 	"context"
 	"database/sql"
 	"errors"
@@ -34,16 +35,16 @@ func (s *Store) cardEmbed(c Card) *discordgo.MessageEmbed {
 		desc.WriteString(clip(safe(c.Work), 300) + "\n")
 	}
 	if c.Favourites > 0 {
-		desc.WriteString(fmt.Sprintf("Likes: #%d\n", c.Favourites))
+		desc.WriteString(locale.Text("gacha.discord.likes.formatted", locale.Data{"Favourites": c.Favourites}))
 	}
 	desc.WriteString(fmt.Sprintf("**%d** 🪙", val))
 	if c.Owner != "" {
-		desc.WriteString(fmt.Sprintf("\nBelongs to <@%s>", c.Owner))
+		desc.WriteString(locale.Text("gacha.discord.belongs_to.formatted", locale.Data{"Owner": c.Owner}))
 	}
 
-	footerText := fmt.Sprintf("%s - %d coins", clip(c.Name, 35), val)
+	footerText := locale.Text("gacha.discord.coins.formatted", locale.Data{"Value1": clip(c.Name, 35), "Val": val})
 	if c.Work != "" {
-		footerText = fmt.Sprintf("%s / %s - %d coins", clip(c.Name, 25), clip(c.Work, 25), val)
+		footerText = locale.Text("gacha.discord.coins_136392.formatted", locale.Data{"Value1": clip(c.Name, 25), "Value2": clip(c.Work, 25), "Val": val})
 	}
 
 	e := &discordgo.MessageEmbed{
@@ -71,20 +72,20 @@ func friendly(e error) string {
 		return input.Error()
 	}
 	if errors.Is(e, sql.ErrNoRows) {
-		return "Character not found."
+		return locale.Text("gacha.discord.character_not_found")
 	}
 	if errors.Is(e, ErrLimit) || errors.Is(e, ErrEmpty) || errors.Is(e, ErrClaim) {
 		return e.Error()
 	}
 	log.Printf("[gacha] %v", e)
-	return "Something went wrong. Please try again."
+	return locale.Text("gacha.discord.something_went_wrong_please_try_again")
 }
 func (s *Store) Execute(ctx context.Context, guild, channel, user, request, action, query string, page int) (*discordgo.MessageSend, error) {
 	if page < 1 || page > 100000 {
-		return nil, userError("Invalid page.")
+		return nil, userError(locale.Text("gacha.discord.invalid_page"))
 	}
 	if guild == "" {
-		return nil, userError("Use this command in a server.")
+		return nil, userError(locale.Text("gacha.discord.use_this_command_in_a_server"))
 	}
 	action = normalizeAction(action)
 	msg := &discordgo.MessageSend{AllowedMentions: &discordgo.MessageAllowedMentions{}}
@@ -96,17 +97,17 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 		}
 		embed := s.cardEmbed(r.Card)
 		if r.KeyEarned {
-			embed.Description += fmt.Sprintf("\n🔑 **+1 key** (Total: %d)", r.Card.Keys)
+			embed.Description += locale.Text("gacha.discord.key_total.formatted", locale.Data{"Keys": r.Card.Keys})
 		}
 		var wished bool
 		if e = s.DB.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM gacha_wishes WHERE guild_id=$1 AND character_id=$2)`, guild, r.Card.ID).Scan(&wished); e != nil {
 			return nil, e
 		}
 		if wished {
-			embed.Description += "\n✦ Wished in this server"
+			embed.Description += locale.Text("gacha.discord.wished_in_this_server")
 		}
 		msg.Embeds = []*discordgo.MessageEmbed{embed}
-		msg.Components = []discordgo.MessageComponent{discordgo.ActionsRow{Components: []discordgo.MessageComponent{discordgo.Button{Label: "Claim character", Style: discordgo.SuccessButton, CustomID: "gacha_claim_" + r.ID, Disabled: r.Card.Owner != "" || !r.Expires.After(time.Now())}}}}
+		msg.Components = []discordgo.MessageComponent{discordgo.ActionsRow{Components: []discordgo.MessageComponent{discordgo.Button{Label: locale.Text("gacha.discord.claim_character"), Style: discordgo.SuccessButton, CustomID: "gacha_claim_" + r.ID, Disabled: r.Card.Owner != "" || !r.Expires.After(time.Now())}}}}
 	case "harem", "harem_visual", "search":
 		owner := ""
 		isVisual := action == "harem_visual"
@@ -114,22 +115,14 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 
 		if action == "harem" || action == "harem_visual" {
 			owner = user
-			fields := strings.Fields(query)
-			var rest []string
-			for _, f := range fields {
-				lf := strings.ToLower(f)
-				if lf == "-i" || lf == "-v" || lf == "img" || lf == "card" || lf == "visual" || lf == "foto" || lf == "fotos" {
-					isVisual = true
-				} else if strings.HasPrefix(f, "<@") || (len(f) >= 15 && len(f) <= 20) {
-					parsedOwner, err := parseMember(f)
-					if err == nil {
-						owner = parsedOwner
-					}
-				} else {
-					rest = append(rest, f)
+			if query != "" {
+				parsedOwner, err := parseMember(query)
+				if err != nil {
+					return nil, err
 				}
+				owner = parsedOwner
 			}
-			cleanQuery = strings.Join(rest, " ")
+			cleanQuery = ""
 		}
 
 		if isVisual {
@@ -142,16 +135,16 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 				return nil, err
 			}
 			if total == 0 {
-				msg.Content = fmt.Sprintf("<@%s> doesn't have any characters in their harem yet.", owner)
+				msg.Content = locale.Text("gacha.discord.doesn_t_have_any_characters_in_their.formatted", locale.Data{"Owner": owner})
 				return msg, nil
 			}
 			embed := s.cardEmbed(c)
 			embed.Footer = &discordgo.MessageEmbedFooter{
-				Text: fmt.Sprintf("Personagem %d de %d • Harem de @%s", index+1, total, owner),
+				Text: locale.Text("gacha.discord.character_of_s_harem.formatted", locale.Data{"Index": index + 1, "Total": total, "Owner": owner}),
 			}
-			prevBtn := discordgo.Button{Label: "◀ Anterior", Style: discordgo.SecondaryButton, CustomID: fmt.Sprintf("gacha_page_haremvisual_%s_%d", owner, index), Disabled: index <= 0}
-			listBtn := discordgo.Button{Label: "📝 Ver Lista", Style: discordgo.PrimaryButton, CustomID: fmt.Sprintf("gacha_page_haremlist_%s_1", owner)}
-			nextBtn := discordgo.Button{Label: "Próximo ▶", Style: discordgo.SecondaryButton, CustomID: fmt.Sprintf("gacha_page_haremvisual_%s_%d", owner, index+2), Disabled: int64(index+1) >= total}
+			prevBtn := discordgo.Button{Label: locale.Text("gacha.discord.previous"), Style: discordgo.SecondaryButton, CustomID: fmt.Sprintf("gacha_page_haremvisual_%s_%d", owner, index), Disabled: index <= 0}
+			listBtn := discordgo.Button{Label: locale.Text("gacha.discord.list_view"), Style: discordgo.PrimaryButton, CustomID: fmt.Sprintf("gacha_page_haremlist_%s_1", owner)}
+			nextBtn := discordgo.Button{Label: locale.Text("gacha.discord.next"), Style: discordgo.SecondaryButton, CustomID: fmt.Sprintf("gacha_page_haremvisual_%s_%d", owner, index+2), Disabled: int64(index+1) >= total}
 			msg.Components = []discordgo.MessageComponent{discordgo.ActionsRow{Components: []discordgo.MessageComponent{prevBtn, listBtn, nextBtn}}}
 			msg.Embeds = []*discordgo.MessageEmbed{embed}
 			return msg, nil
@@ -163,20 +156,20 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 		}
 		var b strings.Builder
 		for _, c := range cards {
-			fmt.Fprintf(&b, "`#%d` **%s** · %s · %d coins · 🔑 %d\n", c.ID, clip(safe(c.Name), 70), clip(safe(c.Work), 70), c.Value, c.Keys)
+			fmt.Fprintf(&b, locale.Text("gacha.discord.coins_d8c438"), c.ID, clip(safe(c.Name), 70), clip(safe(c.Work), 70), c.Value, c.Keys)
 		}
 		if b.Len() == 0 {
-			b.WriteString("No characters found on this page.")
+			b.WriteString(locale.Text("gacha.discord.no_characters_found_on_this_page"))
 		}
-		msg.Embeds = []*discordgo.MessageEmbed{{Title: fmt.Sprintf("Catalog • page %d", page), Description: b.String(), Color: 0xe67e22, Footer: &discordgo.MessageEmbedFooter{Text: "10 per page • use character <ID> for details"}}}
+		msg.Embeds = []*discordgo.MessageEmbed{{Title: locale.Text("gacha.discord.catalog_page.formatted", locale.Data{"Page": page}), Description: b.String(), Color: 0xe67e22, Footer: &discordgo.MessageEmbedFooter{Text: locale.Text("gacha.discord.per_page_use_character_id_for_details")}}}
 		if action == "harem" || action == "harem_visual" {
 			count, value, e := s.HaremSummary(ctx, guild, owner)
 			if e != nil {
 				return nil, e
 			}
 			msg.Components = navigation(action, owner, page, page*10 < count)
-			msg.Embeds[0].Title = fmt.Sprintf("Harem • page %d", page)
-			msg.Embeds[0].Description = fmt.Sprintf("<@%s> • **%d characters** • **%d coins**\n\n", owner, count, value) + msg.Embeds[0].Description
+			msg.Embeds[0].Title = locale.Text("gacha.discord.harem_page.formatted", locale.Data{"Page": page})
+			msg.Embeds[0].Description = locale.Text("gacha.discord.characters_coins.formatted", locale.Data{"Owner": owner, "Count": count, "Value": value}) + msg.Embeds[0].Description
 		}
 	case "character", "gallery", "keys":
 		var c Card
@@ -184,26 +177,26 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 			mainCard, alts, err := s.FindCharacter(ctx, guild, query)
 			if err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
-					return nil, userError(fmt.Sprintf("Personagem '%s' não encontrado. Use `$gacha search <nome>` para buscar.", query))
+					return nil, userError(locale.Text("gacha.discord.character_not_found_try_another_name_with.formatted", locale.Data{"Query": query}))
 				}
 				return nil, err
 			}
 			c = mainCard
 			embed := s.cardEmbed(c)
-			embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Character value", Value: valueLabel(c), Inline: true})
-			embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Catalog", Value: fmt.Sprintf("#%d", c.ID), Inline: true})
+			embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: locale.Text("gacha.discord.character_value"), Value: valueLabel(c), Inline: true})
+			embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: locale.Text("gacha.discord.catalog"), Value: fmt.Sprintf("#%d", c.ID), Inline: true})
 
 			if c.Owner != "" {
-				embed.Description += fmt.Sprintf("\n💍 Casado(a) com <@%s>", c.Owner)
+				embed.Description += locale.Text("gacha.discord.claimed_by.formatted", locale.Data{"Owner": c.Owner})
 			} else {
-				embed.Description += "\n✨ Livre (Unclaimed neste servidor)"
+				embed.Description += locale.Text("gacha.discord.unclaimed_in_this_server")
 			}
 
 			var gender string
 			var genres, studios, works string
 			_ = s.DB.QueryRowContext(ctx, `SELECT gender FROM gacha_characters WHERE id=$1`, c.ID).Scan(&gender)
 			_ = s.DB.QueryRowContext(ctx, `SELECT COALESCE(string_agg(DISTINCT w.title, ', '),''),COALESCE(string_agg(DISTINCT g.value, ', '),''),COALESCE(string_agg(DISTINCT st.value, ', '),'') FROM gacha_character_works cw JOIN gacha_works w ON w.id=cw.work_id LEFT JOIN LATERAL jsonb_array_elements_text(w.genres) g ON true LEFT JOIN LATERAL jsonb_array_elements_text(w.studios) st ON true WHERE cw.character_id=$1`, c.ID).Scan(&works, &genres, &studios)
-			for _, v := range []struct{ name, value string }{{"Works", works}, {"Work genres", genres}, {"Studios", studios}, {"Character gender", gender}} {
+			for _, v := range []struct{ name, value string }{{locale.Text("gacha.discord.works"), works}, {locale.Text("gacha.discord.work_genres"), genres}, {locale.Text("gacha.discord.studios"), studios}, {locale.Text("gacha.discord.character_gender"), gender}} {
 				if v.value != "" {
 					embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: v.name, Value: clip(safe(v.value), 900)})
 				}
@@ -214,7 +207,7 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 				for _, alt := range alts {
 					altNames = append(altNames, fmt.Sprintf("`#%d` %s", alt.ID, clip(safe(alt.Name), 25)))
 				}
-				embed.Footer.Text += " • Outros: " + strings.Join(altNames, ", ")
+				embed.Footer.Text += locale.Text("gacha.discord.others") + strings.Join(altNames, ", ")
 			}
 			msg.Embeds = []*discordgo.MessageEmbed{embed}
 			return msg, nil
@@ -231,7 +224,7 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 		if action == "gallery" {
 			e = s.DB.QueryRowContext(ctx, `SELECT path,source_url,attribution FROM gacha_assets WHERE character_id=$1 AND status='approved' ORDER BY id OFFSET $2 LIMIT 1`, id, page-1).Scan(&c.Image, &c.Source, &c.Attribution)
 			if e == sql.ErrNoRows {
-				msg.Content = "There is no approved image on this page."
+				msg.Content = locale.Text("gacha.discord.there_is_no_approved_image_on_this")
 				return msg, nil
 			}
 			if e != nil {
@@ -243,14 +236,14 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 		}
 		embed := s.cardEmbed(c)
 		if action == "keys" {
-			embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Key milestones", Value: fmt.Sprintf("+2%% per key, plus +10%% every 10 keys.\n%d keys to the next milestone. Keys follow trades/gifts and reset on divorce.", 10-c.Keys%10)})
+			embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: locale.Text("gacha.discord.key_milestones"), Value: locale.Text("gacha.discord.per_key_plus_every_keys_keys_to.formatted", locale.Data{"Value1": 10 - c.Keys%10})})
 		}
 		if action == "gallery" {
 			var total int
 			if e = s.DB.QueryRowContext(ctx, `SELECT count(*) FROM gacha_assets WHERE character_id=$1 AND status='approved'`, id).Scan(&total); e != nil {
 				return nil, e
 			}
-			embed.Footer.Text = fmt.Sprintf("Image %d of %d • Character #%d", page, total, id)
+			embed.Footer.Text = locale.Text("gacha.discord.image_of_character.formatted", locale.Data{"Page": page, "Total": total, "Id": id})
 			msg.Components = navigation("gallery", strconv.FormatInt(id, 10), page, page < total)
 		}
 		msg.Embeds = []*discordgo.MessageEmbed{embed}
@@ -291,38 +284,38 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 			return nil, err
 		}
 
-		title := "Top Personagens"
+		title := locale.Text("gacha.discord.top_characters")
 		if claimFilter == "unclaimed" {
-			title = "Top Personagens Livres (Unclaimed)"
+			title = locale.Text("gacha.discord.top_unclaimed_characters")
 		} else if claimFilter == "claimed" {
-			title = "Top Personagens Casados"
+			title = locale.Text("gacha.discord.top_claimed_characters")
 		}
 		if genderFilter == "female" {
-			title += " • Waifus"
+			title += locale.Text("gacha.discord.waifus")
 		} else if genderFilter == "male" {
-			title += " • Husbandos"
+			title += locale.Text("gacha.discord.husbandos")
 		}
 
 		var b strings.Builder
 		for _, item := range entries {
-			status := "✨ Livre"
+			status := locale.Text("gacha.discord.unclaimed")
 			if item.Owner != "" {
 				status = fmt.Sprintf("💍 <@%s>", item.Owner)
 			}
 			fmt.Fprintf(&b, "**#%d** `#%d` **%s** · %s\n♥ %d · **%d** 🪙 · %s\n\n", item.Rank, item.ID, clip(safe(item.Name), 35), clip(safe(item.Work), 35), item.Favourites, item.Value, status)
 		}
 		if len(entries) == 0 {
-			b.WriteString("Nenhum personagem encontrado nesta página com esses filtros.")
+			b.WriteString(locale.Text("gacha.discord.no_characters_match_these_filters_on_this"))
 		}
 
 		maxPages := int((total + 9) / 10)
 		if maxPages == 0 {
 			maxPages = 1
 		}
-		footer := fmt.Sprintf("Página %d de %d • Total: %d personagens", p, maxPages, total)
+		footer := locale.Text("gacha.discord.page_of_total_characters.formatted", locale.Data{"P": p, "MaxPages": maxPages, "Total": total})
 
 		embed := &discordgo.MessageEmbed{
-			Title:       fmt.Sprintf("%s • Página %d", title, p),
+			Title:       locale.Text("gacha.discord.page.formatted", locale.Data{"Title": title, "P": p}),
 			Description: b.String(),
 			Color:       0xe67e22,
 			Footer:      &discordgo.MessageEmbedFooter{Text: footer},
@@ -342,9 +335,9 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 			return nil, e
 		}
 
-		claimStatus := "**Disponível agora!**"
+		claimStatus := locale.Text("gacha.discord.available_now")
 		if e == nil && claim.After(time.Now()) {
-			claimStatus = fmt.Sprintf("Disponível <t:%d:R>", claim.Unix())
+			claimStatus = locale.Text("gacha.discord.available_t_r.formatted", locale.Data{"Claim": claim.Unix()})
 		}
 
 		count, value, _ := s.HaremSummary(ctx, guild, user)
@@ -352,16 +345,16 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 		_ = s.DB.QueryRowContext(ctx, `SELECT gacha_claimed_count($1)`, guild).Scan(&claimedTotal)
 
 		var desc strings.Builder
-		desc.WriteString(fmt.Sprintf("🎲 **Rolls:** **%d/%d** (reseta <t:%d:R>)\n", rollsLeft, s.Config.RollsPerHour, reset.Unix()))
-		desc.WriteString(fmt.Sprintf("💍 **Marry / Claim:** %s\n\n", claimStatus))
-		desc.WriteString(fmt.Sprintf("✨ **Seu Harem:** **%d** personagens • **%d** 🪙 valor total\n", count, value))
-		desc.WriteString(fmt.Sprintf("🌐 **Bônus do Servidor:** +%.2f%% (%d personagens casados)", float64(claimedTotal)/100, claimedTotal))
+		desc.WriteString(locale.Text("gacha.discord.rolls_resets_t_r.formatted", locale.Data{"RollsLeft": rollsLeft, "RollsPerHour": s.Config.RollsPerHour, "Reset": reset.Unix()}))
+		desc.WriteString(locale.Text("gacha.discord.marry_claim.formatted", locale.Data{"ClaimStatus": claimStatus}))
+		desc.WriteString(locale.Text("gacha.discord.your_harem_characters_total_value.formatted", locale.Data{"Count": count, "Value": value}))
+		desc.WriteString(locale.Text("gacha.discord.server_bonus_claimed_characters.formatted", locale.Data{"Value1": float64(claimedTotal) / 100, "ClaimedTotal": claimedTotal}))
 
 		embed := &discordgo.MessageEmbed{
-			Title:       "Status de Jogador",
+			Title:       locale.Text("gacha.discord.player_profile"),
 			Description: desc.String(),
 			Color:       0xe67e22,
-			Footer:      &discordgo.MessageEmbedFooter{Text: "Pousadinha Gacha • Dica: use $wa ou $harem"},
+			Footer:      &discordgo.MessageEmbedFooter{Text: locale.Text("gacha.discord.pousadinha_gacha_use_roll_or_harem")},
 		}
 		msg.Embeds = []*discordgo.MessageEmbed{embed}
 		return msg, nil
@@ -392,26 +385,26 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 			if recipient == "" {
 				recipient = a.Proposer
 			}
-			fmt.Fprintf(&b, "**%s** · #%d → <@%s> · expires <t:%d:R>\n`%s`\n", a.Kind, a.Offered, recipient, a.Expires.Unix(), a.ID)
+			fmt.Fprintf(&b, locale.Text("gacha.discord.expires_t_r"), a.Kind, a.Offered, recipient, a.Expires.Unix(), a.ID)
 		}
 		if len(offers) == 0 {
-			b.WriteString("No pending offers.")
+			b.WriteString(locale.Text("gacha.discord.no_pending_offers"))
 		}
-		msg.Content = b.String() + "\nUse `!gacha accept <offer ID>`, `decline` or `cancel` in the original channel."
-	case "top":
+		msg.Content = b.String() + locale.Text("gacha.discord.use_the_buttons_on_the_original_offer")
+	case "ranking":
 		ranks, e := s.Rankings(ctx, guild, page)
 		if e != nil {
 			return nil, e
 		}
 		var b strings.Builder
 		for n, r := range ranks {
-			fmt.Fprintf(&b, "**%d.** <@%s> · %d characters · **%d coins**\n", (page-1)*10+n+1, r.User, r.Count, r.Value)
+			fmt.Fprintf(&b, locale.Text("gacha.discord.characters_coins_82844f"), (page-1)*10+n+1, r.User, r.Count, r.Value)
 		}
 		if len(ranks) == 0 {
-			b.WriteString("No harems yet.")
+			b.WriteString(locale.Text("gacha.discord.no_harems_yet"))
 		}
 		msg.Components = navigation("top", "0", page, len(ranks) == 10)
-		msg.Embeds = []*discordgo.MessageEmbed{{Title: fmt.Sprintf("Harem leaderboard • page %d", page), Description: b.String(), Color: 0xc5a66b}}
+		msg.Embeds = []*discordgo.MessageEmbed{{Title: locale.Text("gacha.discord.harem_leaderboard_page.formatted", locale.Data{"Page": page}), Description: b.String(), Color: 0xc5a66b}}
 	case "wish", "unwish":
 		id, err := strconv.ParseInt(query, 10, 64)
 		if err != nil || id <= 0 {
@@ -422,12 +415,12 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 			return nil, err
 		}
 		if remove {
-			msg.Content = fmt.Sprintf("Personagem #%d removido da sua lista de desejos.", id)
+			msg.Content = locale.Text("gacha.discord.character_removed_from_your_wishlist.formatted", locale.Data{"Id": id})
 		} else {
-			msg.Content = fmt.Sprintf("Personagem #%d adicionado à sua lista de desejos! (Você será avisado quando ele for sorteado)", id)
+			msg.Content = locale.Text("gacha.discord.character_added_to_your_wishlist_its_rolls.formatted", locale.Data{"Id": id})
 		}
 	case "wishes":
-		rows, err := s.DB.QueryContext(ctx, `SELECT c.id, c.name, COALESCE(cw.title, '') FROM gacha_wishes w JOIN gacha_characters c ON c.id=w.character_id LEFT JOIN LATERAL (SELECT title FROM gacha_character_works rel JOIN gacha_works gw ON gw.id=rel.work_id WHERE rel.character_id=c.id LIMIT 1) cw ON true WHERE w.guild_id=$1 AND w.user_id=$2 ORDER BY w.created_at DESC`, guild, user)
+		rows, err := s.DB.QueryContext(ctx, `SELECT c.id, c.name, COALESCE(cw.title, '') FROM gacha_wishes w JOIN gacha_characters c ON c.id=w.character_id LEFT JOIN LATERAL (SELECT title FROM gacha_character_works rel JOIN gacha_works gw ON gw.id=rel.work_id WHERE rel.character_id=c.id ORDER BY gw.id LIMIT 1) cw ON true WHERE w.guild_id=$1 AND w.user_id=$2 ORDER BY c.id`, guild, user)
 		if err != nil {
 			return nil, err
 		}
@@ -438,22 +431,27 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 			count++
 			var id int64
 			var name, work string
-			if err := rows.Scan(&id, &name, &work); err == nil {
+			if err := rows.Scan(&id, &name, &work); err != nil {
+				return nil, err
+			} else {
 				fmt.Fprintf(&b, "**#%d** `%d` %s (%s)\n", count, id, clip(safe(name), 30), clip(safe(work), 30))
 			}
 		}
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
 		if count == 0 {
-			b.WriteString("Você ainda não tem nenhum personagem na sua lista de desejos.\nUse `/wishlist acao:Adicionar personagem:<ID>` para adicionar!")
+			b.WriteString(locale.Text("gacha.discord.your_wishlist_is_empty_use_wishlist_with"))
 		}
 		embed := &discordgo.MessageEmbed{
-			Title:       "Sua Lista de Desejos (Wishlist)",
+			Title:       locale.Text("gacha.discord.your_wishlist"),
 			Description: b.String(),
 			Color:       0x9b59b6,
-			Footer:      &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("%d/20 personagens desejados", count)},
+			Footer:      &discordgo.MessageEmbedFooter{Text: locale.Plural("gacha.wishlist.count", count, locale.Data{"Count": count})},
 		}
 		msg.Embeds = []*discordgo.MessageEmbed{embed}
 	default:
-		msg.Content = fmt.Sprintf("**Pousadinha Gacha**\n**Roll:** `!wa` female anime · `!ha` male anime · `!ma` all anime\n`!wg` female games · `!hg` male games · `!mg` all games\n`!w` all female · `!h` all male · `!gacha roll` everyone\n**Collection:** `!harem [@member] [page]` · `!gacha top [page]`\n**Discover:** `!gacha search <name>` · `character <ID>` · `gallery <ID> [page]`\n**Wishlist:** `!gacha wish <ID>` · `unwish <ID>` · `wishes`\n**Social:** `!divorce <ID>` · `!trade @member <your ID> <their ID>` · `!gift @member <ID>`\n`!gacha offers` · `!gacha status` · `!keys <ID>`\nRoll your own character for +1 key. +2%% per key, +10%% every 10 keys.\n%d shared rolls/hour • 1 claim every %d hours • 45-second claim window. Divorce pays virtual coins in this server after confirmation. Gifts/trades require acceptance. Offers expire in 10 minutes.", s.Config.RollsPerHour, s.Config.ClaimHours)
+		msg.Content = locale.Text("gacha.discord.pousadinha_gacha_use_roll_top_info_harem.formatted", locale.Data{"RollsPerHour": s.Config.RollsPerHour, "ClaimHours": s.Config.ClaimHours})
 	}
 	return msg, nil
 }
@@ -467,106 +465,96 @@ func HandleClaim(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 	e := Default.Claim(ctx, i.GuildID, i.ChannelID, i.Member.User.ID, strings.TrimPrefix(i.MessageComponentData().CustomID, "gacha_claim_"))
-	content := "Character claimed! Check your harem."
+	content := locale.Text("gacha.discord.character_claimed_check_your_harem")
 	if e != nil {
 		content = friendly(e)
 	}
 	_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &content})
 	if e == nil && i.Message != nil {
-		components := []discordgo.MessageComponent{discordgo.ActionsRow{Components: []discordgo.MessageComponent{discordgo.Button{Label: "Claimed", Style: discordgo.SecondaryButton, CustomID: "gacha_claim_done", Disabled: true}}}}
+		components := []discordgo.MessageComponent{discordgo.ActionsRow{Components: []discordgo.MessageComponent{discordgo.Button{Label: locale.Text("gacha.discord.claimed"), Style: discordgo.SecondaryButton, CustomID: "gacha_claim_done", Disabled: true}}}}
 		embeds := []*discordgo.MessageEmbed{}
 		for _, original := range i.Message.Embeds {
 			copyEmbed := *original
-			if !strings.Contains(copyEmbed.Description, "Belongs to") {
-				copyEmbed.Description += fmt.Sprintf("\nBelongs to <@%s>", i.Member.User.ID)
+			if !strings.Contains(copyEmbed.Description, locale.Text("gacha.discord.belongs_to_e5d9ee")) {
+				copyEmbed.Description += locale.Text("gacha.discord.belongs_to.formatted1", locale.Data{"ID": i.Member.User.ID})
 			}
 			embeds = append(embeds, &copyEmbed)
 		}
 		_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{ID: i.Message.ID, Channel: i.ChannelID, Components: &components, Embeds: &embeds, AllowedMentions: &discordgo.MessageAllowedMentions{}})
 	}
 }
-func Text(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
-	if Default == nil {
-		_, _ = s.ChannelMessageSend(m.ChannelID, "Gacha is not enabled yet.")
-		return
-	}
-	action, query, page, e := parseText(args)
-	if e != nil {
-		_, _ = s.ChannelMessageSend(m.ChannelID, friendly(e))
-		return
-	}
-	if e = validateTarget(s, m.GuildID, m.Author.ID, action, query); e != nil {
-		_, _ = s.ChannelMessageSend(m.ChannelID, friendly(e))
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-	defer cancel()
-	msg, e := Default.Execute(ctx, m.GuildID, m.ChannelID, m.Author.ID, m.ID, action, query, page)
-	if e != nil {
-		_, _ = s.ChannelMessageSend(m.ChannelID, friendly(e))
-		return
-	}
-	if _, e = s.ChannelMessageSendComplex(m.ChannelID, msg); e != nil {
-		log.Printf("[gacha] Discord delivery failed: %v", e)
-		// Only explicit HTTP rejection proves Discord did not publish the message.
-		// A transport timeout is ambiguous and must not allow a free visible roll.
-		var rest *discordgo.RESTError
-		if errors.As(e, &rest) && rest.Response != nil && rest.Response.StatusCode >= 400 && rest.Response.StatusCode < 500 {
-			refundCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			if err := Default.CancelDelivery(refundCtx, m.ID); err != nil {
-				log.Printf("[gacha] refund failed: %v", err)
-			}
-		}
-	}
-}
+
 func Slash(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if Default == nil || i.Member == nil {
-		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseChannelMessageWithSource, Data: &discordgo.InteractionResponseData{Content: "Gacha is unavailable. Use it in a server with the feature enabled.", Flags: discordgo.MessageFlagsEphemeral}})
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseChannelMessageWithSource, Data: &discordgo.InteractionResponseData{Content: locale.Text("gacha.discord.gacha_is_unavailable_use_it_in_a"), Flags: discordgo.MessageFlagsEphemeral}})
 		return
 	}
 	if e := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredChannelMessageWithSource}); e != nil {
 		return
 	}
-	action, query, page := "help", "", 1
+	action, query, page := parseSlash(i.ApplicationCommandData())
+	if e := validateTarget(s, i.GuildID, i.Member.User.ID, action, query); e != nil {
+		content := friendly(e)
+		_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &content})
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	msg, e := Default.Execute(ctx, i.GuildID, i.ChannelID, i.Member.User.ID, i.ID, action, query, page)
+	if e != nil {
+		content := friendly(e)
+		_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &content})
+		return
+	}
+	_, e = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &msg.Content, Embeds: &msg.Embeds, Components: &msg.Components, AllowedMentions: msg.AllowedMentions})
+	if e != nil {
+		log.Printf("[gacha] Discord delivery failed: %v", e)
+		var rest *discordgo.RESTError
+		if errors.As(e, &rest) && rest.Response != nil && rest.Response.StatusCode >= 400 && rest.Response.StatusCode < 500 {
+			refundCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := Default.CancelDelivery(refundCtx, i.ID); err != nil {
+				log.Printf("[gacha] refund failed: %v", err)
+			}
+		}
+	}
+}
+
+// parseSlash maps the public command schema to the internal game actions.
+func parseSlash(data discordgo.ApplicationCommandInteractionData) (string, string, int) {
+	action, query, page := data.Name, "", 1
 	member := ""
 	var offered, requested int64
 	var visual bool
 	var claimFilter, genderFilter string
-	cmdName := i.ApplicationCommandData().Name
-	if cmdName != "gacha" {
-		action = cmdName
-	}
-	for _, o := range i.ApplicationCommandData().Options {
+	for _, o := range data.Options {
 		switch o.Name {
 		case "pool":
 			action = o.StringValue()
-		case "action", "acao":
+		case "action":
 			action = o.StringValue()
-		case "query", "busca", "name", "nome", "personagem":
+		case "character", "query", "id":
 			if o.Type == discordgo.ApplicationCommandOptionInteger {
 				query = strconv.FormatInt(o.IntValue(), 10)
 				offered = o.IntValue()
 			} else {
 				query = o.StringValue()
 			}
-		case "page", "pagina":
+		case "page":
 			page = int(o.IntValue())
-		case "member", "membro":
+		case "member":
 			member = o.Value.(string)
-		case "character", "seu_personagem":
+		case "offer":
 			offered = o.IntValue()
-		case "receive", "personagem_desejado":
+		case "receive":
 			requested = o.IntValue()
-		case "visual":
-			visual = o.BoolValue()
-		case "modo":
+		case "mode":
 			if o.StringValue() == "visual" {
 				visual = true
 			}
-		case "posse", "claim":
+		case "claim":
 			claimFilter = o.StringValue()
-		case "genero", "gender":
+		case "gender":
 			genderFilter = o.StringValue()
 		}
 	}
@@ -598,29 +586,6 @@ func Slash(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if (action == "wish" || action == "unwish") && offered > 0 {
 		query = strconv.FormatInt(offered, 10)
 	}
-	if e := validateTarget(s, i.GuildID, i.Member.User.ID, action, query); e != nil {
-		content := friendly(e)
-		_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &content})
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-	defer cancel()
-	msg, e := Default.Execute(ctx, i.GuildID, i.ChannelID, i.Member.User.ID, i.ID, action, query, page)
-	if e != nil {
-		content := friendly(e)
-		_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &content})
-		return
-	}
-	_, e = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &msg.Content, Embeds: &msg.Embeds, Components: &msg.Components, AllowedMentions: msg.AllowedMentions})
-	if e != nil {
-		log.Printf("[gacha] Discord delivery failed: %v", e)
-		var rest *discordgo.RESTError
-		if errors.As(e, &rest) && rest.Response != nil && rest.Response.StatusCode >= 400 && rest.Response.StatusCode < 500 {
-			refundCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			if err := Default.CancelDelivery(refundCtx, i.ID); err != nil {
-				log.Printf("[gacha] refund failed: %v", err)
-			}
-		}
-	}
+
+	return action, query, page
 }

@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"bot/internal/locale"
 	"github.com/bwmarrin/discordgo"
 )
 
@@ -11,8 +12,8 @@ func init() {
 	page := func() *discordgo.ApplicationCommandOption {
 		return &discordgo.ApplicationCommandOption{
 			Type:        discordgo.ApplicationCommandOptionInteger,
-			Name:        "pagina",
-			Description: "Número da página",
+			Name:        "page",
+			Description: locale.Text("commands.discovery.page"),
 			MinValue:    &min,
 			MaxValue:    100000,
 		}
@@ -36,51 +37,51 @@ func init() {
 	}
 
 	poolChoices := []*discordgo.ApplicationCommandOptionChoice{
-		{Name: "🌸 Waifus (Anime)", Value: "wa"},
-		{Name: "⚔️ Husbandos (Anime)", Value: "ha"},
-		{Name: "🌟 Todos (Anime)", Value: "ma"},
-		{Name: "🎮 Waifus (Games)", Value: "wg"},
-		{Name: "🕹️ Husbandos (Games)", Value: "hg"},
-		{Name: "👾 Todos (Games)", Value: "mg"},
-		{Name: "💖 Todas Waifus (Geral)", Value: "w"},
-		{Name: "🖤 Todos Husbandos (Geral)", Value: "h"},
-		{Name: "🎲 Roleta Geral (Todos)", Value: "roll"},
+		{Name: locale.Text("commands.gacha.waifus_anime"), Value: "wa"},
+		{Name: locale.Text("commands.gacha.husbandos_anime"), Value: "ha"},
+		{Name: locale.Text("commands.gacha.all_anime_characters"), Value: "ma"},
+		{Name: locale.Text("commands.gacha.waifus_games"), Value: "wg"},
+		{Name: locale.Text("commands.gacha.husbandos_games"), Value: "hg"},
+		{Name: locale.Text("commands.gacha.all_game_characters"), Value: "mg"},
+		{Name: locale.Text("commands.gacha.all_female_characters"), Value: "w"},
+		{Name: locale.Text("commands.gacha.all_male_characters"), Value: "h"},
+		{Name: locale.Text("commands.gacha.all_characters"), Value: "roll"},
 	}
 
 	claimChoices := []*discordgo.ApplicationCommandOptionChoice{
-		{Name: "✨ Todos os personagens", Value: "all"},
-		{Name: "🔓 Não casados (Livres / Unclaimed)", Value: "unclaimed"},
-		{Name: "💍 Já casados (Claimed)", Value: "claimed"},
+		{Name: locale.Text("commands.gacha.all_characters_b9180c"), Value: "all"},
+		{Name: locale.Text("commands.gacha.unclaimed_characters"), Value: "unclaimed"},
+		{Name: locale.Text("commands.gacha.claimed_characters"), Value: "claimed"},
 	}
 
 	genderChoices := []*discordgo.ApplicationCommandOptionChoice{
-		{Name: "👑 Todos os gêneros", Value: "all"},
-		{Name: "🌸 Mulheres (Waifus)", Value: "female"},
-		{Name: "⚔️ Homens (Husbandos)", Value: "male"},
+		{Name: locale.Text("commands.gacha.all_genders"), Value: "all"},
+		{Name: locale.Text("commands.gacha.female_characters"), Value: "female"},
+		{Name: locale.Text("commands.gacha.male_characters"), Value: "male"},
 	}
 
 	haremModeChoices := []*discordgo.ApplicationCommandOptionChoice{
-		{Name: "📋 Lista Compacta", Value: "list"},
-		{Name: "📷 Visual com Fotos", Value: "visual"},
+		{Name: locale.Text("commands.gacha.compact_list"), Value: "list"},
+		{Name: locale.Text("commands.gacha.photo_view"), Value: "visual"},
 	}
 
 	wishlistActionChoices := []*discordgo.ApplicationCommandOptionChoice{
-		{Name: "📜 Ver lista de desejos", Value: "wishes"},
-		{Name: "➕ Adicionar personagem aos desejos", Value: "wish"},
-		{Name: "➖ Remover personagem dos desejos", Value: "unwish"},
+		{Name: locale.Text("commands.gacha.view_wishlist"), Value: "wishes"},
+		{Name: locale.Text("commands.gacha.add_a_character"), Value: "wish"},
+		{Name: locale.Text("commands.gacha.remove_a_character"), Value: "unwish"},
 	}
 
 	SlashCommands = append(SlashCommands,
 		// 1. /roll
 		&discordgo.ApplicationCommand{
 			Name:         "roll",
-			Description:  "Sortear um personagem de anime ou jogos para colecionar",
+			Description:  locale.Text("commands.gacha.roll_an_anime_or_game_character_to"),
 			DMPermission: &dm,
 			Options: []*discordgo.ApplicationCommandOption{
 				{
 					Type:        discordgo.ApplicationCommandOptionString,
 					Name:        "pool",
-					Description: "Categoria de personagens a sortear (Waifus, Husbandos, Anime, Games)",
+					Description: locale.Text("commands.gacha.character_pool_female_male_anime_or_games"),
 					Choices:     poolChoices,
 				},
 			},
@@ -89,11 +90,11 @@ func init() {
 		// 2. /top
 		&discordgo.ApplicationCommand{
 			Name:         "top",
-			Description:  "Ranking dos personagens mais populares do catálogo",
+			Description:  locale.Text("commands.gacha.browse_the_most_popular_characters_in_the"),
 			DMPermission: &dm,
 			Options: []*discordgo.ApplicationCommandOption{
-				{Type: discordgo.ApplicationCommandOptionString, Name: "genero", Description: "Filtrar por gênero (Waifus / Husbandos)", Choices: genderChoices},
-				{Type: discordgo.ApplicationCommandOptionString, Name: "posse", Description: "Filtrar por posse no servidor (Livres / Casados)", Choices: claimChoices},
+				{Type: discordgo.ApplicationCommandOptionString, Name: "gender", Description: locale.Text("commands.gacha.filter_by_character_gender"), Choices: genderChoices},
+				{Type: discordgo.ApplicationCommandOptionString, Name: "claim", Description: locale.Text("commands.gacha.filter_by_ownership_in_this_server"), Choices: claimChoices},
 				page(),
 			},
 		},
@@ -101,39 +102,39 @@ func init() {
 		// 3. /info
 		&discordgo.ApplicationCommand{
 			Name:         "info",
-			Description:  "Ver foto oficial, obra, valor e dono de um personagem",
+			Description:  locale.Text("commands.gacha.view_a_character_s_official_image_work"),
 			DMPermission: &dm,
 			Options: []*discordgo.ApplicationCommandOption{
-				{Type: discordgo.ApplicationCommandOptionString, Name: "personagem", Description: "Nome ou ID do personagem", Required: true},
+				{Type: discordgo.ApplicationCommandOptionString, Name: "character", Description: locale.Text("commands.gacha.character_name_or_id"), Required: true},
 			},
 		},
 
 		// 4. /harem
 		&discordgo.ApplicationCommand{
 			Name:         "harem",
-			Description:  "Visualizar sua coleção de personagens ou a de outro membro",
+			Description:  locale.Text("commands.gacha.browse_your_character_collection_or_another_member"),
 			DMPermission: &dm,
 			Options: []*discordgo.ApplicationCommandOption{
-				member("membro", "Membro do servidor (deixe vazio para ver o seu)", false),
-				{Type: discordgo.ApplicationCommandOptionString, Name: "modo", Description: "Formato de exibição (Lista ou Fotos)", Choices: haremModeChoices},
+				member("member", locale.Text("commands.gacha.server_member_defaults_to_you"), false),
+				{Type: discordgo.ApplicationCommandOptionString, Name: "mode", Description: locale.Text("commands.gacha.display_format_list_or_photos"), Choices: haremModeChoices},
 				page(),
 			},
 		},
 
 		// 5. /perfil
 		&discordgo.ApplicationCommand{
-			Name:         "perfil",
-			Description:  "Ver seus rolls disponíveis, tempo de claim e status no gacha",
+			Name:         "profile",
+			Description:  locale.Text("commands.gacha.view_remaining_rolls_claim_cooldown_and_gacha"),
 			DMPermission: &dm,
 		},
 
 		// 6. /galeria
 		&discordgo.ApplicationCommand{
-			Name:         "galeria",
-			Description:  "Navegar pelas fotos e ilustrações aprovadas de um personagem",
+			Name:         "gallery",
+			Description:  locale.Text("commands.gacha.browse_a_character_s_approved_images"),
 			DMPermission: &dm,
 			Options: []*discordgo.ApplicationCommandOption{
-				character("personagem", "ID do personagem", true),
+				character("character", locale.Text("commands.discovery.character_id"), true),
 				page(),
 			},
 		},
@@ -141,44 +142,44 @@ func init() {
 		// 7. /wishlist
 		&discordgo.ApplicationCommand{
 			Name:         "wishlist",
-			Description:  "Gerenciar sua lista de personagens desejados",
+			Description:  locale.Text("commands.gacha.manage_your_character_wishlist"),
 			DMPermission: &dm,
 			Options: []*discordgo.ApplicationCommandOption{
-				{Type: discordgo.ApplicationCommandOptionString, Name: "acao", Description: "O que deseja fazer?", Required: true, Choices: wishlistActionChoices},
-				character("personagem", "ID do personagem (necessário para adicionar ou remover)", false),
+				{Type: discordgo.ApplicationCommandOptionString, Name: "action", Description: locale.Text("commands.gacha.wishlist_action"), Required: true, Choices: wishlistActionChoices},
+				character("character", locale.Text("commands.gacha.character_id_required_to_add_or_remove"), false),
 			},
 		},
 
 		// 8. /troca
 		&discordgo.ApplicationCommand{
-			Name:         "troca",
-			Description:  "Propor uma troca de personagens com outro jogador",
+			Name:         "trade",
+			Description:  locale.Text("commands.gacha.offer_a_character_trade_to_another_member"),
 			DMPermission: &dm,
 			Options: []*discordgo.ApplicationCommandOption{
-				member("membro", "Membro com quem deseja trocar", true),
-				character("seu_personagem", "ID do seu personagem a oferecer", true),
-				character("personagem_desejado", "ID do personagem que você quer em troca", true),
+				member("member", locale.Text("commands.gacha.member_to_trade_with"), true),
+				character("offer", locale.Text("commands.gacha.id_of_the_character_you_offer"), true),
+				character("receive", locale.Text("commands.gacha.id_of_the_character_you_want_in"), true),
 			},
 		},
 
 		// 9. /presente
 		&discordgo.ApplicationCommand{
-			Name:         "presente",
-			Description:  "Enviar um personagem do seu harém como presente para outro jogador",
+			Name:         "gift",
+			Description:  locale.Text("commands.gacha.offer_a_character_from_your_harem_as"),
 			DMPermission: &dm,
 			Options: []*discordgo.ApplicationCommandOption{
-				member("membro", "Membro que receberá o presente", true),
-				character("personagem", "ID do seu personagem a presentear", true),
+				member("member", locale.Text("commands.gacha.gift_recipient"), true),
+				character("character", locale.Text("commands.gacha.id_of_the_character_you_want_to"), true),
 			},
 		},
 
 		// 10. /divorcio
 		&discordgo.ApplicationCommand{
-			Name:         "divorcio",
-			Description:  "Libertar um personagem do seu harém em troca de moedas do servidor",
+			Name:         "divorce",
+			Description:  locale.Text("commands.gacha.release_a_character_in_exchange_for_server"),
 			DMPermission: &dm,
 			Options: []*discordgo.ApplicationCommandOption{
-				character("personagem", "ID do personagem a divorciar", true),
+				character("character", locale.Text("commands.gacha.id_of_the_character_to_release"), true),
 			},
 		},
 	)

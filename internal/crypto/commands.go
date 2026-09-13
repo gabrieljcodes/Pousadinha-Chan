@@ -2,6 +2,7 @@ package crypto
 
 import (
 	"bot/internal/database"
+	"bot/internal/locale"
 	"bot/pkg/config"
 	"bot/pkg/utils"
 	"fmt"
@@ -12,55 +13,15 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-func CmdCrypto(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
-	if m.GuildID == "" {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("This command can only be used within a server."))
-		return
-	}
-
-	if len(args) == 0 {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("Crypto Market", "Usage: `!crypto <market|buy|sell|portfolio>`"))
-		return
-	}
-
-	subcmd := strings.ToLower(args[0])
-
-	switch subcmd {
-	case "market", "list", "prices":
-		s.ChannelMessageSendEmbed(m.ChannelID, ExecuteCryptoMarket())
-	case "buy":
-		if len(args) < 3 {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Usage: `!crypto buy <SYMBOL> <amount>`\nExample: `!crypto buy BTC 1000`"))
-			return
-		}
-		amount, err := strconv.Atoi(args[2])
-		if err != nil || amount <= 0 {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Invalid amount."))
-			return
-		}
-		s.ChannelMessageSendEmbed(m.ChannelID, ExecuteCryptoBuy(m.GuildID, m.Author.ID, args[1], amount))
-	case "sell":
-		if len(args) < 3 {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Usage: `!crypto sell <SYMBOL> <amount|all>`\nExample: `!crypto sell BTC all` or `!crypto sell BTC 0.5`"))
-			return
-		}
-		s.ChannelMessageSendEmbed(m.ChannelID, ExecuteCryptoSell(m.GuildID, m.Author.ID, args[1], args[2]))
-	case "portfolio", "p":
-		s.ChannelMessageSendEmbed(m.ChannelID, ExecuteCryptoPortfolio(m.GuildID, m.Author.ID))
-	default:
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Unknown subcommand. Use `market`, `buy`, `sell`, or `portfolio`."))
-	}
-}
-
 // ExecuteCryptoMarket returns the crypto market prices embed
 func ExecuteCryptoMarket() *discordgo.MessageEmbed {
 	prices, err := GetCryptoPrices()
 	if err != nil {
-		return utils.ErrorEmbed("Error fetching crypto prices. Try again later.")
+		return utils.ErrorEmbed(locale.Text("crypto.commands.error_fetching_crypto_prices_try_again_later"))
 	}
 
 	var sb strings.Builder
-	sb.WriteString("**Major Cryptocurrencies:**\n")
+	sb.WriteString(locale.Text("crypto.commands.major_cryptocurrencies"))
 	for _, c := range AvailableCryptos {
 		if c.Type != "major" {
 			continue
@@ -72,7 +33,7 @@ func ExecuteCryptoMarket() *discordgo.MessageEmbed {
 		}
 	}
 
-	sb.WriteString("\n**Meme Coins (High Volatility!):**\n")
+	sb.WriteString(locale.Text("crypto.commands.meme_coins_high_volatility"))
 	for _, c := range AvailableCryptos {
 		if c.Type != "meme" {
 			continue
@@ -84,7 +45,7 @@ func ExecuteCryptoMarket() *discordgo.MessageEmbed {
 		}
 	}
 
-	return utils.GoldEmbed("Crypto Market", sb.String())
+	return utils.GoldEmbed(locale.Text("crypto.commands.crypto_market"), sb.String())
 }
 
 func formatPrice(price float64) string {
@@ -102,25 +63,25 @@ func formatPrice(price float64) string {
 func ExecuteCryptoBuy(guildID, userID, symbol string, amount int) *discordgo.MessageEmbed {
 	symbol = strings.ToUpper(strings.TrimSpace(symbol))
 	if amount <= 0 {
-		return utils.ErrorEmbed("Invalid amount.")
+		return utils.ErrorEmbed(locale.Text("crypto.commands.invalid_amount"))
 	}
 
 	// Check if crypto exists
 	c := GetCryptoBySymbol(symbol)
 	if c == nil {
-		return utils.ErrorEmbed("Invalid cryptocurrency symbol. Use `/crypto market` or `!crypto market` to see available options.")
+		return utils.ErrorEmbed(locale.Text("crypto.commands.invalid_cryptocurrency_symbol_use_crypto_market_or"))
 	}
 
 	// Check balance
 	balance := database.GetBalance(guildID, userID)
 	if balance < amount {
-		return utils.ErrorEmbed("Insufficient funds.")
+		return utils.ErrorEmbed(locale.Text("crypto.commands.insufficient_funds"))
 	}
 
 	// Fetch current price
 	price, err := GetSingleCryptoPrice(c.ID)
 	if err != nil || price <= 0 {
-		return utils.ErrorEmbed("Could not fetch crypto price. Try again later.")
+		return utils.ErrorEmbed(locale.Text("crypto.commands.could_not_fetch_crypto_price_try_again"))
 	}
 
 	// Calculate coins quantity
@@ -128,13 +89,13 @@ func ExecuteCryptoBuy(guildID, userID, symbol string, amount int) *discordgo.Mes
 
 	// Transaction
 	if err := database.RemoveCoins(guildID, userID, amount); err != nil {
-		return utils.ErrorEmbed("Transaction failed.")
+		return utils.ErrorEmbed(locale.Text("crypto.commands.transaction_failed"))
 	}
 
 	if err := database.AddCryptoShares(guildID, userID, symbol, coins, amount); err != nil {
 		// Refund
 		_ = database.AddCoins(guildID, userID, amount)
-		return utils.ErrorEmbed("Database error. Refunded.")
+		return utils.ErrorEmbed(locale.Text("crypto.commands.database_error_refunded"))
 	}
 
 	// Special message for meme coins
@@ -142,12 +103,11 @@ func ExecuteCryptoBuy(guildID, userID, symbol string, amount int) *discordgo.Mes
 	warning := ""
 	if c.Type == "meme" {
 		emoji = "🎰"
-		warning = "\n⚠️ **Meme coins are highly volatile! Invest at your own risk.**"
+		warning = locale.Text("crypto.commands.meme_coins_are_highly_volatile_invest_at")
 	}
 
-	return utils.SuccessEmbed("Crypto Purchase Successful!",
-		fmt.Sprintf("%s You bought **%s %s** for **%d %s** (at $%s/coin).%s",
-			emoji, formatCryptoAmount(coins), symbol, amount, config.Bot.CurrencyName, formatPrice(price), warning))
+	return utils.SuccessEmbed(locale.Text("crypto.commands.crypto_purchase_successful"),
+		locale.Text("crypto.commands.you_bought_for_at_coin.formatted", locale.Data{"Emoji": emoji, "Value2": formatCryptoAmount(coins), "Symbol": symbol, "Amount": amount, "CurrencyName": config.Bot.CurrencyName, "Value6": formatPrice(price), "Warning": warning}))
 }
 
 // ExecuteCryptoSell processes a cryptocurrency sale and returns an embed response
@@ -157,13 +117,13 @@ func ExecuteCryptoSell(guildID, userID, symbol, amountStr string) *discordgo.Mes
 	// Check if crypto exists
 	c := GetCryptoBySymbol(symbol)
 	if c == nil {
-		return utils.ErrorEmbed("Invalid cryptocurrency symbol.")
+		return utils.ErrorEmbed(locale.Text("crypto.commands.invalid_cryptocurrency_symbol"))
 	}
 
 	// Check owned amount
 	ownedCoins, _ := database.GetCryptoInvestment(guildID, userID, symbol)
 	if ownedCoins <= 0 {
-		return utils.ErrorEmbed(fmt.Sprintf("You don't own any %s.", symbol))
+		return utils.ErrorEmbed(locale.Text("crypto.commands.you_don_t_own_any.formatted", locale.Data{"Symbol": symbol}))
 	}
 
 	var coinsToSell float64
@@ -173,25 +133,25 @@ func ExecuteCryptoSell(guildID, userID, symbol, amountStr string) *discordgo.Mes
 	} else {
 		val, err := strconv.ParseFloat(amountStr, 64)
 		if err != nil || val <= 0 {
-			return utils.ErrorEmbed("Invalid amount.")
+			return utils.ErrorEmbed(locale.Text("crypto.commands.invalid_amount"))
 		}
 		coinsToSell = val
 	}
 
 	if coinsToSell > ownedCoins {
-		return utils.ErrorEmbed(fmt.Sprintf("You only own %s %s.", formatCryptoAmount(ownedCoins), symbol))
+		return utils.ErrorEmbed(locale.Text("crypto.commands.you_only_own.formatted", locale.Data{"Value1": formatCryptoAmount(ownedCoins), "Symbol": symbol}))
 	}
 
 	// Fetch current price
 	price, err := GetSingleCryptoPrice(c.ID)
 	if err != nil || price <= 0 {
-		return utils.ErrorEmbed("Could not fetch crypto price. Try again later.")
+		return utils.ErrorEmbed(locale.Text("crypto.commands.could_not_fetch_crypto_price_try_again"))
 	}
 
 	payout := int(math.Round(coinsToSell * price))
 
 	if err := database.RemoveCryptoShares(guildID, userID, symbol, coinsToSell); err != nil {
-		return utils.ErrorEmbed("Database error.")
+		return utils.ErrorEmbed(locale.Text("crypto.commands.database_error"))
 	}
 
 	_ = database.AddCoins(guildID, userID, payout)
@@ -201,26 +161,25 @@ func ExecuteCryptoSell(guildID, userID, symbol, amountStr string) *discordgo.Mes
 		emoji = "🎰"
 	}
 
-	return utils.SuccessEmbed("Crypto Sale Successful!",
-		fmt.Sprintf("%s You sold **%s %s** for **%d %s** (at $%s/coin).",
-			emoji, formatCryptoAmount(coinsToSell), symbol, payout, config.Bot.CurrencyName, formatPrice(price)))
+	return utils.SuccessEmbed(locale.Text("crypto.commands.crypto_sale_successful"),
+		locale.Text("crypto.commands.you_sold_for_at_coin.formatted", locale.Data{"Emoji": emoji, "Value2": formatCryptoAmount(coinsToSell), "Symbol": symbol, "Payout": payout, "CurrencyName": config.Bot.CurrencyName, "Value6": formatPrice(price)}))
 }
 
 // ExecuteCryptoPortfolio generates a user's crypto portfolio embed
 func ExecuteCryptoPortfolio(guildID, userID string) *discordgo.MessageEmbed {
 	investments, err := database.GetAllCryptoInvestmentsByUser(guildID, userID)
 	if err != nil {
-		return utils.ErrorEmbed("Database error.")
+		return utils.ErrorEmbed(locale.Text("crypto.commands.database_error"))
 	}
 
 	if len(investments) == 0 {
-		return utils.InfoEmbed("Crypto Portfolio", "You have no cryptocurrency investments.")
+		return utils.InfoEmbed(locale.Text("crypto.commands.crypto_portfolio"), locale.Text("crypto.commands.you_have_no_cryptocurrency_investments"))
 	}
 
 	// Fetch current prices
 	prices, err := GetCryptoPrices()
 	if err != nil {
-		return utils.ErrorEmbed("Could not fetch current prices.")
+		return utils.ErrorEmbed(locale.Text("crypto.commands.could_not_fetch_current_prices"))
 	}
 
 	var sb strings.Builder
@@ -263,10 +222,7 @@ func ExecuteCryptoPortfolio(guildID, userID string) *discordgo.MessageEmbed {
 			statusEmoji = "🎰"
 		}
 
-		sb.WriteString(fmt.Sprintf("%s **%s** (%s): %s coins (~%d %s @ $%s)\n  ↳ Invested: %d %s | P/L: %s\n",
-			statusEmoji, c.Name, inv.Symbol, formatCryptoAmount(inv.Coins),
-			int(math.Round(val)), config.Bot.CurrencyName, formatPrice(price),
-			int(math.Round(cost)), config.Bot.CurrencyName, pnlStr))
+		sb.WriteString(locale.Text("crypto.commands.coins_invested_p_l.formatted", locale.Data{"StatusEmoji": statusEmoji, "Name": c.Name, "Symbol": inv.Symbol, "Value4": formatCryptoAmount(inv.Coins), "Value5": int(math.Round(val)), "CurrencyName": config.Bot.CurrencyName, "Value7": formatPrice(price), "Value8": int(math.Round(cost)), "CurrencyName9": config.Bot.CurrencyName, "PnlStr": pnlStr}))
 	}
 
 	overallPnl := totalValue - totalInvested
@@ -283,12 +239,9 @@ func ExecuteCryptoPortfolio(guildID, userID string) *discordgo.MessageEmbed {
 		overallPnlStr = fmt.Sprintf("0 %s (0.0%%) ⚪", config.Bot.CurrencyName)
 	}
 
-	sb.WriteString(fmt.Sprintf("\n**Total Value**: ~%d %s\n**Total Invested**: %d %s\n**Net Return**: %s",
-		int(math.Round(totalValue)), config.Bot.CurrencyName,
-		int(math.Round(totalInvested)), config.Bot.CurrencyName,
-		overallPnlStr))
+	sb.WriteString(locale.Text("crypto.commands.total_value_total_invested_net_return.formatted", locale.Data{"Value1": int(math.Round(totalValue)), "CurrencyName": config.Bot.CurrencyName, "Value3": int(math.Round(totalInvested)), "CurrencyName4": config.Bot.CurrencyName, "OverallPnlStr": overallPnlStr}))
 
-	return utils.GoldEmbed("Your Crypto Portfolio", sb.String())
+	return utils.GoldEmbed(locale.Text("crypto.commands.your_crypto_portfolio"), sb.String())
 }
 
 func formatCryptoAmount(amount float64) string {

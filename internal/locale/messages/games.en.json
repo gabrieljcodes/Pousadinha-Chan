@@ -1,0 +1,1211 @@
+{
+  "games.aviator.altitude": {
+    "other": "Altitude"
+  },
+  "games.aviator.auto_cash_out_multiplier_must_be_at": {
+    "other": "Auto cash-out multiplier must be at least **1.05x**."
+  },
+  "games.aviator.auto_cash_out_success": {
+    "other": "AUTO CASH-OUT SUCCESS!"
+  },
+  "games.aviator.auto_cash_out_triggered_at_x_total.formatted": {
+    "other": "Auto Cash-Out triggered at **x{{printf \"%.2f\" .Multiplier}}**!\n\n💰 **Total Payout:** {{printf \"%d\" .TotalPayout}} {{printf \"%s\" .CurrencySymbol}}\n📈 **Net Profit:** +{{printf \"%d\" .NetProfit}} {{printf \"%s\" .CurrencySymbol5}}"
+  },
+  "games.aviator.auto_cash_out_x.formatted": {
+    "other": "\nAuto Cash-Out: **x{{printf \"%.2f\" .AutoCashout}}**"
+  },
+  "games.aviator.aviator_flying": {
+    "other": "✈️ Aviator Flying..."
+  },
+  "games.aviator.aviator_starting": {
+    "other": "✈️ Aviator Starting..."
+  },
+  "games.aviator.bet_preparing_for_takeoff.formatted": {
+    "other": "Bet: **{{printf \"%d\" .Bet}} {{printf \"%s\" .CurrencySymbol}}**\nPreparing for takeoff..."
+  },
+  "games.aviator.cannot_start_game_min_bet_check_your.formatted": {
+    "other": "Cannot start game. Min bet: **{{printf \"%d\" .MinBet}} {{printf \"%s\" .CurrencySymbol}}**, check your balance or finish your active game."
+  },
+  "games.aviator.cash_out": {
+    "other": "🛑 CASH OUT"
+  },
+  "games.aviator.cashed_out": {
+    "other": "CASHED OUT!"
+  },
+  "games.aviator.crashed_at_x_you_didn_t_jump.formatted": {
+    "other": "💥 **CRASHED at x{{printf \"%.2f\" .CrashPoint}}!**\nYou didn't jump in time and lost **{{printf \"%d\" .Bet}} {{printf \"%s\" .CurrencySymbol}}**."
+  },
+  "games.aviator.crashed_at_x_you_lost.formatted": {
+    "other": "💥 **CRASHED at x{{printf \"%.2f\" .CrashPoint}}!**\nYou lost **{{printf \"%d\" .Bet}} {{printf \"%s\" .CurrencySymbol}}**."
+  },
+  "games.aviator.failed_to_deduct_bet": {
+    "other": "Failed to deduct bet."
+  },
+  "games.aviator.flight_already_ended_or_not_active": {
+    "other": "⚠️ Flight already ended or not active."
+  },
+  "games.aviator.flight_ended": {
+    "other": "FLIGHT ENDED"
+  },
+  "games.aviator.flight_started_in.formatted": {
+    "other": "Flight started in <#{{printf \"%s\" .ChannelID}}>!"
+  },
+  "games.aviator.multiplier_x_potential_win_profit.formatted": {
+    "other": "Multiplier: **x{{printf \"%.2f\" .Multiplier}}**\nPotential Win: **{{printf \"%d\" .PotentialWin}} {{printf \"%s\" .CurrencySymbol}}** *(+{{printf \"%d\" .PotentialProfit}} profit)*"
+  },
+  "games.aviator.target_auto_cash_out_x.formatted": {
+    "other": "\nTarget Auto Cash-Out: **x{{printf \"%.2f\" .AutoCashout}}**"
+  },
+  "games.aviator.this_game_can_only_be_played_within": {
+    "other": "This game can only be played within a server."
+  },
+  "games.aviator.this_is_not_your_flight_only_can.formatted": {
+    "other": "❌ This is not your flight! Only <@{{printf \"%s\" .ExpectedUserID}}> can cash out."
+  },
+  "games.aviator.you_already_have_an_active_game_in": {
+    "other": "You already have an active game in progress! Finish it first."
+  },
+  "games.aviator.you_jumped_at_x_total_payout_net.formatted": {
+    "other": "You jumped at **x{{printf \"%.2f\" .Multiplier}}**!\n\n💰 **Total Payout:** {{printf \"%d\" .TotalPayout}} {{printf \"%s\" .CurrencySymbol}}\n📈 **Net Profit:** +{{printf \"%d\" .NetProfit}} {{printf \"%s\" .CurrencySymbol5}}"
+  },
+  "games.aviator.you_ran_out_of_coins_before_takeoff": {
+    "other": "You ran out of coins before takeoff!"
+  },
+  "games.aviator.your_aviator_flight_is_taking_off.formatted": {
+    "other": "<@{{printf \"%s\" .UserID}}> ✈️ Your Aviator flight is taking off!"
+  },
+  "games.bicho.alligator": {
+    "other": "Alligator"
+  },
+  "games.bicho.and_more_winners.formatted": {
+    "other": "\n*... and {{printf \"%d\" .Value1}} more winners!*"
+  },
+  "games.bicho.animal_pair_and.formatted": {
+    "other": "Animal Pair: {{printf \"%s\" .Emoji}} {{printf \"%s\" .Name}} and {{printf \"%s\" .Emoji3}} {{printf \"%s\" .Name4}}"
+  },
+  "games.bicho.animal_pair_duque_and.formatted": {
+    "other": "Animal Pair (Duque): {{printf \"%s\" .Emoji}} {{printf \"%s\" .Name}} and {{printf \"%s\" .Emoji3}} {{printf \"%s\" .Name4}}!"
+  },
+  "games.bicho.animal_pair_requires_animals_or_groups_e": {
+    "other": "animal pair requires 2 animals or groups! E.g. `Monkey, Lion` or `17 16`"
+  },
+  "games.bicho.animal_table": {
+    "other": "Animal Table"
+  },
+  "games.bicho.animal_trio_and.formatted": {
+    "other": "Animal Trio: {{printf \"%s\" .Emoji}} {{printf \"%s\" .Name}}, {{printf \"%s\" .Emoji3}} {{printf \"%s\" .Name4}} and {{printf \"%s\" .Emoji5}} {{printf \"%s\" .Name6}}"
+  },
+  "games.bicho.animal_trio_requires_animals_or_groups_e": {
+    "other": "animal trio requires 3 animals or groups! E.g. `Monkey, Lion, Tiger` or `17 16 22`"
+  },
+  "games.bicho.animal_trio_terno_and.formatted": {
+    "other": "Animal Trio (Terno): {{printf \"%s\" .Emoji}} {{printf \"%s\" .Name}}, {{printf \"%s\" .Emoji3}} {{printf \"%s\" .Name4}} and {{printf \"%s\" .Emoji5}} {{printf \"%s\" .Name6}}!"
+  },
+  "games.bicho.bear": {
+    "other": "Bear"
+  },
+  "games.bicho.bet_amount_must_be_greater_than_zero": {
+    "other": "bet amount must be greater than zero"
+  },
+  "games.bicho.bull": {
+    "other": "Bull"
+  },
+  "games.bicho.butterfly": {
+    "other": "Butterfly"
+  },
+  "games.bicho.camel": {
+    "other": "Camel"
+  },
+  "games.bicho.cat": {
+    "other": "Cat"
+  },
+  "games.bicho.cow": {
+    "other": "Cow"
+  },
+  "games.bicho.deer": {
+    "other": "Deer"
+  },
+  "games.bicho.dog": {
+    "other": "Dog"
+  },
+  "games.bicho.donkey": {
+    "other": "Donkey"
+  },
+  "games.bicho.each_animal_represents_a_group_and_tens": {
+    "other": "Each animal represents a Group and 4 Tens. The group is determined by the **last two digits** of the drawn number."
+  },
+  "games.bicho.eagle": {
+    "other": "Eagle"
+  },
+  "games.bicho.elephant": {
+    "other": "Elephant"
+  },
+  "games.bicho.goat": {
+    "other": "Goat"
+  },
+  "games.bicho.group.formatted": {
+    "other": "**{{printf \"%s\" .Value1}}:** `{{printf \"%04d\" .P}}` ➔ {{printf \"%s\" .Emoji}} **Group {{printf \"%02d\" .Number}}** ({{printf \"%s\" .Name}})"
+  },
+  "games.bicho.group_drawn_x_on_the_board.formatted": {
+    "other": "Group {{printf \"%02d\" .Number}} ({{printf \"%s\" .Emoji}} {{printf \"%s\" .Name}}) drawn {{printf \"%d\" .Matches}}x on the Board"
+  },
+  "games.bicho.group_on_board.formatted": {
+    "other": "Group {{printf \"%02d\" .Number}} ({{printf \"%s\" .Emoji}} {{printf \"%s\" .Name}}) on Board"
+  },
+  "games.bicho.group_on_head.formatted": {
+    "other": "Group {{printf \"%02d\" .Number}} ({{printf \"%s\" .Emoji}} {{printf \"%s\" .Name}}) on Head"
+  },
+  "games.bicho.group_on_the_head_st_prize.formatted": {
+    "other": "Group {{printf \"%02d\" .Number}} ({{printf \"%s\" .Emoji}} {{printf \"%s\" .Name}}) on the Head (1st Prize)"
+  },
+  "games.bicho.group_x_on_head_x_on_board": {
+    "other": "• **Group:** `18x` on Head | `3.6x` on Board (1st to 5th)\n• **Tens:** `60x` on Head | `12x` on Board\n• **Hundreds:** `600x` on Head | `120x` on Board\n• **Thousands:** `4,000x` on Head | `800x` on Board\n• **Animal Pair (Duque):** `18.5x` | **Animal Trio (Terno):** `130x`"
+  },
+  "games.bicho.groups_to": {
+    "other": "Groups 01 to 09"
+  },
+  "games.bicho.groups_to_0e0181": {
+    "other": "Groups 10 to 17"
+  },
+  "games.bicho.groups_to_585ccd": {
+    "other": "Groups 18 to 25"
+  },
+  "games.bicho.hit_won.formatted": {
+    "other": "• <@{{printf \"%s\" .UserID}}> hit **{{printf \"%s\" .Description}}**! Won **{{printf \"%d\" .Payout}} {{printf \"%s\" .CurrencySymbol}}**!"
+  },
+  "games.bicho.horse": {
+    "other": "Horse"
+  },
+  "games.bicho.hundreds_drawn_x_on_the_board.formatted": {
+    "other": "Hundreds {{printf \"%03d\" .TargetNum}} drawn {{printf \"%d\" .Matches}}x on the Board"
+  },
+  "games.bicho.hundreds_on_board.formatted": {
+    "other": "Hundreds {{printf \"%03d\" .Num}} ({{printf \"%s\" .Emoji}} {{printf \"%s\" .Name}}) on Board"
+  },
+  "games.bicho.hundreds_on_head.formatted": {
+    "other": "Hundreds {{printf \"%03d\" .Num}} ({{printf \"%s\" .Emoji}} {{printf \"%s\" .Name}}) on Head"
+  },
+  "games.bicho.hundreds_on_the_head_st_prize.formatted": {
+    "other": "Hundreds {{printf \"%03d\" .TargetNum}} on the Head (1st Prize)"
+  },
+  "games.bicho.invalid_animal": {
+    "other": "Invalid animal"
+  },
+  "games.bicho.invalid_animal_or_group_use_the_animal": {
+    "other": "invalid animal or group! Use the animal name (e.g. `Monkey`) or group number (01 to 25)"
+  },
+  "games.bicho.invalid_animals_for_animal_pair": {
+    "other": "Invalid animals for Animal Pair"
+  },
+  "games.bicho.invalid_animals_for_animal_trio": {
+    "other": "Invalid animals for Animal Trio"
+  },
+  "games.bicho.invalid_hundreds": {
+    "other": "Invalid hundreds"
+  },
+  "games.bicho.invalid_hundreds_must_be_a_number_between": {
+    "other": "invalid hundreds! Must be a number between `000` and `999`"
+  },
+  "games.bicho.invalid_modality_choose_between_group_tens_hundreds": {
+    "other": "invalid modality! Choose between: `group`, `tens`, `hundreds`, `thousands`, `pair`, or `trio`"
+  },
+  "games.bicho.invalid_position_choose_between_head_st_prize": {
+    "other": "invalid position! Choose between `head` (1st prize) or `board` (1st to 5th prizes)"
+  },
+  "games.bicho.invalid_targets_for_animal_pair": {
+    "other": "Invalid targets for Animal Pair"
+  },
+  "games.bicho.invalid_targets_for_animal_trio": {
+    "other": "Invalid targets for Animal Trio"
+  },
+  "games.bicho.invalid_tens": {
+    "other": "Invalid tens"
+  },
+  "games.bicho.invalid_tens_must_be_a_number_between": {
+    "other": "invalid tens! Must be a number between `00` and `99`"
+  },
+  "games.bicho.invalid_thousands": {
+    "other": "Invalid thousands"
+  },
+  "games.bicho.invalid_thousands_must_be_a_number_between": {
+    "other": "invalid thousands! Must be a number between `0000` and `9999`"
+  },
+  "games.bicho.jogo_do_bicho_betting_open_round.formatted": {
+    "other": "🎫 Jogo do Bicho - Betting Open (Round #{{printf \"%d\" .RoundNumber}})"
+  },
+  "games.bicho.jogo_do_bicho_channel_is_not_configured": {
+    "other": "Jogo do Bicho channel is not configured"
+  },
+  "games.bicho.jogo_do_bicho_gamble_responsibly": {
+    "other": "Jogo do Bicho • Gamble responsibly"
+  },
+  "games.bicho.jogo_do_bicho_is_not_active_or": {
+    "other": "Jogo do Bicho is not active or configured on this server. An administrator must use `/bicho config channel #channel`"
+  },
+  "games.bicho.lion": {
+    "other": "Lion"
+  },
+  "games.bicho.monkey": {
+    "other": "Monkey"
+  },
+  "games.bicho.my_bets": {
+    "other": "My Bets"
+  },
+  "games.bicho.nd_prize": {
+    "other": "2nd Prize"
+  },
+  "games.bicho.no_active_round_found_to_draw": {
+    "other": "no active round found to draw"
+  },
+  "games.bicho.no_active_round_open_at_this_time": {
+    "other": "no active round open at this time. Please wait for the next draw"
+  },
+  "games.bicho.no_winning_tickets_in_this_round_better": {
+    "other": "No winning tickets in this round! Better luck next time!"
+  },
+  "games.bicho.official_animal_lottery_table_animals_tens": {
+    "other": "📜 Official Animal Lottery Table (25 Animals & 100 Tens)"
+  },
+  "games.bicho.official_draw_results_jogo_do_bicho_round.formatted": {
+    "other": "🎰 OFFICIAL DRAW RESULTS - Jogo do Bicho (Round #{{printf \"%d\" .RoundNumber}})"
+  },
+  "games.bicho.official_lottery_draw_completed_audited_results": {
+    "other": "Official lottery draw completed • Audited results"
+  },
+  "games.bicho.one_or_more_animals_specified_for_the": {
+    "other": "one or more animals specified for the pair are invalid"
+  },
+  "games.bicho.one_or_more_animals_specified_for_the_c137a8": {
+    "other": "one or more animals specified for the trio are invalid"
+  },
+  "games.bicho.ostrich": {
+    "other": "Ostrich"
+  },
+  "games.bicho.peacock": {
+    "other": "Peacock"
+  },
+  "games.bicho.pig": {
+    "other": "Pig"
+  },
+  "games.bicho.place_bet": {
+    "other": "Place Bet"
+  },
+  "games.bicho.place_your_bets_for_today_s_official.formatted": {
+    "other": "Place your bets for today's official lottery draw!\n\n⏰ **Scheduled Draw:** <t:{{printf \"%d\" .UnixTime}}:F> (<t:{{printf \"%d\" .UnixTime2}}:R>)\n💰 **Total Wagered:** `{{printf \"%d\" .TotalAmount}} {{printf \"%s\" .CurrencySymbol}}` across **{{printf \"%d\" .TotalBets}} ticket(s)** ({{printf \"%d\" .DistinctUsers}} bettors)\n\n**How to Bet:**\n• `/bicho bet monkey 100` *(Group on Head)*\n• `/bicho bet group <animal> <amount> [board]`\n• `/bicho bet tens <00-99> <amount>`\n• `/bicho bet hundreds <000-999> <amount>`\n• `/bicho bet thousands <0000-9999> <amount>`\n• `/bicho bet pair <animal1> <animal2> <amount>`\n• `/bicho bet trio <animal1> <animal2> <animal3> <amount>`\n\n👇 *Or use the interactive buttons below:*"
+  },
+  "games.bicho.please_specify_a_target_animal_name_tens": {
+    "other": "please specify a target (animal name, tens, hundreds, or thousands)"
+  },
+  "games.bicho.prize_multipliers": {
+    "other": "💰 Prize Multipliers"
+  },
+  "games.bicho.rabbit": {
+    "other": "Rabbit"
+  },
+  "games.bicho.ram": {
+    "other": "Ram"
+  },
+  "games.bicho.rd_prize": {
+    "other": "3rd Prize"
+  },
+  "games.bicho.rooster": {
+    "other": "Rooster"
+  },
+  "games.bicho.round_id_daily_provably_fair_lottery.formatted": {
+    "other": "Round ID: {{printf \"%d\" .ID}} • Daily provably fair lottery"
+  },
+  "games.bicho.snake": {
+    "other": "Snake"
+  },
+  "games.bicho.st_prize": {
+    "other": "1st Prize"
+  },
+  "games.bicho.tens_drawn_x_on_the_board.formatted": {
+    "other": "Tens {{printf \"%02d\" .TargetNum}} drawn {{printf \"%d\" .Matches}}x on the Board"
+  },
+  "games.bicho.tens_on_board.formatted": {
+    "other": "Tens {{printf \"%02d\" .Num}} ({{printf \"%s\" .Emoji}} {{printf \"%s\" .Name}}) on Board"
+  },
+  "games.bicho.tens_on_head.formatted": {
+    "other": "Tens {{printf \"%02d\" .Num}} ({{printf \"%s\" .Emoji}} {{printf \"%s\" .Name}}) on Head"
+  },
+  "games.bicho.tens_on_the_head_st_prize.formatted": {
+    "other": "Tens {{printf \"%02d\" .TargetNum}} on the Head (1st Prize)"
+  },
+  "games.bicho.th_prize": {
+    "other": "4th Prize"
+  },
+  "games.bicho.th_prize_7fc029": {
+    "other": "5th Prize"
+  },
+  "games.bicho.the_minimum_bet_amount_configured_is": {
+    "other": "the minimum bet amount configured is %d %s"
+  },
+  "games.bicho.the_three_animals_in_a_trio_must": {
+    "other": "the three animals in a trio must all be distinct"
+  },
+  "games.bicho.the_two_animals_in_a_pair_must": {
+    "other": "the two animals in a pair must be different"
+  },
+  "games.bicho.thousands_drawn_x_on_the_board.formatted": {
+    "other": "Thousands {{printf \"%04d\" .TargetNum}} drawn {{printf \"%d\" .Matches}}x on the Board"
+  },
+  "games.bicho.thousands_on_board.formatted": {
+    "other": "Thousands {{printf \"%04d\" .Num}} ({{printf \"%s\" .Emoji}} {{printf \"%s\" .Name}}) on Board"
+  },
+  "games.bicho.thousands_on_head.formatted": {
+    "other": "Thousands {{printf \"%04d\" .Num}} ({{printf \"%s\" .Emoji}} {{printf \"%s\" .Name}}) on Head"
+  },
+  "games.bicho.thousands_on_the_head_st_prize.formatted": {
+    "other": "Thousands {{printf \"%04d\" .TargetNum}} on the Head (1st Prize)"
+  },
+  "games.bicho.ticket_not_drawn": {
+    "other": "Ticket not drawn"
+  },
+  "games.bicho.tiger": {
+    "other": "Tiger"
+  },
+  "games.bicho.turkey": {
+    "other": "Turkey"
+  },
+  "games.bicho.unknown_modality": {
+    "other": "unknown modality"
+  },
+  "games.bicho.winners_payouts_total_prizes_distributed_the_ticket.formatted": {
+    "other": "════════════════════════════════════════\n{{printf \"%s\" .Strings}}\n════════════════════════════════════════\n\n🏆 **Winners & Payouts:**\n{{printf \"%s\" .WinnersText}}\n\n💰 **Total Prizes Distributed:** `{{printf \"%d\" .TotalPayout}} {{printf \"%s\" .CurrencySymbol}}`\n✨ *The ticket office for the next round is now open!*"
+  },
+  "games.bicho.x_per_match": {
+    "other": "3.6x per match"
+  },
+  "games.bicho.x_per_match_0836b5": {
+    "other": "12x per match"
+  },
+  "games.bicho.x_per_match_7cfdbe": {
+    "other": "120x per match"
+  },
+  "games.bicho.x_per_match_c6ba1f": {
+    "other": "800x per match"
+  },
+  "games.blackjack.active": {
+    "other": " 🎯 **[ACTIVE]**"
+  },
+  "games.blackjack.bet": {
+    "other": "💰 Bet"
+  },
+  "games.blackjack.blackjack": {
+    "other": "🃏 Blackjack"
+  },
+  "games.blackjack.blackjack_ee13d8": {
+    "other": "🎉 **BLACKJACK!**"
+  },
+  "games.blackjack.blackjack_game_over": {
+    "other": "🃏 Blackjack - Game Over"
+  },
+  "games.blackjack.blackjack_game_over_split": {
+    "other": "🃏 Blackjack - Game Over (Split)"
+  },
+  "games.blackjack.bust": {
+    "other": " *(Bust)*"
+  },
+  "games.blackjack.bust_0fa043.formatted": {
+    "other": "{{printf \"%d\" .Score}} (Bust)"
+  },
+  "games.blackjack.bust_you_lose": {
+    "other": "💥 **BUST - YOU LOSE**"
+  },
+  "games.blackjack.cannot_double_down_now": {
+    "other": "Cannot double down now."
+  },
+  "games.blackjack.cannot_double_down_on_this_hand": {
+    "other": "Cannot double down on this hand."
+  },
+  "games.blackjack.cannot_split_now": {
+    "other": "Cannot split now."
+  },
+  "games.blackjack.choose_your_action_timeout_in_min": {
+    "other": "Choose your action • Timeout in 2 min"
+  },
+  "games.blackjack.dealer_bust_you_win": {
+    "other": "💥 **DEALER BUST - YOU WIN!**"
+  },
+  "games.blackjack.dealer_s_hand": {
+    "other": "🎰 Dealer's Hand"
+  },
+  "games.blackjack.dealer_wins": {
+    "other": "❌ **DEALER WINS**"
+  },
+  "games.blackjack.double_down": {
+    "other": "Double Down"
+  },
+  "games.blackjack.doubled": {
+    "other": " *(Doubled)*"
+  },
+  "games.blackjack.error_deducting_bet": {
+    "other": "Error deducting bet."
+  },
+  "games.blackjack.failed_to_deduct_double_down_bet": {
+    "other": "Failed to deduct double down bet."
+  },
+  "games.blackjack.failed_to_deduct_split_bet": {
+    "other": "Failed to deduct split bet."
+  },
+  "games.blackjack.failed_to_process_insurance_bet": {
+    "other": "Failed to process insurance bet."
+  },
+  "games.blackjack.game_ended": {
+    "other": "Game ended"
+  },
+  "games.blackjack.game_ended_split": {
+    "other": "Game ended (Split)"
+  },
+  "games.blackjack.hand.formatted": {
+    "other": "🎴 Hand 1{{printf \"%s\" .H1Tag}}"
+  },
+  "games.blackjack.hand_58e253": {
+    "other": "🎴 Hand 1"
+  },
+  "games.blackjack.hand_9eb5b3.formatted": {
+    "other": "🎴 Hand 2{{printf \"%s\" .H2Tag}}"
+  },
+  "games.blackjack.hand_e0c870": {
+    "other": "🎴 Hand 2"
+  },
+  "games.blackjack.hit": {
+    "other": "Hit"
+  },
+  "games.blackjack.inactivity_timeout_min_auto_stand_executed.formatted": {
+    "other": "⏰ <@{{printf \"%s\" .UserID}}> Inactivity timeout (2 min). Auto-stand executed!"
+  },
+  "games.blackjack.insufficient_balance_for_insurance": {
+    "other": "Insufficient balance for insurance!"
+  },
+  "games.blackjack.insufficient_balance_to_double_down": {
+    "other": "Insufficient balance to double down!"
+  },
+  "games.blackjack.insufficient_balance_to_split": {
+    "other": "Insufficient balance to split!"
+  },
+  "games.blackjack.insufficient_balance_you_have.formatted": {
+    "other": "Insufficient balance! You have {{printf \"%d\" .Balance}} {{printf \"%s\" .CurrencySymbol}}"
+  },
+  "games.blackjack.insufficient_balance_you_have.formatted2": {
+    "other": "Insufficient balance! You have {{printf \"%d\" .ChallengerBalance}} {{printf \"%s\" .CurrencySymbol}}"
+  },
+  "games.blackjack.insurance.formatted": {
+    "other": " *(+ {{printf \"%d\" .InsuranceBet}} {{printf \"%s\" .CurrencySymbol}} insurance)*"
+  },
+  "games.blackjack.insurance_e3149c": {
+    "other": "Insurance"
+  },
+  "games.blackjack.insurance_is_not_available": {
+    "other": "Insurance is not available."
+  },
+  "games.blackjack.insurance_lost.formatted": {
+    "other": "\n🛡️ **Insurance lost:** -{{printf \"%d\" .InsuranceBet}} {{printf \"%s\" .CurrencySymbol}}"
+  },
+  "games.blackjack.insurance_paid.formatted": {
+    "other": "\n🛡️ **Insurance paid:** +{{printf \"%d\" .InsurancePayout}} {{printf \"%s\" .CurrencySymbol}}"
+  },
+  "games.blackjack.insurance_purchased_dealer_does_not_have_blackjack.formatted": {
+    "other": "🛡️ Insurance purchased (-{{printf \"%d\" .InsuranceAmount}} {{printf \"%s\" .CurrencySymbol}}). Dealer does NOT have Blackjack!"
+  },
+  "games.blackjack.minimum_bet_is.formatted": {
+    "other": "Minimum bet is 10 {{printf \"%s\" .CurrencySymbol}}"
+  },
+  "games.blackjack.net_loss.formatted": {
+    "other": "💸 **Net Loss:** {{printf \"%d\" .NetProfit}} {{printf \"%s\" .CurrencySymbol}}"
+  },
+  "games.blackjack.net_loss_022d9e.formatted": {
+    "other": "\n💸 **Net Loss:** {{printf \"%d\" .NetProfit}} {{printf \"%s\" .CurrencySymbol}}"
+  },
+  "games.blackjack.net_profit.formatted": {
+    "other": "💰 **Net Profit:** +{{printf \"%d\" .NetProfit}} {{printf \"%s\" .CurrencySymbol}}"
+  },
+  "games.blackjack.net_profit_41a377.formatted": {
+    "other": "\n💰 **Net Profit:** +{{printf \"%d\" .NetProfit}} {{printf \"%s\" .CurrencySymbol}}"
+  },
+  "games.blackjack.net_result_even.formatted": {
+    "other": "⚖️ **Net Result:** Even (0 {{printf \"%s\" .CurrencySymbol}})"
+  },
+  "games.blackjack.net_result_even_19f468.formatted": {
+    "other": "\n⚖️ **Net Result:** Even (0 {{printf \"%s\" .CurrencySymbol}})"
+  },
+  "games.blackjack.new_balance": {
+    "other": "💵 New Balance"
+  },
+  "games.blackjack.no_active_game_found": {
+    "other": "No active game found!"
+  },
+  "games.blackjack.playing_hand_timeout_in_min.formatted": {
+    "other": "Playing Hand {{printf \"%d\" .ActiveHand}} • Timeout in 2 min"
+  },
+  "games.blackjack.push_tie": {
+    "other": "🤝 **PUSH - TIE**"
+  },
+  "games.blackjack.score.formatted": {
+    "other": "{{printf \"%s\" .Value1}}\nScore: **{{printf \"%s\" .DealerScore}}**"
+  },
+  "games.blackjack.score_27158a.formatted": {
+    "other": "{{printf \"%s\" .Value1}}\nScore: **{{printf \"%d\" .Score}}**"
+  },
+  "games.blackjack.score_result.formatted": {
+    "other": "{{printf \"%s\" .Value1}}\nScore: **{{printf \"%d\" .Score}}**\nResult: {{printf \"%s\" .H1Result}}"
+  },
+  "games.blackjack.score_result.formatted1": {
+    "other": "{{printf \"%s\" .Value1}}\nScore: **{{printf \"%d\" .Score}}**\nResult: {{printf \"%s\" .H2Result}}"
+  },
+  "games.blackjack.split": {
+    "other": "Split"
+  },
+  "games.blackjack.stand": {
+    "other": "Stand"
+  },
+  "games.blackjack.surrender": {
+    "other": "Surrender"
+  },
+  "games.blackjack.surrender_is_only_allowed_on_your_opening": {
+    "other": "Surrender is only allowed on your opening two cards."
+  },
+  "games.blackjack.surrender_refunded": {
+    "other": "🏳️ **SURRENDER - 50% REFUNDED**"
+  },
+  "games.blackjack.this_is_not_your_game": {
+    "other": "❌ This is not your game!"
+  },
+  "games.blackjack.you_already_have_an_active_blackjack_game": {
+    "other": "You already have an active Blackjack game! Finish it before starting another."
+  },
+  "games.blackjack.you_can_only_split_cards_of_the": {
+    "other": "You can only split cards of the same rank or value!"
+  },
+  "games.blackjack.you_win": {
+    "other": "✅ **YOU WIN!**"
+  },
+  "games.blackjack.your_hand": {
+    "other": "🎴 Your Hand"
+  },
+  "games.cups.auto_cash_out": {
+    "other": "AUTO CASH-OUT"
+  },
+  "games.cups.cash_out": {
+    "other": "💰 Cash Out"
+  },
+  "games.cups.congratulations_walked_away_with_net_profit.formatted": {
+    "other": "🎉 **Congratulations!**\n<@{{printf \"%s\" .UserID}}> walked away with **{{printf \"%d\" .CurrentPot}} {{printf \"%s\" .CurrencySymbol}}**! *(Net Profit: +{{printf \"%d\" .NetProfit}} {{printf \"%s\" .CurrencySymbol5}})*"
+  },
+  "games.cups.continue_double_or_nothing": {
+    "other": "🎲 Continue (Double or Nothing)"
+  },
+  "games.cups.correct": {
+    "other": "✅ CORRECT!"
+  },
+  "games.cups.cup.formatted": {
+    "other": "Cup {{printf \"%d\" .I}}"
+  },
+  "games.cups.cup_game_round.formatted": {
+    "other": "🥤 Cup Game — Round {{printf \"%d\" .Round}}"
+  },
+  "games.cups.current_pot_round_multiplier_guess_which_cup.formatted": {
+    "other": "Current Pot: **{{printf \"%d\" .CurrentPot}} {{printf \"%s\" .CurrencySymbol}}**\nRound Multiplier: **{{printf \"%s\" .MultiplierText}}**\n\n**Guess which cup contains the coin!** (1 to {{printf \"%d\" .NumCups}})"
+  },
+  "games.cups.error_processing_bet": {
+    "other": "Error processing bet."
+  },
+  "games.cups.game_timed_out_took_too_long_to.formatted": {
+    "other": "⏰ **Game Timed Out!**\n<@{{printf \"%s\" .UserID}}> took too long to pick a cup. Bet lost."
+  },
+  "games.cups.insufficient_funds": {
+    "other": "Insufficient funds."
+  },
+  "games.cups.it_s_your_turn.formatted": {
+    "other": "<@{{printf \"%s\" .UserID}}> It's your turn!"
+  },
+  "games.cups.minimum_bet_is.formatted": {
+    "other": "Minimum bet is {{printf \"%d\" .MinCupBet}} {{printf \"%s\" .CurrencySymbol}}"
+  },
+  "games.cups.minimum_bet_is.formatted1": {
+    "other": "Minimum bet is {{printf \"%d\" .MinEventBet}} {{printf \"%s\" .CurrencySymbol}}"
+  },
+  "games.cups.minimum_bet_is.formatted2": {
+    "other": "Minimum bet is {{printf \"%d\" .MinRouletteBet}} {{printf \"%s\" .CurrencySymbol}}"
+  },
+  "games.cups.minimum_bet_is.formatted3": {
+    "other": "Minimum bet is {{printf \"%d\" .MinRussianRouletteBet}} {{printf \"%s\" .CurrencySymbol}}"
+  },
+  "games.cups.minimum_bet_is.formatted4": {
+    "other": "Minimum bet is {{printf \"%d\" .MinSlotsBet}} {{printf \"%s\" .CurrencySymbol}}"
+  },
+  "games.cups.the_coin_was_in_cup_current_pot.formatted": {
+    "other": "The coin was in **Cup {{printf \"%d\" .WinningCup}}**!\n\n💰 **Current Pot:** {{printf \"%d\" .CurrentPot}} {{printf \"%s\" .CurrencySymbol}} *(+{{printf \"%d\" .NetProfit}} profit)*\n\nDo you want to **Cash Out** now or **Continue** for Double or Nothing (50% chance on 2 cups)?"
+  },
+  "games.cups.this_game_has_already_ended": {
+    "other": "⚠️ This game has already ended."
+  },
+  "games.cups.this_is_not_your_game_only_can.formatted": {
+    "other": "❌ This is not your game! Only <@{{printf \"%s\" .ExpectedUserID}}> can make choices here."
+  },
+  "games.cups.time_expired_automatically_cashed_out_for.formatted": {
+    "other": "⏰ Time expired! Automatically cashed out **{{printf \"%d\" .CurrentPot}} {{printf \"%s\" .CurrencySymbol}}** for <@{{printf \"%s\" .UserID}}>."
+  },
+  "games.cups.wrong_cup": {
+    "other": "❌ WRONG CUP!"
+  },
+  "games.cups.x_double_or_nothing": {
+    "other": "2x (Double or Nothing)"
+  },
+  "games.cups.you_picked_cup_but_the_coin_was.formatted": {
+    "other": "You picked Cup {{printf \"%d\" .Choice}}, but the coin was hiding in **Cup {{printf \"%d\" .WinningCup}}**!\n\n📉 You lost your initial bet of **{{printf \"%d\" .Bet}} {{printf \"%s\" .CurrencySymbol}}**."
+  },
+  "games.cups.you_ran_out_of_funds_before_starting": {
+    "other": "You ran out of funds before starting."
+  },
+  "games.event_commands.active_events": {
+    "other": "Active Events"
+  },
+  "games.event_commands.bet_placed": {
+    "other": "Bet Placed"
+  },
+  "games.event_commands.betting_is_now_closed_use_event_result": {
+    "other": "Betting is now closed. Use /event result to declare the winner."
+  },
+  "games.event_commands.event_cancelled": {
+    "other": "Event Cancelled"
+  },
+  "games.event_commands.event_closed": {
+    "other": "Event Closed"
+  },
+  "games.event_commands.event_not_found_in_this_server": {
+    "other": "Event not found in this server."
+  },
+  "games.event_commands.event_resolved": {
+    "other": "Event Resolved"
+  },
+  "games.event_commands.no_active_betting_events_right_now": {
+    "other": "No active betting events right now."
+  },
+  "games.event_commands.only_the_event_creator_or_a_server": {
+    "other": "Only the event creator or a server administrator can manage this event."
+  },
+  "games.event_commands.provide_an_event_id": {
+    "other": "Provide an event ID."
+  },
+  "games.event_commands.unable_to_close_this_event": {
+    "other": "Unable to close this event."
+  },
+  "games.event_commands.you_need_administrator_or_manage_server_permissions": {
+    "other": "You need Administrator or Manage Server permissions to create betting events."
+  },
+  "games.event_commands.your_event_bet_has_been_registered": {
+    "other": "Your event bet has been registered."
+  },
+  "games.eventbetting.betting_closed": {
+    "other": "🔒 Betting Closed"
+  },
+  "games.eventbetting.betting_is_now_closed_awaiting_result_from.formatted": {
+    "other": "**{{printf \"%s\" .Question}}**\n\nBetting is now closed! Awaiting result from admin/creator.\n\nTotal Pool: **{{printf \"%d\" .TotalPool}} {{printf \"%s\" .CurrencySymbol}}** | Total Bets: **{{printf \"%d\" .TotalBets}}**"
+  },
+  "games.eventbetting.cancelled": {
+    "other": "❌ Cancelled"
+  },
+  "games.eventbetting.closed_awaiting_result": {
+    "other": "🔒 Closed (Awaiting Result)"
+  },
+  "games.eventbetting.distributed_to_winners_house_profit.formatted": {
+    "other": "Distributed **{{printf \"%d\" .TotalDistributed}} {{printf \"%s\" .CurrencySymbol}}** to winners. House profit: **{{printf \"%d\" .HouseProfit}} {{printf \"%s\" .CurrencySymbol4}}**."
+  },
+  "games.eventbetting.duration_must_be_between_and_minutes_hours": {
+    "other": "Duration must be between 1 and 1440 minutes (24 hours)."
+  },
+  "games.eventbetting.ends_in_min.formatted": {
+    "other": " | Ends in {{printf \"%d\" .Value1}} min"
+  },
+  "games.eventbetting.event_cancelled_refunded_to_bettors.formatted": {
+    "other": "Event cancelled. Refunded **{{printf \"%d\" .TotalRefunded}} {{printf \"%s\" .CurrencySymbol}}** to {{printf \"%d\" .Value3}} bettors."
+  },
+  "games.eventbetting.event_id_min_bet.formatted": {
+    "other": "Event ID: {{printf \"%s\" .ID}} | Min Bet: {{printf \"%d\" .MinEventBet}} {{printf \"%s\" .CurrencySymbol}}"
+  },
+  "games.eventbetting.event_id_use_event_result_option_number.formatted": {
+    "other": "Event ID: {{printf \"%s\" .Id}} | Use /event result {{printf \"%s\" .Id2}} <option_number>"
+  },
+  "games.eventbetting.event_not_found": {
+    "other": "Event not found."
+  },
+  "games.eventbetting.event_not_found_or_betting_is_closed": {
+    "other": "Event not found or betting is closed."
+  },
+  "games.eventbetting.failed_to_persist_betting_event_in_database": {
+    "other": "Failed to persist betting event in database."
+  },
+  "games.eventbetting.invalid_option_number_choose_between_and.formatted": {
+    "other": "Invalid option number. Choose between 1 and {{printf \"%d\" .Value1}}."
+  },
+  "games.eventbetting.maximum_options_allowed": {
+    "other": "Maximum 10 options allowed."
+  },
+  "games.eventbetting.need_at_least_options": {
+    "other": "Need at least 2 options."
+  },
+  "games.eventbetting.odds_bets.formatted": {
+    "other": "**{{printf \"%d\" .I}}.** {{printf \"%s\" .Name}} — Odds: **{{printf \"%s\" .OddsStr}}** | Bets: {{printf \"%d\" .TotalBets}} ({{printf \"%d\" .TotalAmount}} {{printf \"%s\" .CurrencySymbol}})\n"
+  },
+  "games.eventbetting.open": {
+    "other": "🟢 Open"
+  },
+  "games.eventbetting.question_must_be_between_and_characters": {
+    "other": "Question must be between 5 and 200 characters."
+  },
+  "games.eventbetting.resolved": {
+    "other": "🏆 Resolved"
+  },
+  "games.eventbetting.status_total_pool_use_event_bet_number.formatted": {
+    "other": "**Status:** {{printf \"%s\" .Status}}\n**Total Pool:** {{printf \"%d\" .TotalPool}} {{printf \"%s\" .CurrencySymbol}}\n\n{{printf \"%s\" .OptionsText}}\n*Use `/event bet {{printf \"%s\" .ID}} <number> <amount>` to place a bet!*"
+  },
+  "games.mines.cash_out_x.formatted": {
+    "other": "💰 Cash Out ({{printf \"%.2f\" .CurrentMultiplier}}x • {{printf \"%d\" .CurrentPayout}} {{printf \"%s\" .CurrencySymbol}})"
+  },
+  "games.mines.current_multiplier": {
+    "other": "📈 Current Multiplier"
+  },
+  "games.mines.find_gems_and_avoid_mines_cash_out": {
+    "other": "Find gems and avoid mines. Cash out after revealing a gem."
+  },
+  "games.mines.gems.formatted": {
+    "other": "**{{printf \"%d\" .RemainingDiamonds}}** gems"
+  },
+  "games.mines.gems_collected": {
+    "other": "🎯 Gems Collected"
+  },
+  "games.mines.initial_bet": {
+    "other": "💵 Initial Bet"
+  },
+  "games.mines.insufficient_funds_you_have.formatted": {
+    "other": "Insufficient funds. You have {{printf \"%d\" .Balance}} {{printf \"%s\" .CurrencySymbol}}"
+  },
+  "games.mines.mines": {
+    "other": "💣 Mines"
+  },
+  "games.mines.mines_automatic_cash_out": {
+    "other": "⏰ Mines — Automatic Cash-Out"
+  },
+  "games.mines.mines_board_cleared": {
+    "other": "🏆 Mines — Board Cleared"
+  },
+  "games.mines.mines_cancelled_due_to_inactivity": {
+    "other": "⏰ Mines — Cancelled Due to Inactivity"
+  },
+  "games.mines.mines_cashed_out": {
+    "other": "💰 Mines — Cashed Out"
+  },
+  "games.mines.mines_f37846.formatted": {
+    "other": "💣 {{printf \"%d\" .MinesCount}} Mines"
+  },
+  "games.mines.mines_gems": {
+    "other": "💣 Mines / Gems"
+  },
+  "games.mines.mines_you_hit_a_mine": {
+    "other": "💥 Mines — You Hit a Mine"
+  },
+  "games.mines.next_step": {
+    "other": "🚀 Next Step"
+  },
+  "games.mines.no_active_game_found_it_may_have": {
+    "other": "❌ No active game found. It may have already ended."
+  },
+  "games.mines.play_again": {
+    "other": "🔄 Play Again"
+  },
+  "games.mines.player": {
+    "other": "👤 Player"
+  },
+  "games.mines.profit.formatted": {
+    "other": "**{{printf \"%d\" .CurrentPayout}} {{printf \"%s\" .CurrencySymbol}}** (Profit: +{{printf \"%d\" .CurrentProfit}} {{printf \"%s\" .CurrencySymbol4}})"
+  },
+  "games.mines.provably_fair_hash.formatted": {
+    "other": "🔒 Provably Fair Hash: {{printf \"%s\" .ServerHash}}"
+  },
+  "games.mines.remaining": {
+    "other": "💎 Remaining"
+  },
+  "games.mines.reveal_at_least_one_gem_before_cashing": {
+    "other": "⚠️ Reveal at least one gem before cashing out."
+  },
+  "games.mines.seed_mines.formatted": {
+    "other": "🔑 Seed: {{printf \"%s\" .ServerSeed}} | Mines: {{printf \"%v\" .MinePositions}}"
+  },
+  "games.mines.the_minimum_bet_is.formatted": {
+    "other": "The minimum bet is {{printf \"%d\" .MinesMinBet}} {{printf \"%s\" .CurrencySymbol}}"
+  },
+  "games.mines.this_game_can_only_be_played_in": {
+    "other": "This game can only be played in a server."
+  },
+  "games.mines.this_mines_game_belongs_to_another_player": {
+    "other": "❌ This Mines game belongs to another player."
+  },
+  "games.mines.time_expired_without_a_move_your_bet.formatted": {
+    "other": "Time expired without a move. Your bet of **{{printf \"%d\" .Bet}} {{printf \"%s\" .CurrencySymbol}}** was refunded."
+  },
+  "games.mines.time_expired_your_profit_of_x_was.formatted": {
+    "other": "Time expired. Your profit of **+{{printf \"%d\" .CurrentProfit}} {{printf \"%s\" .CurrencySymbol}}** ({{printf \"%.2f\" .CurrentMultiplier}}x) was collected automatically."
+  },
+  "games.mines.total_return": {
+    "other": "💸 Total Return"
+  },
+  "games.mines.unable_to_debit_your_bet": {
+    "other": "Unable to debit your bet."
+  },
+  "games.mines.you_already_have_an_active_mines_game": {
+    "other": "You already have an active Mines game. Finish it before starting another."
+  },
+  "games.mines.you_are_already_playing_another_game": {
+    "other": "You are already playing another game."
+  },
+  "games.mines.you_cashed_out_at_x_with_a.formatted": {
+    "other": "You cashed out at **{{printf \"%.2f\" .CurrentMultiplier}}x** with a profit of **+{{printf \"%d\" .CurrentProfit}} {{printf \"%s\" .CurrencySymbol}}**!"
+  },
+  "games.mines.you_found_all_gems_at_x_earning.formatted": {
+    "other": "You found all **{{printf \"%d\" .TotalTiles}} gems** at **{{printf \"%.2f\" .CurrentMultiplier}}x**, earning **{{printf \"%d\" .CurrentPayout}} {{printf \"%s\" .CurrencySymbol}}**!"
+  },
+  "games.mines.you_hit_a_mine_on_tile_and.formatted": {
+    "other": "You hit a mine on tile **#{{printf \"%d\" .ExplodedTile}}** and lost **{{printf \"%d\" .Bet}} {{printf \"%s\" .CurrencySymbol}}**."
+  },
+  "games.roulette.available_bets": {
+    "other": "📋 Available Bets"
+  },
+  "games.roulette.black": {
+    "other": "⚫ Black"
+  },
+  "games.roulette.dozen": {
+    "other": " dozen"
+  },
+  "games.roulette.error_deducting_bet_coins": {
+    "other": "Error deducting bet coins."
+  },
+  "games.roulette.error_sending_roulette_betting_open_message": {
+    "other": "Error sending roulette betting open message: %v"
+  },
+  "games.roulette.error_sending_roulette_result_message": {
+    "other": "Error sending roulette result message: %v"
+  },
+  "games.roulette.even": {
+    "other": "Even"
+  },
+  "games.roulette.high": {
+    "other": "High (19-36)"
+  },
+  "games.roulette.invalid_bet_type_or_value_use_wheel": {
+    "other": "Invalid bet type or value. Use `/wheel status` to see valid options."
+  },
+  "games.roulette.low": {
+    "other": "Low (1-18)"
+  },
+  "games.roulette.minimum_bet": {
+    "other": "💰 Minimum Bet"
+  },
+  "games.roulette.net_winners": {
+    "other": "🏆 Net Winners"
+  },
+  "games.roulette.next_round_starting_shortly": {
+    "other": "Next round starting shortly..."
+  },
+  "games.roulette.no_active_roulette_round_the_casino_wheel": {
+    "other": "No active roulette round. The casino wheel may be initializing."
+  },
+  "games.roulette.no_active_roulette_round_to_spin": {
+    "other": "No active roulette round to spin"
+  },
+  "games.roulette.no_winners_this_round": {
+    "other": "No winners this round."
+  },
+  "games.roulette.none_yet": {
+    "other": "None yet"
+  },
+  "games.roulette.number": {
+    "other": "number "
+  },
+  "games.roulette.odd": {
+    "other": "Odd"
+  },
+  "games.roulette.payout_bet.formatted": {
+    "other": "• <@{{printf \"%s\" .UserID}}>: **+{{printf \"%d\" .NetProfit}} {{printf \"%s\" .CurrencySymbol}}** *(Payout: {{printf \"%d\" .TotalPayout}} {{printf \"%s\" .CurrencySymbol5}}, Bet: {{printf \"%d\" .TotalWagered}} {{printf \"%s\" .CurrencySymbol7}})*\n"
+  },
+  "games.roulette.place_your_bets_the_wheel_spins_t.formatted": {
+    "other": "Place your bets! The wheel spins <t:{{printf \"%d\" .EndTime}}:R>."
+  },
+  "games.roulette.recent_spins": {
+    "other": "📜 Recent Spins"
+  },
+  "games.roulette.red": {
+    "other": "🔴 Red"
+  },
+  "games.roulette.refunded_bets_on_roulette_shutdown": {
+    "other": "Refunded %d bets on roulette shutdown"
+  },
+  "games.roulette.roulette_already_spinning": {
+    "other": "Roulette already spinning"
+  },
+  "games.roulette.roulette_betting_open": {
+    "other": "🎰 ROULETTE - Betting Open!"
+  },
+  "games.roulette.roulette_channel_id_not_configured_set_roulette": {
+    "other": "Roulette channel ID not configured. Set 'roulette_channel_id' in config.json"
+  },
+  "games.roulette.roulette_is_disabled_in_configuration": {
+    "other": "Roulette is disabled in configuration"
+  },
+  "games.roulette.roulette_result": {
+    "other": "Roulette result: %d (%s)"
+  },
+  "games.roulette.roulette_result_5075f4": {
+    "other": "🎰 ROULETTE - Result!"
+  },
+  "games.roulette.roulette_stopped": {
+    "other": "Roulette stopped"
+  },
+  "games.roulette.roulette_ticker_triggered_spinning_wheel": {
+    "other": "Roulette ticker triggered - spinning wheel"
+  },
+  "games.roulette.round_stats": {
+    "other": "📊 Round Stats"
+  },
+  "games.roulette.spin_time": {
+    "other": "⏰ Spin Time"
+  },
+  "games.roulette.starting_new_roulette_round_next_spin_at": {
+    "other": "Starting new roulette round. Next spin at %s"
+  },
+  "games.roulette.starting_roulette_with_minute_intervals_in_channel": {
+    "other": "Starting Roulette with %d minute intervals in channel %s"
+  },
+  "games.roulette.the_ball_landed_on.formatted": {
+    "other": "# {{printf \"%s\" .Emoji}} **{{printf \"%d\" .ResultNum}} ({{printf \"%s\" .Strings}})**\n\nThe ball landed on **{{printf \"%s\" .Strings4}} {{printf \"%d\" .ResultNum5}}**!"
+  },
+  "games.roulette.this_command_can_only_be_used_within": {
+    "other": "This command can only be used within a server."
+  },
+  "games.roulette.too_late_the_wheel_is_already_spinning": {
+    "other": "Too late! The wheel is already spinning for this round."
+  },
+  "games.roulette.total_bets_total_wagered.formatted": {
+    "other": "Total Bets: {{printf \"%d\" .TotalBets}} | Total Wagered: {{printf \"%d\" .TotalAmount}} {{printf \"%s\" .CurrencySymbol}}"
+  },
+  "games.roulette.use_wheel_status_to_check_countdown_from": {
+    "other": "🍀 Use /wheel status to check countdown from any channel!"
+  },
+  "games.roulette.wheel_bet_type_number_number_amount_coins": {
+    "other": "• `/wheel bet type:number number:<0-36> amount:<coins>` - **35:1**\n• `/wheel bet type:red amount:<coins>` or `/wheel bet type:black amount:<coins>` - **1:1**\n• `/wheel bet type:even amount:<coins>` or `/wheel bet type:odd amount:<coins>` - **1:1**\n• `/wheel bet type:low amount:<coins>` (1-18) or `/wheel bet type:high amount:<coins>` (19-36) - **1:1**\n• `/wheel bet type:<dozen> amount:<coins>` - **2:1**"
+  },
+  "games.russianroulette.accept": {
+    "other": "✅ Accept"
+  },
+  "games.russianroulette.challenged_to_a_game_of_russian_roulette.formatted": {
+    "other": "<@{{printf \"%s\" .ChallengerID}}> challenged <@{{printf \"%s\" .ChallengedID}}> to a game of Russian Roulette!"
+  },
+  "games.russianroulette.challenger_s_bet_has_been_reserved_in": {
+    "other": "Challenger's bet has been reserved in escrow."
+  },
+  "games.russianroulette.chamber_result": {
+    "other": "🎲 Chamber Result"
+  },
+  "games.russianroulette.chamber_was_empty.formatted": {
+    "other": "Chamber {{printf \"%d\" .ShotPos}} was empty!"
+  },
+  "games.russianroulette.click_pulled_the_trigger_and_survived.formatted": {
+    "other": "😅 **CLICK!** <@{{printf \"%s\" .Survivor}}> pulled the trigger and... **SURVIVED!**"
+  },
+  "games.russianroulette.cylinder": {
+    "other": "🔫 Cylinder"
+  },
+  "games.russianroulette.decline": {
+    "other": "❌ Decline"
+  },
+  "games.russianroulette.declined_the_challenge_s_bet_of_has.formatted": {
+    "other": "❌ <@{{printf \"%s\" .UserID}}> declined the challenge! <@{{printf \"%s\" .ChallengerID}}>'s bet of {{printf \"%d\" .Bet}} {{printf \"%s\" .CurrencySymbol}} has been refunded."
+  },
+  "games.russianroulette.did_not_respond_to_s_challenge_in.formatted": {
+    "other": "⏰ <@{{printf \"%s\" .ChallengedID}}> did not respond to <@{{printf \"%s\" .ChallengerID}}>'s challenge in time! Challenge expired and {{printf \"%d\" .Bet}} {{printf \"%s\" .CurrencySymbol}} refunded to challenger."
+  },
+  "games.russianroulette.does_not_have_enough_balance_to_accept.formatted": {
+    "other": "❌ <@{{printf \"%s\" .ChallengedID}}> does not have enough balance to accept! Bet refunded."
+  },
+  "games.russianroulette.don_t_accept_duels_if_you_re": {
+    "other": "Don't accept duels if you're too afraid to shoot!"
+  },
+  "games.russianroulette.error_processing_bet_challenge_cancelled_and_challenger": {
+    "other": "❌ Error processing bet. Challenge cancelled and challenger refunded."
+  },
+  "games.russianroulette.error_reserving_bet_coins": {
+    "other": "Error reserving bet coins."
+  },
+  "games.russianroulette.game_not_found_or_already_finished": {
+    "other": "❌ Game not found or already finished!"
+  },
+  "games.russianroulette.game_over_the_survivor_takes_all": {
+    "other": "Game Over - The survivor takes all!"
+  },
+  "games.russianroulette.it_s_not_your_turn": {
+    "other": "❌ It's not your turn!"
+  },
+  "games.russianroulette.it_s_s_turn_you_have_seconds.formatted": {
+    "other": "It's **{{printf \"%s\" .CurrentPlayerName}}**'s turn!\nYou have **45 seconds** to pull the trigger..."
+  },
+  "games.russianroulette.next_turn": {
+    "other": "🔄 Next Turn"
+  },
+  "games.russianroulette.no_pending_challenge_found": {
+    "other": "❌ No pending challenge found!"
+  },
+  "games.russianroulette.no_pending_challenge_found_for_you": {
+    "other": "❌ No pending challenge found for you!"
+  },
+  "games.russianroulette.player": {
+    "other": "👤 Player 1"
+  },
+  "games.russianroulette.player_07e8d4": {
+    "other": "👤 Player 2"
+  },
+  "games.russianroulette.position.formatted": {
+    "other": "Position {{printf \"%d\" .CurrentShot}}/6"
+  },
+  "games.russianroulette.pot": {
+    "other": "💰 Pot"
+  },
+  "games.russianroulette.pow_pulled_the_trigger_and_the_chamber.formatted": {
+    "other": "💥 **POW!** <@{{printf \"%s\" .LoserID}}> pulled the trigger and the chamber was **LOADED!**"
+  },
+  "games.russianroulette.prize": {
+    "other": "💰 Prize"
+  },
+  "games.russianroulette.round": {
+    "other": "🎲 Round"
+  },
+  "games.russianroulette.round_fatal_shot_position.formatted": {
+    "other": "Round: {{printf \"%d\" .RoundNum}} | Fatal shot position: {{printf \"%d\" .ShotPos}}/6"
+  },
+  "games.russianroulette.russian_roulette": {
+    "other": "🔫 Russian Roulette"
+  },
+  "games.russianroulette.russian_roulette_challenge": {
+    "other": "🔫 Russian Roulette Challenge"
+  },
+  "games.russianroulette.russian_roulette_duel": {
+    "other": "🔫 Russian Roulette Duel"
+  },
+  "games.russianroulette.russian_roulette_forfeit_timed_out": {
+    "other": "🔫 Russian Roulette - FORFEIT (TIMED OUT)"
+  },
+  "games.russianroulette.russian_roulette_game_over": {
+    "other": "🔫 Russian Roulette - GAME OVER"
+  },
+  "games.russianroulette.s_turn.formatted": {
+    "other": "<@{{printf \"%s\" .NextPlayer}}>'s turn..."
+  },
+  "games.russianroulette.seconds_to_accept": {
+    "other": "30 seconds to accept"
+  },
+  "games.russianroulette.shoot": {
+    "other": "🔫 SHOOT"
+  },
+  "games.russianroulette.shot_details": {
+    "other": "🎲 Shot Details"
+  },
+  "games.russianroulette.survivor_takes_pull_the_trigger_with_the.formatted": {
+    "other": "Survivor takes {{printf \"%d\" .TotalPot}} {{printf \"%s\" .CurrencySymbol}}! Pull the trigger with the button below."
+  },
+  "games.russianroulette.survivor_winner": {
+    "other": "🏆 Survivor / Winner"
+  },
+  "games.russianroulette.this_user_already_has_a_pending_challenge": {
+    "other": "This user already has a pending challenge!"
+  },
+  "games.russianroulette.this_user_is_already_in_an_active": {
+    "other": "This user is already in an active game!"
+  },
+  "games.russianroulette.time": {
+    "other": "⏱️ Time"
+  },
+  "games.russianroulette.took_longer_than_seconds_to_pull_the.formatted": {
+    "other": "⏰ <@{{printf \"%s\" .LoserID}}> took longer than 45 seconds to pull the trigger and fled!\n\n🏆 **Winner by default:** <@{{printf \"%s\" .WinnerID}}>\n💰 **Prize Awarded:** {{printf \"%d\" .TotalPot}} {{printf \"%s\" .CurrencySymbol}}"
+  },
+  "games.russianroulette.total_pot": {
+    "other": "💰 Total Pot"
+  },
+  "games.russianroulette.you_already_have_an_outgoing_challenge_waiting": {
+    "other": "You already have an outgoing challenge waiting for a response!"
+  },
+  "games.russianroulette.you_are_already_in_an_active_game": {
+    "other": "You are already in an active game!"
+  },
+  "games.russianroulette.you_cannot_challenge_bots": {
+    "other": "You cannot challenge bots!"
+  },
+  "games.russianroulette.you_cannot_challenge_yourself": {
+    "other": "You cannot challenge yourself!"
+  },
+  "games.russianroulette.you_have_been_challenged.formatted": {
+    "other": "<@{{printf \"%s\" .ChallengedID}}>, you have been challenged!"
+  },
+  "games.russianroulette.your_turn": {
+    "other": " ⬅️ **(Your turn)**"
+  },
+  "games.slots.error_processing_your_bet": {
+    "other": "❌ Error processing your bet."
+  },
+  "games.slots.insufficient_balance_you_need.formatted": {
+    "other": "Insufficient balance! You need {{printf \"%d\" .Bet}} {{printf \"%s\" .CurrencySymbol}}."
+  },
+  "games.slots.insufficient_balance_you_need_to_spin_again.formatted": {
+    "other": "❌ Insufficient balance! You need {{printf \"%d\" .Bet}} {{printf \"%s\" .CurrencySymbol}} to spin again."
+  },
+  "games.slots.jackpot": {
+    "other": "🎰💰 JACKPOT! 💰🎰"
+  },
+  "games.slots.leave": {
+    "other": "🛑 Leave"
+  },
+  "games.slots.match_win": {
+    "other": "🎉 Match Win!"
+  },
+  "games.slots.no_luck": {
+    "other": "😢 No Luck!"
+  },
+  "games.slots.no_matching_symbols_this_time": {
+    "other": "💔 No matching symbols this time."
+  },
+  "games.slots.pair_of.formatted": {
+    "other": "✨ **Pair of {{printf \"%s\" .Emoji}}!**"
+  },
+  "games.slots.pair_of_cherries_your_bet_of_was.formatted": {
+    "other": "🍒 **Pair of Cherries!** Your bet of {{printf \"%d\" .Bet}} {{printf \"%s\" .Currency}} was refunded."
+  },
+  "games.slots.pulled_the_lever_bet_reels_are_spinning.formatted": {
+    "other": "**{{printf \"%s\" .Username}}** pulled the lever!\n\n# 🎰 | 🎰 | 🎰\n\n**Bet:** {{printf \"%d\" .Bet}} {{printf \"%s\" .CurrencySymbol}}\n*Reels are spinning...*"
+  },
+  "games.slots.push_bet_returned": {
+    "other": "🍒 Push - Bet Returned"
+  },
+  "games.slots.slot_machine": {
+    "other": "🎰 Slot Machine"
+  },
+  "games.slots.spin_again.formatted": {
+    "other": "🎰 Spin Again ({{printf \"%d\" .Bet}} {{printf \"%s\" .CurrencySymbol}})"
+  },
+  "games.slots.spun_the_reels_bet_multiplier_x_total.formatted": {
+    "other": "**{{printf \"%s\" .Username}}** spun the reels!\n\n{{printf \"%s\" .SlotsDisplay}}\n\n{{printf \"%s\" .OutcomeText}}\n\n**Bet:** {{printf \"%d\" .Bet}} {{printf \"%s\" .Currency}}\n**Multiplier:** {{printf \"%.1f\" .Multiplier}}x\n**Total Payout:** {{printf \"%d\" .WinAmount}} {{printf \"%s\" .Currency8}}\n**Net Profit:** {{printf \"%s\" .ProfitStr}}"
+  },
+  "games.slots.stepped_away_from_the_slot_machine_thanks.formatted": {
+    "other": "<@{{printf \"%s\" .ExpectedUser}}> stepped away from the slot machine. Thanks for playing!"
+  },
+  "games.slots.the_reels_are_rolling.formatted": {
+    "other": "<@{{printf \"%s\" .UserID}}> The reels are rolling!"
+  },
+  "games.slots.the_reels_are_rolling_again.formatted": {
+    "other": "<@{{printf \"%s\" .ExpectedUser}}> The reels are rolling again!"
+  },
+  "games.slots.this_session_has_expired_start_a_new": {
+    "other": "❌ This session has expired. Start a new game with `/slots <bet>` or `/bet slots`!"
+  },
+  "games.slots.x_jackpot_hit.formatted": {
+    "other": "🎉 **3x {{printf \"%s\" .Emoji}}! JACKPOT HIT!**"
+  }
+}

@@ -1,0 +1,116 @@
+{
+  "polymarket.oracle.and_more_winners": {
+    "other": "...\n*(and more winners)*"
+  },
+  "polymarket.oracle.polymarket_market_cancelled_the_event_was_officially.formatted": {
+    "other": "⚠️ **POLYMARKET MARKET CANCELLED**\nThe event **\"{{printf \"%s\" .Question}}\"** was officially cancelled. All bets from {{printf \"%d\" .Value2}} participants were fully refunded."
+  },
+  "polymarket.oracle.polymarket_market_resolved_event_official_outcome_winners.formatted": {
+    "other": "🏆 **POLYMARKET MARKET RESOLVED**\n\n📌 **Event:** {{printf \"%s\" .Question}}\n🎯 **Official Outcome:** **{{printf \"%s\" .Strings}}**\n\n🎉 **Winners (100 EC per share):**\n{{printf \"%s\" .Strings3}}\n\n💰 **Total Paid:** **{{printf \"%d\" .TotalPaid}} {{printf \"%s\" .CurrencySymbol}}**!"
+  },
+  "polymarket.oracle.polymarket_market_resolved_the_event_ended_with.formatted": {
+    "other": "🏆 **POLYMARKET MARKET RESOLVED**\nThe event **\"{{printf \"%s\" .Question}}\"** ended with outcome **{{printf \"%s\" .Strings}}**.\nNo server members held winning shares."
+  },
+  "polymarket.service.buy_no_ec.formatted": {
+    "other": "Buy NO ({{printf \"%d\" .TotalCost}} EC)"
+  },
+  "polymarket.service.buy_shares.formatted": {
+    "other": "Buy Shares: {{printf \"%s\" .Strings}}"
+  },
+  "polymarket.service.buy_yes_ec.formatted": {
+    "other": "Buy YES ({{printf \"%d\" .TotalCost}} EC)"
+  },
+  "polymarket.service.category": {
+    "other": "🏷️ Category"
+  },
+  "polymarket.service.current_price_per_share_including_fees": {
+    "other": "Current price per share (including fees):"
+  },
+  "polymarket.service.each_winning_share_is_automatically_redeemed_for": {
+    "other": "Each winning share is automatically redeemed for 100 EC at settlement."
+  },
+  "polymarket.service.ec_share_payout_ec.formatted": {
+    "other": "**{{printf \"%d\" .TotalCost}} EC** / share\n*Payout: 100 EC*"
+  },
+  "polymarket.service.example_estimated_cost_ec.formatted": {
+    "other": "Example: 10 (estimated cost: {{printf \"%d\" .TotalCost}} EC)"
+  },
+  "polymarket.service.expected_closing_time": {
+    "other": "📅 Expected Closing Time"
+  },
+  "polymarket.service.house_fee": {
+    "other": "🏛️ House Fee"
+  },
+  "polymarket.service.id_polymarket_id_live_prices.formatted": {
+    "other": "ID: {{printf \"%s\" .ID}} | Polymarket ID: {{printf \"%s\" .PolymarketID}} | Live prices"
+  },
+  "polymarket.service.market": {
+    "other": "Market #"
+  },
+  "polymarket.service.market_cancelled_bets_refunded": {
+    "other": "❌ Market Cancelled — Bets Refunded"
+  },
+  "polymarket.service.market_closed_awaiting_outcome": {
+    "other": "🔒 Market Closed — Awaiting Outcome"
+  },
+  "polymarket.service.market_resolved_won.formatted": {
+    "other": "🏆 Market Resolved: {{printf \"%s\" .Strings}} Won"
+  },
+  "polymarket.service.markets.formatted": {
+    "other": "**{{printf \"%d\" .Value1}} markets**"
+  },
+  "polymarket.service.maximum_potential_return": {
+    "other": "🏆 Maximum Potential Return"
+  },
+  "polymarket.service.my_shares": {
+    "other": "💼 My Shares"
+  },
+  "polymarket.service.my_shares_267c56": {
+    "other": "My Shares"
+  },
+  "polymarket.service.no_price": {
+    "other": "🔴 No Price"
+  },
+  "polymarket.service.open_market_polymarket": {
+    "other": "📊 Open Market — Polymarket"
+  },
+  "polymarket.service.open_positions": {
+    "other": "📊 Open Positions"
+  },
+  "polymarket.service.polymarket_market": {
+    "other": "📊 Polymarket Market"
+  },
+  "polymarket.service.polymarket_portfolio.formatted": {
+    "other": "💼 Polymarket Portfolio — <@{{printf \"%s\" .UserID}}>"
+  },
+  "polymarket.service.refresh": {
+    "other": "Refresh"
+  },
+  "polymarket.service.share_ec_pays_ec_if_it_wins.formatted": {
+    "other": "1 share = {{printf \"%d\" .TotalCost}} EC | Pays 100 EC if it wins"
+  },
+  "polymarket.service.share_quantity_winning_shares_pay_ec": {
+    "other": "Share quantity (winning shares pay 100 EC)"
+  },
+  "polymarket.service.shares_average_price_ec_invested_potential_return.formatted": {
+    "other": "{{printf \"%s\" .Emoji}} **{{printf \"%s\" .Q}}** ({{printf \"%s\" .Outcome}})\n• **{{printf \"%d\" .Shares}} shares** | Average price: `{{printf \"%.1f\" .AvgPrice}} EC`\n• Invested: `{{printf \"%d\" .TotalInvested}} {{printf \"%s\" .CurrencySymbol}}` | Potential return: `+{{printf \"%d\" .Payout}} {{printf \"%s\" .CurrencySymbol9}}`\n"
+  },
+  "polymarket.service.status.formatted": {
+    "other": "Status: {{printf \"%s\" .Strings}}"
+  },
+  "polymarket.service.total_invested": {
+    "other": "💰 Total Invested"
+  },
+  "polymarket.service.yes_no.formatted": {
+    "other": "🟢 **YES**: `{{printf \"%d\" .YesPct}}%` [{{printf \"%s\" .Bar}}] `{{printf \"%d\" .NoPct}}%` :**NO** 🔴"
+  },
+  "polymarket.service.yes_price": {
+    "other": "🟢 Yes Price"
+  },
+  "polymarket.service.you_do_not_hold_any_active_polymarket": {
+    "other": "You do not hold any active Polymarket shares.\nUse /poly trending or browse the dedicated channel to start trading."
+  },
+  "polymarket.service.your_polymarket_portfolio": {
+    "other": "💼 Your Polymarket Portfolio"
+  }
+}

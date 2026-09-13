@@ -7,8 +7,8 @@ import (
 
 func TestGachaSlashDefinitions(t *testing.T) {
 	wanted := map[string]bool{
-		"roll": false, "top": false, "info": false, "harem": false, "perfil": false,
-		"galeria": false, "wishlist": false, "troca": false, "presente": false, "divorcio": false,
+		"roll": false, "top": false, "info": false, "harem": false, "profile": false,
+		"gallery": false, "wishlist": false, "trade": false, "gift": false, "divorce": false,
 	}
 	for _, cmd := range SlashCommands {
 		if _, ok := wanted[cmd.Name]; !ok {
@@ -31,7 +31,7 @@ func TestGachaSlashDefinitions(t *testing.T) {
 			} else if optional {
 				t.Fatalf("required option follows optional in %s", cmd.Name)
 			}
-			if o.Name == "membro" && o.Type != discordgo.ApplicationCommandOptionUser {
+			if o.Name == "member" && o.Type != discordgo.ApplicationCommandOptionUser {
 				t.Fatal("membro must use Discord user selection")
 			}
 		}

@@ -83,13 +83,12 @@ func main() {
 	}
 
 	// Register Handlers
-	dg.AddHandler(commands.MessageCreate)
 	dg.AddHandler(commands.SlashHandler)
 	dg.AddHandler(commands.ComponentsHandler)
 	dg.AddHandler(events.VoiceStateUpdate)
 
 	// Identify Intent
-	dg.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMessages | discordgo.IntentsGuildVoiceStates | discordgo.IntentsMessageContent
+	dg.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildVoiceStates
 
 	// Open Websocket
 	err = dg.Open()
@@ -124,7 +123,7 @@ func main() {
 
 	// Register Slash Commands in a single bulk request to avoid Discord rate limits
 	log.Println("Registering slash commands...")
-	_, err = dg.ApplicationCommandBulkOverwrite(dg.State.User.ID, "", commands.SlashCommands)
+	_, err = dg.ApplicationCommandBulkOverwrite(dg.State.User.ID, "", commands.ApplicationCommands())
 	if err != nil {
 		log.Printf("Warning: cannot bulk overwrite slash commands: %v", err)
 	} else {

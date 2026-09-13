@@ -1,11 +1,12 @@
 package games
 
 import (
-	"crypto/rand"
-	"encoding/binary"
 	"bot/internal/database"
+	"bot/internal/locale"
 	"bot/pkg/config"
 	"bot/pkg/utils"
+	"crypto/rand"
+	"encoding/binary"
 	"fmt"
 	"strings"
 	"sync"
@@ -84,166 +85,10 @@ func isPlayerInGame(playerID string) bool {
 	return false
 }
 
-// CmdRussianRoulette handles text challenge: !roulette @user <amount>
-func CmdRussianRoulette(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
-	if m.GuildID == "" {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("This command can only be used within a server."))
-		return
-	}
-	guildID := m.GuildID
-
-	if len(args) < 2 {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.InfoEmbed("🔫 Russian Roulette",
-			"Usage: `!roulette @user <amount>`\n\nChallenge another user to a game of Russian Roulette. Winner takes all!"))
-		return
-	}
-
-	amount, err := parseAmount(args[len(args)-1])
-	if err != nil || amount <= 0 {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Invalid amount. Use a positive number."))
-		return
-	}
-
-	if amount < MinRussianRouletteBet {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(fmt.Sprintf("Minimum bet is %d %s", MinRussianRouletteBet, config.Bot.CurrencySymbol)))
-		return
-	}
-
-	userArg := args[0]
-	challengedID := ""
-
-	if strings.HasPrefix(userArg, "<@") && strings.HasSuffix(userArg, ">") {
-		challengedID = strings.TrimPrefix(userArg, "<@")
-		challengedID = strings.TrimPrefix(challengedID, "!")
-		challengedID = strings.TrimSuffix(challengedID, ">")
-	} else {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Mention a valid user. Example: `!roulette @user 100`"))
-		return
-	}
-
-	challengerID := m.Author.ID
-
-	if challengedID == challengerID {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("You cannot challenge yourself!"))
-		return
-	}
-
-	challengedMember, err := s.GuildMember(guildID, challengedID)
-	if err != nil || challengedMember.User.Bot {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Invalid user or bot."))
-		return
-	}
-
-	// Concurrency checks
-	pendingMu.Lock()
-	if _, exists := challengerPending[challengerID]; exists {
-		pendingMu.Unlock()
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("You already have an outgoing challenge waiting for a response!"))
-		return
-	}
-	if _, exists := pendingChallenges[challengedID]; exists {
-		pendingMu.Unlock()
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("This user already has a pending challenge!"))
-		return
-	}
-	pendingMu.Unlock()
-
-	if isPlayerInGame(challengerID) || IsUserInGame(challengerID) {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("You are already in an active game!"))
-		return
-	}
-	if isPlayerInGame(challengedID) || IsUserInGame(challengedID) {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("This user is already in an active game!"))
-		return
-	}
-
-	challengerBalance := database.GetBalance(guildID, challengerID)
-	if challengerBalance < amount {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(fmt.Sprintf("Insufficient balance! You have %d %s", challengerBalance, config.Bot.CurrencySymbol)))
-		return
-	}
-
-	// Atomically reserve challenger's bet
-	if err := database.CollectLostBet(guildID, challengerID, amount); err != nil {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Error reserving bet coins."))
-		return
-	}
-	RegisterActivePlayer(challengerID)
-
-	embed := &discordgo.MessageEmbed{
-		Title:       "🔫 Russian Roulette Challenge",
-		Description: fmt.Sprintf("<@%s> challenged <@%s> to a game of Russian Roulette!", challengerID, challengedID),
-		Color:       0x8B0000,
-		Fields: []*discordgo.MessageEmbedField{
-			{
-				Name:   "💰 Bet",
-				Value:  fmt.Sprintf("%d %s", amount, config.Bot.CurrencySymbol),
-				Inline: true,
-			},
-			{
-				Name:   "⏱️ Time",
-				Value:  "30 seconds to accept",
-				Inline: true,
-			},
-		},
-		Footer: &discordgo.MessageEmbedFooter{
-			Text: "Challenger's bet has been reserved in escrow.",
-		},
-	}
-
-	buttons := []discordgo.MessageComponent{
-		discordgo.ActionsRow{
-			Components: []discordgo.MessageComponent{
-				discordgo.Button{
-					Label:    "✅ Accept",
-					Style:    discordgo.SuccessButton,
-					CustomID: fmt.Sprintf("rr_accept_%s_%s", challengerID, challengedID),
-				},
-				discordgo.Button{
-					Label:    "❌ Decline",
-					Style:    discordgo.DangerButton,
-					CustomID: fmt.Sprintf("rr_decline_%s_%s", challengerID, challengedID),
-				},
-			},
-		},
-	}
-
-	msg, err := s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
-		Content:    fmt.Sprintf("<@%s>, you have been challenged!", challengedID),
-		Embeds:     []*discordgo.MessageEmbed{embed},
-		Components: buttons,
-	})
-
-	if err != nil || msg == nil {
-		_ = database.AddCoins(guildID, challengerID, amount)
-		UnregisterActivePlayer(challengerID)
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Failed to send challenge message."))
-		return
-	}
-
-	challenge := &RussianRouletteChallenge{
-		GuildID:      guildID,
-		ChallengerID: challengerID,
-		ChallengedID: challengedID,
-		Bet:          amount,
-		ChannelID:    m.ChannelID,
-		MessageID:    msg.ID,
-	}
-
-	challenge.TimeoutTimer = time.AfterFunc(ChallengeTimeout, func() {
-		expireChallenge(s, challengedID)
-	})
-
-	pendingMu.Lock()
-	pendingChallenges[challengedID] = challenge
-	challengerPending[challengerID] = challengedID
-	pendingMu.Unlock()
-}
-
 // StartRussianRouletteInteraction handles slash command /roulette challenge @user amount
 func StartRussianRouletteInteraction(s *discordgo.Session, i *discordgo.InteractionCreate, challenged *discordgo.User, amount int) {
 	if i.GuildID == "" {
-		respondPrivate(s, i, utils.ErrorEmbed("This command can only be used within a server."))
+		respondPrivate(s, i, utils.ErrorEmbed(locale.Text("games.roulette.this_command_can_only_be_used_within")))
 		return
 	}
 	guildID := i.GuildID
@@ -251,73 +96,73 @@ func StartRussianRouletteInteraction(s *discordgo.Session, i *discordgo.Interact
 	challengedID := challenged.ID
 
 	if amount < MinRussianRouletteBet {
-		respondPrivate(s, i, utils.ErrorEmbed(fmt.Sprintf("Minimum bet is %d %s", MinRussianRouletteBet, config.Bot.CurrencySymbol)))
+		respondPrivate(s, i, utils.ErrorEmbed(locale.Text("games.cups.minimum_bet_is.formatted3", locale.Data{"MinRussianRouletteBet": MinRussianRouletteBet, "CurrencySymbol": config.Bot.CurrencySymbol})))
 		return
 	}
 
 	if challengedID == challengerID {
-		respondPrivate(s, i, utils.ErrorEmbed("You cannot challenge yourself!"))
+		respondPrivate(s, i, utils.ErrorEmbed(locale.Text("games.russianroulette.you_cannot_challenge_yourself")))
 		return
 	}
 
 	if challenged.Bot {
-		respondPrivate(s, i, utils.ErrorEmbed("You cannot challenge bots!"))
+		respondPrivate(s, i, utils.ErrorEmbed(locale.Text("games.russianroulette.you_cannot_challenge_bots")))
 		return
 	}
 
 	pendingMu.Lock()
 	if _, exists := challengerPending[challengerID]; exists {
 		pendingMu.Unlock()
-		respondPrivate(s, i, utils.ErrorEmbed("You already have an outgoing challenge waiting for a response!"))
+		respondPrivate(s, i, utils.ErrorEmbed(locale.Text("games.russianroulette.you_already_have_an_outgoing_challenge_waiting")))
 		return
 	}
 	if _, exists := pendingChallenges[challengedID]; exists {
 		pendingMu.Unlock()
-		respondPrivate(s, i, utils.ErrorEmbed("This user already has a pending challenge!"))
+		respondPrivate(s, i, utils.ErrorEmbed(locale.Text("games.russianroulette.this_user_already_has_a_pending_challenge")))
 		return
 	}
 	pendingMu.Unlock()
 
 	if isPlayerInGame(challengerID) || IsUserInGame(challengerID) {
-		respondPrivate(s, i, utils.ErrorEmbed("You are already in an active game!"))
+		respondPrivate(s, i, utils.ErrorEmbed(locale.Text("games.russianroulette.you_are_already_in_an_active_game")))
 		return
 	}
 	if isPlayerInGame(challengedID) || IsUserInGame(challengedID) {
-		respondPrivate(s, i, utils.ErrorEmbed("This user is already in an active game!"))
+		respondPrivate(s, i, utils.ErrorEmbed(locale.Text("games.russianroulette.this_user_is_already_in_an_active")))
 		return
 	}
 
 	challengerBalance := database.GetBalance(guildID, challengerID)
 	if challengerBalance < amount {
-		respondPrivate(s, i, utils.ErrorEmbed(fmt.Sprintf("Insufficient balance! You have %d %s", challengerBalance, config.Bot.CurrencySymbol)))
+		respondPrivate(s, i, utils.ErrorEmbed(locale.Text("games.blackjack.insufficient_balance_you_have.formatted2", locale.Data{"ChallengerBalance": challengerBalance, "CurrencySymbol": config.Bot.CurrencySymbol})))
 		return
 	}
 
 	// Reserve coins in escrow
 	if err := database.CollectLostBet(guildID, challengerID, amount); err != nil {
-		respondPrivate(s, i, utils.ErrorEmbed("Error reserving bet coins."))
+		respondPrivate(s, i, utils.ErrorEmbed(locale.Text("games.russianroulette.error_reserving_bet_coins")))
 		return
 	}
 	RegisterActivePlayer(challengerID)
 
 	embed := &discordgo.MessageEmbed{
-		Title:       "🔫 Russian Roulette Challenge",
-		Description: fmt.Sprintf("<@%s> challenged <@%s> to a game of Russian Roulette!", challengerID, challengedID),
+		Title:       locale.Text("games.russianroulette.russian_roulette_challenge"),
+		Description: locale.Text("games.russianroulette.challenged_to_a_game_of_russian_roulette.formatted", locale.Data{"ChallengerID": challengerID, "ChallengedID": challengedID}),
 		Color:       0x8B0000,
 		Fields: []*discordgo.MessageEmbedField{
 			{
-				Name:   "💰 Bet",
+				Name:   locale.Text("games.blackjack.bet"),
 				Value:  fmt.Sprintf("%d %s", amount, config.Bot.CurrencySymbol),
 				Inline: true,
 			},
 			{
-				Name:   "⏱️ Time",
-				Value:  "30 seconds to accept",
+				Name:   locale.Text("games.russianroulette.time"),
+				Value:  locale.Text("games.russianroulette.seconds_to_accept"),
 				Inline: true,
 			},
 		},
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: "Challenger's bet has been reserved in escrow.",
+			Text: locale.Text("games.russianroulette.challenger_s_bet_has_been_reserved_in"),
 		},
 	}
 
@@ -325,12 +170,12 @@ func StartRussianRouletteInteraction(s *discordgo.Session, i *discordgo.Interact
 		discordgo.ActionsRow{
 			Components: []discordgo.MessageComponent{
 				discordgo.Button{
-					Label:    "✅ Accept",
+					Label:    locale.Text("games.russianroulette.accept"),
 					Style:    discordgo.SuccessButton,
 					CustomID: fmt.Sprintf("rr_accept_%s_%s", challengerID, challengedID),
 				},
 				discordgo.Button{
-					Label:    "❌ Decline",
+					Label:    locale.Text("games.russianroulette.decline"),
 					Style:    discordgo.DangerButton,
 					CustomID: fmt.Sprintf("rr_decline_%s_%s", challengerID, challengedID),
 				},
@@ -341,7 +186,7 @@ func StartRussianRouletteInteraction(s *discordgo.Session, i *discordgo.Interact
 	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Content:    fmt.Sprintf("<@%s>, you have been challenged!", challengedID),
+			Content:    locale.Text("games.russianroulette.you_have_been_challenged.formatted", locale.Data{"ChallengedID": challengedID}),
 			Embeds:     []*discordgo.MessageEmbed{embed},
 			Components: buttons,
 		},
@@ -399,7 +244,7 @@ func handleAccept(s *discordgo.Session, i *discordgo.InteractionCreate, userID s
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "❌ No pending challenge found for you!",
+				Content: locale.Text("games.russianroulette.no_pending_challenge_found_for_you"),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -424,7 +269,7 @@ func handleAccept(s *discordgo.Session, i *discordgo.InteractionCreate, userID s
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseUpdateMessage,
 			Data: &discordgo.InteractionResponseData{
-				Content:    fmt.Sprintf("❌ <@%s> does not have enough balance to accept! Bet refunded.", challenge.ChallengedID),
+				Content:    locale.Text("games.russianroulette.does_not_have_enough_balance_to_accept.formatted", locale.Data{"ChallengedID": challenge.ChallengedID}),
 				Embeds:     []*discordgo.MessageEmbed{},
 				Components: []discordgo.MessageComponent{},
 			},
@@ -440,7 +285,7 @@ func handleAccept(s *discordgo.Session, i *discordgo.InteractionCreate, userID s
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseUpdateMessage,
 			Data: &discordgo.InteractionResponseData{
-				Content:    "❌ Error processing bet. Challenge cancelled and challenger refunded.",
+				Content:    locale.Text("games.russianroulette.error_processing_bet_challenge_cancelled_and_challenger"),
 				Embeds:     []*discordgo.MessageEmbed{},
 				Components: []discordgo.MessageComponent{},
 			},
@@ -516,7 +361,7 @@ func handleDecline(s *discordgo.Session, i *discordgo.InteractionCreate, userID 
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "❌ No pending challenge found!",
+				Content: locale.Text("games.russianroulette.no_pending_challenge_found"),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -537,7 +382,7 @@ func handleDecline(s *discordgo.Session, i *discordgo.InteractionCreate, userID 
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseUpdateMessage,
 		Data: &discordgo.InteractionResponseData{
-			Content:    fmt.Sprintf("❌ <@%s> declined the challenge! <@%s>'s bet of %d %s has been refunded.", userID, challenge.ChallengerID, challenge.Bet, config.Bot.CurrencySymbol),
+			Content:    locale.Text("games.russianroulette.declined_the_challenge_s_bet_of_has.formatted", locale.Data{"UserID": userID, "ChallengerID": challenge.ChallengerID, "Bet": challenge.Bet, "CurrencySymbol": config.Bot.CurrencySymbol}),
 			Embeds:     []*discordgo.MessageEmbed{},
 			Components: []discordgo.MessageComponent{},
 		},
@@ -565,7 +410,7 @@ func handleShoot(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "❌ Game not found or already finished!",
+				Content: locale.Text("games.russianroulette.game_not_found_or_already_finished"),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -578,7 +423,7 @@ func handleShoot(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "❌ It's not your turn!",
+				Content: locale.Text("games.russianroulette.it_s_not_your_turn"),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -614,28 +459,28 @@ func handleShoot(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		}
 
 		embed := &discordgo.MessageEmbed{
-			Title:       "🔫 Russian Roulette - GAME OVER",
-			Description: fmt.Sprintf("💥 **POW!** <@%s> pulled the trigger and the chamber was **LOADED!**", loserID),
+			Title:       locale.Text("games.russianroulette.russian_roulette_game_over"),
+			Description: locale.Text("games.russianroulette.pow_pulled_the_trigger_and_the_chamber.formatted", locale.Data{"LoserID": loserID}),
 			Color:       0x8B0000,
 			Fields: []*discordgo.MessageEmbedField{
 				{
-					Name:   "🏆 Survivor / Winner",
+					Name:   locale.Text("games.russianroulette.survivor_winner"),
 					Value:  fmt.Sprintf("<@%s>", survivorID),
 					Inline: true,
 				},
 				{
-					Name:   "💰 Prize",
+					Name:   locale.Text("games.russianroulette.prize"),
 					Value:  fmt.Sprintf("%d %s", totalPot, config.Bot.CurrencySymbol),
 					Inline: true,
 				},
 				{
-					Name:   "🎲 Shot Details",
-					Value:  fmt.Sprintf("Round: %d | Fatal shot position: %d/6", roundNum, shotPos),
+					Name:   locale.Text("games.russianroulette.shot_details"),
+					Value:  locale.Text("games.russianroulette.round_fatal_shot_position.formatted", locale.Data{"RoundNum": roundNum, "ShotPos": shotPos}),
 					Inline: false,
 				},
 			},
 			Footer: &discordgo.MessageEmbedFooter{
-				Text: "Game Over - The survivor takes all!",
+				Text: locale.Text("games.russianroulette.game_over_the_survivor_takes_all"),
 			},
 		}
 
@@ -653,23 +498,23 @@ func handleShoot(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		shotPos := game.CurrentShot
 
 		embed := &discordgo.MessageEmbed{
-			Title:       "🔫 Russian Roulette",
-			Description: fmt.Sprintf("😅 **CLICK!** <@%s> pulled the trigger and... **SURVIVED!**", survivor),
+			Title:       locale.Text("games.russianroulette.russian_roulette"),
+			Description: locale.Text("games.russianroulette.click_pulled_the_trigger_and_survived.formatted", locale.Data{"Survivor": survivor}),
 			Color:       0x00FF00,
 			Fields: []*discordgo.MessageEmbedField{
 				{
-					Name:   "🎲 Chamber Result",
-					Value:  fmt.Sprintf("Chamber %d was empty!", shotPos),
+					Name:   locale.Text("games.russianroulette.chamber_result"),
+					Value:  locale.Text("games.russianroulette.chamber_was_empty.formatted", locale.Data{"ShotPos": shotPos}),
 					Inline: false,
 				},
 				{
-					Name:   "💰 Total Pot",
+					Name:   locale.Text("games.russianroulette.total_pot"),
 					Value:  fmt.Sprintf("%d %s", totalPot, config.Bot.CurrencySymbol),
 					Inline: true,
 				},
 				{
-					Name:   "🔄 Next Turn",
-					Value:  fmt.Sprintf("<@%s>'s turn...", nextPlayer),
+					Name:   locale.Text("games.russianroulette.next_turn"),
+					Value:  locale.Text("games.russianroulette.s_turn.formatted", locale.Data{"NextPlayer": nextPlayer}),
 					Inline: true,
 				},
 			},
@@ -738,14 +583,11 @@ func handleTurnTimeout(s *discordgo.Session, game *RussianRouletteGame) {
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title: "🔫 Russian Roulette - FORFEIT (TIMED OUT)",
-		Description: fmt.Sprintf("⏰ <@%s> took longer than 45 seconds to pull the trigger and fled!\n\n"+
-			"🏆 **Winner by default:** <@%s>\n"+
-			"💰 **Prize Awarded:** %d %s",
-			loserID, winnerID, totalPot, config.Bot.CurrencySymbol),
-		Color: utils.ColorGold,
+		Title:       locale.Text("games.russianroulette.russian_roulette_forfeit_timed_out"),
+		Description: locale.Text("games.russianroulette.took_longer_than_seconds_to_pull_the.formatted", locale.Data{"LoserID": loserID, "WinnerID": winnerID, "TotalPot": totalPot, "CurrencySymbol": config.Bot.CurrencySymbol}),
+		Color:       utils.ColorGold,
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: "Don't accept duels if you're too afraid to shoot!",
+			Text: locale.Text("games.russianroulette.don_t_accept_duels_if_you_re"),
 		},
 	}
 
@@ -764,38 +606,38 @@ func (g *RussianRouletteGame) createGameEmbed(totalPot int) *discordgo.MessageEm
 	}
 
 	return &discordgo.MessageEmbed{
-		Title:       "🔫 Russian Roulette Duel",
-		Description: fmt.Sprintf("It's **%s**'s turn!\nYou have **45 seconds** to pull the trigger...", currentPlayerName),
+		Title:       locale.Text("games.russianroulette.russian_roulette_duel"),
+		Description: locale.Text("games.russianroulette.it_s_s_turn_you_have_seconds.formatted", locale.Data{"CurrentPlayerName": currentPlayerName}),
 		Color:       0x8B0000,
 		Fields: []*discordgo.MessageEmbedField{
 			{
-				Name:   "👤 Player 1",
+				Name:   locale.Text("games.russianroulette.player"),
 				Value:  fmt.Sprintf("%s%s", g.Player1Name, getTurnIndicator(g.Player1ID, g.CurrentTurn)),
 				Inline: true,
 			},
 			{
-				Name:   "👤 Player 2",
+				Name:   locale.Text("games.russianroulette.player_07e8d4"),
 				Value:  fmt.Sprintf("%s%s", g.Player2Name, getTurnIndicator(g.Player2ID, g.CurrentTurn)),
 				Inline: true,
 			},
 			{
-				Name:   "💰 Pot",
+				Name:   locale.Text("games.russianroulette.pot"),
 				Value:  fmt.Sprintf("%d %s", totalPot, config.Bot.CurrencySymbol),
 				Inline: true,
 			},
 			{
-				Name:   "🎲 Round",
+				Name:   locale.Text("games.russianroulette.round"),
 				Value:  fmt.Sprintf("%d", g.Round),
 				Inline: true,
 			},
 			{
-				Name:   "🔫 Cylinder",
-				Value:  fmt.Sprintf("Position %d/6", g.CurrentShot),
+				Name:   locale.Text("games.russianroulette.cylinder"),
+				Value:  locale.Text("games.russianroulette.position.formatted", locale.Data{"CurrentShot": g.CurrentShot}),
 				Inline: true,
 			},
 		},
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: fmt.Sprintf("Survivor takes %d %s! Pull the trigger with the button below.", totalPot, config.Bot.CurrencySymbol),
+			Text: locale.Text("games.russianroulette.survivor_takes_pull_the_trigger_with_the.formatted", locale.Data{"TotalPot": totalPot, "CurrencySymbol": config.Bot.CurrencySymbol}),
 		},
 	}
 }
@@ -806,7 +648,7 @@ func (g *RussianRouletteGame) createShootButton() []discordgo.MessageComponent {
 		discordgo.ActionsRow{
 			Components: []discordgo.MessageComponent{
 				discordgo.Button{
-					Label:    "🔫 SHOOT",
+					Label:    locale.Text("games.russianroulette.shoot"),
 					Style:    discordgo.DangerButton,
 					CustomID: fmt.Sprintf("rr_shoot_%s", gameID),
 					Emoji:    &discordgo.ComponentEmoji{Name: "💀"},
@@ -825,7 +667,7 @@ func (g *RussianRouletteGame) getOtherPlayer(playerID string) string {
 
 func getTurnIndicator(playerID string, currentTurn string) string {
 	if playerID == currentTurn {
-		return " ⬅️ **(Your turn)**"
+		return locale.Text("games.russianroulette.your_turn")
 	}
 	return ""
 }
@@ -846,8 +688,7 @@ func expireChallenge(s *discordgo.Session, challengedID string) {
 	UnregisterActivePlayer(challenge.ChallengerID)
 
 	s.ChannelMessageSend(challenge.ChannelID,
-		fmt.Sprintf("⏰ <@%s> did not respond to <@%s>'s challenge in time! Challenge expired and %d %s refunded to challenger.",
-			challengedID, challenge.ChallengerID, challenge.Bet, config.Bot.CurrencySymbol))
+		locale.Text("games.russianroulette.did_not_respond_to_s_challenge_in.formatted", locale.Data{"ChallengedID": challengedID, "ChallengerID": challenge.ChallengerID, "Bet": challenge.Bet, "CurrencySymbol": config.Bot.CurrencySymbol}))
 }
 
 func cleanupGame(g *RussianRouletteGame) {

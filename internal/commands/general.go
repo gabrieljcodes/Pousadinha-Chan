@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"bot/internal/locale"
 	"bot/pkg/config"
 	"bot/pkg/utils"
 	"fmt"
@@ -21,140 +22,16 @@ type HelpSection struct {
 // getHelpSections returns the help sections at runtime (to use loaded config)
 func getHelpSections() []HelpSection {
 	return []HelpSection{
-		{ID: "gacha", Name: "Character Gacha", Emoji: "✨", Value: "O sistema de Gacha é 100% integrado aos **Slash Commands (`/`)** do Discord!\n\n" +
-			"`/roll [pool]` — Sortear personagem (Waifus, Husbandos, Anime, Games ou Geral)\n" +
-			"`/top [genero] [posse] [pagina]` — Ranking dos personagens mais populares com filtros interativos\n" +
-			"`/info <personagem>` — Ver foto oficial, obra, valor e dono atual\n" +
-			"`/harem [membro] [modo] [pagina]` — Ver sua coleção em lista ou fotos\n" +
-			"`/perfil` — Rolls disponíveis, tempo de claim e estatísticas\n" +
-			"`/galeria <personagem> [pagina]` — Navegar pelas fotos aprovadas\n" +
-			"`/wishlist <acao> [personagem]` — Gerenciar sua lista de desejos\n" +
-			"`/troca` · `/presente` · `/divorcio` — Negociações sociais entre membros"},
-		{
-			ID:    "economy",
-			Name:  "Economy",
-			Emoji: "💰",
-			Value: "`!daily` / `/daily`\nCollect your daily reward (**100-5000**).\n" +
-				"🔥 **Streak System:** Day 1 = 100, Day 2 = 200... up to 5000!\n" +
-				"⚠️ Skip a day = streak resets to 100.\n\n" +
-				"`!balance` / `/balance [user]`\nCheck your wallet or someone else's.\n\n" +
-				"`!leaderboard` / `/leaderboard`\nSee the richest users.\n\n" +
-				"`!pay` / `/pay <user> <amount>`\nTransfer coins to another user.",
-		},
-		{
-			ID:    "shop",
-			Name:  "Shop",
-			Emoji: "🛒",
-			Value: fmt.Sprintf("`!shop` / `/shop`\nView available items.\n\n"+
-				"`!buy nickname <n>`\nChange your own nickname (**%d %s**).\n\n"+
-				"`!buy rename @user <n>`\nChange someone else's nickname (**%d %s**).\n\n"+
-				"`!buy punishment @user <min>`\nTimeout user (**%d %s/min**) - text & voice.\n*Note: Punishments are accumulative!*\n\n"+
-				"`!buy mute @user <min>`\nMute user in voice (**%d %s/min**) - voice only.\n*User must be in a call!*",
-				config.Economy.CostNicknameSelf, config.Bot.CurrencySymbol, config.Economy.CostNicknameOther, config.Bot.CurrencySymbol, config.Economy.CostPerMinutePunishment, config.Bot.CurrencySymbol, config.Economy.CostPerMinuteMute, config.Bot.CurrencySymbol),
-		},
-		{
-			ID:    "gambling",
-			Name:  "Gambling",
-			Emoji: "🎲",
-			Value: "`!bet aviator <amount> [auto]` / `/bet aviator`\nPlay the Aviator crash game.\n*Watch out for turbulence! Supports auto cash-out (e.g. 2.0x)*\n\n" +
-				"`!bet cups <amount>` / `/bet cups`\nFind the coin (6 cups in Round 1 for 5x, then 2 cups for Double or Nothing).\n*Cash out anytime!*\n\n" +
-				"`!bj <amount>` / `!bet bj <amount>` / `/blackjack`\nClassic Blackjack vs dealer (4-deck shoe).\n*Hit, Stand, Double, Split, Insurance, Surrender.*\n\n" +
-				"`!mines <amount> [mines]` / `!bet mines <amount>` / `/mines`\n💣 Play Mines (Campo Minado)! Find diamonds, avoid bombs.\n*Cash out anytime!*\n\n" +
-				"`!bet slots <amount>` / `/slots`\nSpin the slot machine!\n*3 = Jackpot | 2 = Win | Up to 25x!*\n\n" +
-				"`!roulette @user <amount>`\nRussian Roulette PvP.\n*Survivor takes all!*",
-		},
-		{
-			ID:    "casino",
-			Name:  "Casino Roulette",
-			Emoji: "🎡",
-			Value: "`!wheel`\nView roulette options and time until spin.\n\n" +
-				"`!wheel number <0-36> <amount>` - **35:1**\n" +
-				"`!wheel red/black <amount>` - **1:1**\n" +
-				"`!wheel even/odd <amount>` - **1:1**\n" +
-				"`!wheel low/high <amount>` - **1:1**\n" +
-				"`!wheel dozen <1st/2nd/3rd> <amount>` - **2:1**\n\n" +
-				"*Rounds every 10 min. Betting closes on spin!*",
-		},
-		{
-			ID:    "events",
-			Name:  "Event Betting",
-			Emoji: "🎯",
-			Value: "`!createevent <q> | <opt1> | <opt2> [| min]`\n*Admin only.* Create betting event.\n\n" +
-				"`!betevent <id> <opt_num> <amount>`\nPlace bet on event option.\n\n" +
-				"`!events` - List active events\n" +
-				"`!event <id>` - View event details\n" +
-				"`!closeevent <id>` - Close betting early\n" +
-				"`!result <id> <opt_num>` - Declare winner & payout\n" +
-				"`!cancelevent <id>` - Cancel event & refund all bets\n\n" +
-				"*Dynamic odds: less popular = higher payout!*",
-		},
-		{
-			ID:    "polymarket",
-			Name:  "Polymarket Predictions",
-			Emoji: "🔮",
-			Value: "`!poly trending` / `/poly trending`\nVer eventos reais em alta no mundo.\n\n" +
-				"`!poly search <query>` / `/poly search`\nPesquisar mercados reais no Polymarket.\n\n" +
-				"`!poly import <slug>` / `/poly import`\nImportar mercado para o canal de apostas.\n\n" +
-				"`!poly portfolio` / `/poly portfolio`\nVer suas ações ativas e lucros potenciais.\n\n" +
-				"`!poly config` / `/poly config`\nConfigurar canal e permissões *(Apenas Admins)*.\n\n" +
-				"*Compre ações de SIM ou NÃO. Cada ação vencedora paga 100 EC no encerramento!*",
-		},
-		{
-			ID:    "bicho",
-			Name:  "Jogo do Bicho (Lottery)",
-			Emoji: "🎲",
-			Value: "`!bicho` / `/bicho panel`\nView official lottery panel with live stats and action buttons.\n\n" +
-				"`!bicho bet <mod> <target> <val> [pos]`\nPlace bet (group, tens, hundreds, thousands, pair, trio).\n\n" +
-				"`!bicho table` / `/bicho table`\nView official catalog of all 25 animals and 100 tens.\n\n" +
-				"`!bicho bets` / `/bicho my-bets`\nView your registered tickets in the active round.\n\n" +
-				"`!bicho config` / `!bicho draw`\nConfigure channel and trigger draws *(Admin only)*.\n\n" +
-				"*Official daily 5-prize audited animal lottery draw!*",
-		},
-		{
-			ID:    "stocks",
-			Name:  "Stock Market",
-			Emoji: "📈",
-			Value: "`!stock market`\nView stocks and prices.\n\n" +
-				"`!stock buy <ticker> <amount>`\nBuy shares.\n\n" +
-				"`!stock sell <ticker> <shares|all>`\nSell shares.\n\n" +
-				"`!stock portfolio`\nView investments.",
-		},
-		{
-			ID:    "crypto",
-			Name:  "Cryptocurrency",
-			Emoji: "🪙",
-			Value: "`!crypto market`\nView crypto prices.\n\n" +
-				"`!crypto buy <SYMBOL> <amount>`\nBuy crypto (BTC, ETH, etc).\n\n" +
-				"`!crypto sell <SYMBOL> <amount|all>`\nSell crypto.\n\n" +
-				"`!crypto portfolio`\nView crypto holdings.\n\n" +
-				"⚠️ Meme coins are highly volatile!",
-		},
-		{
-			ID:    "voice",
-			Name:  "Voice Rewards",
-			Emoji: "🎙️",
-			Value: fmt.Sprintf("Earn **%d %s/min** in voice channels.\n*Need 2+ people, not muted/deafened.*", config.Economy.VoiceCoinsPerMinute, config.Bot.CurrencySymbol),
-		},
-		{
-			ID:    "loans",
-			Name:  "Loans",
-			Emoji: "💳",
-			Value: "`!loan offer @user <amount> <interest> <days>` / `/loan offer`\n" +
-				"Offer a loan to another user. They have 1 minute to accept.\n\n" +
-				"`!loan pay [loan_id]` / `/loan pay`\n" +
-				"Pay an active loan (pays oldest if no ID specified).\n\n" +
-				"`!loan list [@user]` / `/loan list`\n" +
-				"View active loans.\n\n" +
-				"⚠️ **Auto-collection:** If not paid by due date, funds are automatically deducted!",
-		},
-		{
-			ID:    "api",
-			Name:  "Developer & API",
-			Emoji: "🔧",
-			Value: "`/apikey create` - Generate API key\n" +
-				"`/apikey list` - View keys\n" +
-				"`/webhook set <url>` - Coin notifications",
-		},
+		{ID: "gacha", Name: locale.Text("commands.general.character_gacha"), Emoji: "✨", Value: locale.Text("commands.general.roll_pool_roll_anime_or_game_characters")},
+		{ID: "economy", Name: locale.Text("commands.general.economy"), Emoji: "💰", Value: locale.Text("commands.general.daily_claim_your_daily_streak_reward_balance")},
+		{ID: "shop", Name: locale.Text("commands.general.shop"), Emoji: "🛒", Value: locale.Text("commands.general.shop_browse_items_and_current_prices_buy")},
+		{ID: "games", Name: locale.Text("commands.general.casino_games"), Emoji: "🎲", Value: locale.Text("commands.general.bet_aviator_crash_game_with_optional_automatic")},
+		{ID: "events", Name: locale.Text("commands.general.event_betting"), Emoji: "🎯", Value: locale.Text("commands.general.event_list_event_view_browse_server_events")},
+		{ID: "markets", Name: locale.Text("commands.general.markets"), Emoji: "📈", Value: locale.Text("commands.general.stock_market_stock_buy_stock_sell_stock")},
+		{ID: "lottery", Name: locale.Text("commands.general.animal_lottery"), Emoji: "🎫", Value: locale.Text("commands.general.bicho_panel_active_round_bicho_table_animals")},
+		{ID: "loans", Name: locale.Text("commands.general.loans"), Emoji: "💳", Value: locale.Text("commands.general.loan_offer_offer_a_loan_with_interest")},
+		{ID: "voice", Name: locale.Text("commands.general.voice_rewards"), Emoji: "🎙️", Value: locale.Text("commands.general.earn_min_in_voice_channels_with_at.formatted", locale.Data{"VoiceCoinsPerMinute": config.Economy.VoiceCoinsPerMinute, "CurrencySymbol": config.Bot.CurrencySymbol})},
+		{ID: "api", Name: locale.Text("commands.general.developer_tools"), Emoji: "🔧", Value: locale.Text("commands.general.apikey_create_apikey_list_manage_api_access")},
 	}
 }
 
@@ -171,11 +48,11 @@ func getHelpEmbed(sectionIdx int) *discordgo.MessageEmbed {
 	section := sections[sectionIdx]
 
 	embed := utils.NewEmbed()
-	embed.Title = fmt.Sprintf("%s %s - Page %d/%d", section.Emoji, section.Name, sectionIdx+1, len(sections))
+	embed.Title = locale.Text("commands.general.page.formatted", locale.Data{"Emoji": section.Emoji, "Name": section.Name, "SectionIdx": sectionIdx + 1, "Value4": len(sections)})
 	embed.Description = section.Value
 	embed.Color = utils.ColorBlue
 	embed.Footer = &discordgo.MessageEmbedFooter{
-		Text: fmt.Sprintf("Use !help <section> to jump | Sections: economy, shop, gambling, casino, events, stocks, crypto, voice, loans, api"),
+		Text: locale.Text("commands.general.use_the_buttons_to_browse_command_categories"),
 	}
 
 	return embed
@@ -186,13 +63,13 @@ func getHelpButtons(sectionIdx int) []discordgo.MessageComponent {
 		discordgo.ActionsRow{
 			Components: []discordgo.MessageComponent{
 				discordgo.Button{
-					Label:    "⬅️ Previous",
+					Label:    locale.Text("commands.general.previous"),
 					Style:    discordgo.PrimaryButton,
 					CustomID: fmt.Sprintf("help_nav_%d", sectionIdx-1),
 					Disabled: false,
 				},
 				discordgo.Button{
-					Label:    "➡️ Next",
+					Label:    locale.Text("commands.general.next"),
 					Style:    discordgo.PrimaryButton,
 					CustomID: fmt.Sprintf("help_nav_%d", sectionIdx+1),
 					Disabled: false,
@@ -200,39 +77,6 @@ func getHelpButtons(sectionIdx int) []discordgo.MessageComponent {
 			},
 		},
 	}
-}
-
-func findSectionIndex(sectionID string) int {
-	sections := getHelpSections()
-	sectionID = strings.ToLower(sectionID)
-	for i, section := range sections {
-		if strings.ToLower(section.ID) == sectionID || strings.ToLower(section.Name) == sectionID {
-			return i
-		}
-	}
-	return -1
-}
-
-func CmdHelp(s *discordgo.Session, m *discordgo.MessageCreate) {
-	args := strings.Fields(m.Content)
-
-	// Check if user specified a section
-	sectionIdx := 0
-	if len(args) > 1 {
-		sectionArg := strings.ToLower(args[1])
-		foundIdx := findSectionIndex(sectionArg)
-		if foundIdx >= 0 {
-			sectionIdx = foundIdx
-		}
-	}
-
-	embed := getHelpEmbed(sectionIdx)
-	buttons := getHelpButtons(sectionIdx)
-
-	s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
-		Embeds:     []*discordgo.MessageEmbed{embed},
-		Components: buttons,
-	})
 }
 
 func HandleHelpNavigation(s *discordgo.Session, i *discordgo.InteractionCreate, customID string) {

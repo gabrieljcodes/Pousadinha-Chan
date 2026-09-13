@@ -2,6 +2,7 @@ package polymarket
 
 import (
 	"bot/internal/database"
+	"bot/internal/locale"
 	"bot/pkg/config"
 	"fmt"
 	"math"
@@ -93,27 +94,27 @@ func FormatProbabilityBar(yesPrice, noPrice float64) string {
 	noBlocks := barLength - yesBlocks
 
 	bar := strings.Repeat("█", yesBlocks) + strings.Repeat("░", noBlocks)
-	return fmt.Sprintf("🟢 **SIM**: `%d%%` [%s] `%d%%` :**NÃO** 🔴", yesPct, bar, noPct)
+	return locale.Text("polymarket.service.yes_no.formatted", locale.Data{"YesPct": yesPct, "Bar": bar, "NoPct": noPct})
 }
 
 // CreateMarketEmbed builds the rich Discord embed for an active or resolved Polymarket market
 func CreateMarketEmbed(market *database.DBPolymarketMarket, settings *database.DBPolymarketSettings) *discordgo.MessageEmbed {
 	embedColor := 0x2b2d31 // Dark theme
-	statusTitle := "📊 Mercado Polymarket"
+	statusTitle := locale.Text("polymarket.service.polymarket_market")
 
 	switch market.Status {
 	case "open":
 		embedColor = 0x5865f2 // Blurple
-		statusTitle = "📊 Mercado Aberto - Polymarket"
+		statusTitle = locale.Text("polymarket.service.open_market_polymarket")
 	case "closed":
 		embedColor = 0xe67e22 // Orange
-		statusTitle = "🔒 Mercado Fechado (Aguardando Desfecho)"
+		statusTitle = locale.Text("polymarket.service.market_closed_awaiting_outcome")
 	case "resolved":
 		embedColor = 0x2ecc71 // Green
-		statusTitle = fmt.Sprintf("🏆 Mercado Resolvido: Venceu %s!", strings.ToUpper(market.Winner))
+		statusTitle = locale.Text("polymarket.service.market_resolved_won.formatted", locale.Data{"Strings": strings.ToUpper(market.Winner)})
 	case "cancelled":
 		embedColor = 0x95a5a6 // Gray
-		statusTitle = "❌ Mercado Cancelado (Apostas Reembolsadas)"
+		statusTitle = locale.Text("polymarket.service.market_cancelled_bets_refunded")
 	}
 
 	probBar := FormatProbabilityBar(market.YesPrice, market.NoPrice)
@@ -127,17 +128,17 @@ func CreateMarketEmbed(market *database.DBPolymarketMarket, settings *database.D
 
 	fields := []*discordgo.MessageEmbedField{
 		{
-			Name:   "🟢 Cotação Sim",
-			Value:  fmt.Sprintf("**%d EC** / ação\n*Retorno: 100 EC*", yesCost.TotalCost),
+			Name:   locale.Text("polymarket.service.yes_price"),
+			Value:  locale.Text("polymarket.service.ec_share_payout_ec.formatted", locale.Data{"TotalCost": yesCost.TotalCost}),
 			Inline: true,
 		},
 		{
-			Name:   "🔴 Cotação Não",
-			Value:  fmt.Sprintf("**%d EC** / ação\n*Retorno: 100 EC*", noCost.TotalCost),
+			Name:   locale.Text("polymarket.service.no_price"),
+			Value:  locale.Text("polymarket.service.ec_share_payout_ec.formatted", locale.Data{"TotalCost": noCost.TotalCost}),
 			Inline: true,
 		},
 		{
-			Name:   "🏷️ Categoria",
+			Name:   locale.Text("polymarket.service.category"),
 			Value:  fmt.Sprintf("`%s`", market.Category),
 			Inline: true,
 		},
@@ -145,19 +146,19 @@ func CreateMarketEmbed(market *database.DBPolymarketMarket, settings *database.D
 
 	if market.EndDate != nil {
 		fields = append(fields, &discordgo.MessageEmbedField{
-			Name:   "📅 Previsão de Encerramento",
+			Name:   locale.Text("polymarket.service.expected_closing_time"),
 			Value:  fmt.Sprintf("<t:%d:F> (<t:%d:R>)", market.EndDate.Unix(), market.EndDate.Unix()),
 			Inline: true,
 		})
 	}
 
 	fields = append(fields, &discordgo.MessageEmbedField{
-		Name:   "🏛️ Taxa da Casa",
+		Name:   locale.Text("polymarket.service.house_fee"),
 		Value:  fmt.Sprintf("%.1f%%", settings.HouseEdge*100),
 		Inline: true,
 	})
 
-	footerText := fmt.Sprintf("ID: %s | Polymarket ID: %s | Atualizado em tempo real", market.ID, market.PolymarketID)
+	footerText := locale.Text("polymarket.service.id_polymarket_id_live_prices.formatted", locale.Data{"ID": market.ID, "PolymarketID": market.PolymarketID})
 
 	embed := &discordgo.MessageEmbed{
 		Title:       statusTitle,
@@ -188,13 +189,13 @@ func CreateMarketComponents(market *database.DBPolymarketMarket, settings *datab
 				Components: []discordgo.MessageComponent{
 					discordgo.Button{
 						CustomID: fmt.Sprintf("poly_pos_%s", market.ID),
-						Label:    "💼 Minhas Ações",
+						Label:    locale.Text("polymarket.service.my_shares"),
 						Style:    discordgo.SecondaryButton,
 						Emoji:    &discordgo.ComponentEmoji{Name: "💼"},
 					},
 					discordgo.Button{
 						CustomID: fmt.Sprintf("poly_status_%s", market.ID),
-						Label:    fmt.Sprintf("Status: %s", strings.ToUpper(market.Status)),
+						Label:    locale.Text("polymarket.service.status.formatted", locale.Data{"Strings": strings.ToUpper(market.Status)}),
 						Style:    discordgo.SecondaryButton,
 						Disabled: true,
 					},
@@ -210,25 +211,25 @@ func CreateMarketComponents(market *database.DBPolymarketMarket, settings *datab
 		Components: []discordgo.MessageComponent{
 			discordgo.Button{
 				CustomID: fmt.Sprintf("poly_buy_yes_%s", market.ID),
-				Label:    fmt.Sprintf("Comprar SIM (%d EC)", yesCost.TotalCost),
+				Label:    locale.Text("polymarket.service.buy_yes_ec.formatted", locale.Data{"TotalCost": yesCost.TotalCost}),
 				Style:    discordgo.SuccessButton,
 				Emoji:    &discordgo.ComponentEmoji{Name: "🟢"},
 			},
 			discordgo.Button{
 				CustomID: fmt.Sprintf("poly_buy_no_%s", market.ID),
-				Label:    fmt.Sprintf("Comprar NÃO (%d EC)", noCost.TotalCost),
+				Label:    locale.Text("polymarket.service.buy_no_ec.formatted", locale.Data{"TotalCost": noCost.TotalCost}),
 				Style:    discordgo.DangerButton,
 				Emoji:    &discordgo.ComponentEmoji{Name: "🔴"},
 			},
 			discordgo.Button{
 				CustomID: fmt.Sprintf("poly_pos_%s", market.ID),
-				Label:    "Minhas Ações",
+				Label:    locale.Text("polymarket.service.my_shares_267c56"),
 				Style:    discordgo.SecondaryButton,
 				Emoji:    &discordgo.ComponentEmoji{Name: "💼"},
 			},
 			discordgo.Button{
 				CustomID: fmt.Sprintf("poly_refresh_%s", market.ID),
-				Label:    "Atualizar",
+				Label:    locale.Text("polymarket.service.refresh"),
 				Style:    discordgo.SecondaryButton,
 				Emoji:    &discordgo.ComponentEmoji{Name: "🔄"},
 			},
@@ -243,7 +244,7 @@ func CreateBuyModal(marketID, outcome string, pricePerShare float64, houseEdge f
 	cost1 := CalculateShareCost(outcomePrice(pricePerShare), 1, houseEdge)
 	cost10 := CalculateShareCost(outcomePrice(pricePerShare), 10, houseEdge)
 
-	title := fmt.Sprintf("Comprar Ações: %s", strings.ToUpper(outcome))
+	title := locale.Text("polymarket.service.buy_shares.formatted", locale.Data{"Strings": strings.ToUpper(outcome)})
 	if len(title) > 45 {
 		title = title[:45]
 	}
@@ -260,9 +261,9 @@ func CreateBuyModal(marketID, outcome string, pricePerShare float64, houseEdge f
 					Components: []discordgo.MessageComponent{
 						discordgo.TextInput{
 							CustomID:    "shares",
-							Label:       "Quantidade de Ações (Cada ação paga 100 EC)",
+							Label:       locale.Text("polymarket.service.share_quantity_winning_shares_pay_ec"),
 							Style:       discordgo.TextInputShort,
-							Placeholder: fmt.Sprintf("Ex: 10 (Custo estimado: %d EC)", cost10.TotalCost),
+							Placeholder: locale.Text("polymarket.service.example_estimated_cost_ec.formatted", locale.Data{"TotalCost": cost10.TotalCost}),
 							Required:    true,
 							MinLength:   1,
 							MaxLength:   8,
@@ -272,11 +273,11 @@ func CreateBuyModal(marketID, outcome string, pricePerShare float64, houseEdge f
 				discordgo.ActionsRow{
 					Components: []discordgo.MessageComponent{
 						discordgo.TextInput{
-							CustomID:    "info_hint",
-							Label:       "Preço por ação atual (com taxa incluída):",
-							Style:       discordgo.TextInputShort,
-							Value:       fmt.Sprintf("1 ação = %d EC | Paga 100 EC se vencer!", cost1.TotalCost),
-							Required:    false,
+							CustomID: "info_hint",
+							Label:    locale.Text("polymarket.service.current_price_per_share_including_fees"),
+							Style:    discordgo.TextInputShort,
+							Value:    locale.Text("polymarket.service.share_ec_pays_ec_if_it_wins.formatted", locale.Data{"TotalCost": cost1.TotalCost}),
+							Required: false,
 						},
 					},
 				},
@@ -296,8 +297,8 @@ func outcomePrice(p float64) float64 {
 func CreatePortfolioEmbed(userID string, positions []*database.DBPolymarketPosition, markets map[string]*database.DBPolymarketMarket) *discordgo.MessageEmbed {
 	if len(positions) == 0 {
 		return &discordgo.MessageEmbed{
-			Title:       "💼 Seu Portfólio Polymarket",
-			Description: "Você ainda não possui nenhuma ação ativa em mercados do Polymarket.\nUse `/poly trending` ou pesquise eventos no canal dedicado para começar a negociar!",
+			Title:       locale.Text("polymarket.service.your_polymarket_portfolio"),
+			Description: locale.Text("polymarket.service.you_do_not_hold_any_active_polymarket"),
 			Color:       0x5865f2,
 		}
 	}
@@ -308,7 +309,7 @@ func CreatePortfolioEmbed(userID string, positions []*database.DBPolymarketPosit
 
 	for _, p := range positions {
 		m := markets[p.MarketID]
-		q := "Mercado #" + p.MarketID
+		q := locale.Text("polymarket.service.market") + p.MarketID
 		if m != nil && m.Question != "" {
 			q = m.Question
 		}
@@ -322,38 +323,37 @@ func CreatePortfolioEmbed(userID string, positions []*database.DBPolymarketPosit
 		totalPotentialPayout += payout
 
 		emoji := "🟢"
-		if strings.EqualFold(p.Outcome, "No") {
+		if strings.EqualFold(p.Outcome, "no") {
 			emoji = "🔴"
 		}
 
-		line := fmt.Sprintf("%s **%s** (%s)\n• **%d ações** | Preço médio: `%.1f EC`\n• Investido: `%d %s` | Retorno potencial: `+%d %s`\n",
-			emoji, q, p.Outcome, p.Shares, avgPrice, p.TotalInvested, config.Bot.CurrencySymbol, payout-p.TotalInvested, config.Bot.CurrencySymbol)
+		line := locale.Text("polymarket.service.shares_average_price_ec_invested_potential_return.formatted", locale.Data{"Emoji": emoji, "Q": q, "Outcome": p.Outcome, "Shares": p.Shares, "AvgPrice": avgPrice, "TotalInvested": p.TotalInvested, "CurrencySymbol": config.Bot.CurrencySymbol, "Payout": payout - p.TotalInvested, "CurrencySymbol9": config.Bot.CurrencySymbol})
 		positionLines = append(positionLines, line)
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title:       fmt.Sprintf("💼 Portfólio Polymarket - <@%s>", userID),
+		Title:       locale.Text("polymarket.service.polymarket_portfolio.formatted", locale.Data{"UserID": userID}),
 		Description: strings.Join(positionLines, "\n"),
 		Color:       0x2ecc71,
 		Fields: []*discordgo.MessageEmbedField{
 			{
-				Name:   "💰 Total Investido",
+				Name:   locale.Text("polymarket.service.total_invested"),
 				Value:  fmt.Sprintf("**%d %s**", totalInvested, config.Bot.CurrencySymbol),
 				Inline: true,
 			},
 			{
-				Name:   "🏆 Retorno Máximo Potencial",
+				Name:   locale.Text("polymarket.service.maximum_potential_return"),
 				Value:  fmt.Sprintf("**%d %s**", totalPotentialPayout, config.Bot.CurrencySymbol),
 				Inline: true,
 			},
 			{
-				Name:   "📊 Posições Abertas",
-				Value:  fmt.Sprintf("**%d mercados**", len(positions)),
+				Name:   locale.Text("polymarket.service.open_positions"),
+				Value:  locale.Text("polymarket.service.markets.formatted", locale.Data{"Value1": len(positions)}),
 				Inline: true,
 			},
 		},
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: "Cada ação vencedora é resgatada por 100 EC automaticamente no encerramento.",
+			Text: locale.Text("polymarket.service.each_winning_share_is_automatically_redeemed_for"),
 		},
 		Timestamp: time.Now().Format(time.RFC3339),
 	}

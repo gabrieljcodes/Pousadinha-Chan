@@ -1,0 +1,8 @@
+{
+  "common.embeds.error": {
+    "other": "❌ Error"
+  },
+  "common.server_only": {
+    "other": "Use this command in a server."
+  }
+}

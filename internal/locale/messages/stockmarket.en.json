@@ -1,0 +1,74 @@
+{
+  "stockmarket.commands.could_not_fetch_stock_price": {
+    "other": "Could not fetch stock price."
+  },
+  "stockmarket.commands.could_not_fetch_stock_price_try_again": {
+    "other": "Could not fetch stock price. Try again later."
+  },
+  "stockmarket.commands.current_market_prices_real_time_yahoo_finance": {
+    "other": "Current Market Prices (Real-Time Yahoo Finance):\n\n"
+  },
+  "stockmarket.commands.database_error": {
+    "other": "Database error."
+  },
+  "stockmarket.commands.database_error_refunded": {
+    "other": "Database error. Refunded."
+  },
+  "stockmarket.commands.fetching": {
+    "other": "Fetching..."
+  },
+  "stockmarket.commands.insufficient_funds": {
+    "other": "Insufficient funds."
+  },
+  "stockmarket.commands.invalid_amount": {
+    "other": "Invalid amount."
+  },
+  "stockmarket.commands.invalid_number_of_shares": {
+    "other": "Invalid number of shares."
+  },
+  "stockmarket.commands.invalid_ticker": {
+    "other": "Invalid Ticker."
+  },
+  "stockmarket.commands.invalid_ticker_check_stock_market": {
+    "other": "Invalid Ticker. Check /stock market."
+  },
+  "stockmarket.commands.investment_successful": {
+    "other": "Investment Successful"
+  },
+  "stockmarket.commands.portfolio": {
+    "other": "Portfolio"
+  },
+  "stockmarket.commands.sale_successful": {
+    "other": "Sale Successful"
+  },
+  "stockmarket.commands.shares_invested_p_l.formatted": {
+    "other": "**{{printf \"%s\" .Ticker}}**: {{printf \"%.4f\" .Shares}} shares (~{{printf \"%d\" .Value3}} {{printf \"%s\" .CurrencyName}} @ ${{printf \"%.2f\" .Price}})\n  ↳ Invested: {{printf \"%d\" .Value6}} {{printf \"%s\" .CurrencyName7}} | P/L: {{printf \"%s\" .PnlStr}}\n"
+  },
+  "stockmarket.commands.stock_market": {
+    "other": "Stock Market"
+  },
+  "stockmarket.commands.total_value_total_invested_net_return.formatted": {
+    "other": "\n**Total Value**: ~{{printf \"%d\" .Value1}} {{printf \"%s\" .CurrencyName}}\n**Total Invested**: {{printf \"%d\" .Value3}} {{printf \"%s\" .CurrencyName4}}\n**Net Return**: {{printf \"%s\" .OverallPnlStr}}"
+  },
+  "stockmarket.commands.transaction_failed": {
+    "other": "Transaction failed."
+  },
+  "stockmarket.commands.you_bought_shares_of_for_at_share.formatted": {
+    "other": "You bought **{{printf \"%.4f\" .Shares}}** shares of **{{printf \"%s\" .Ticker}}** for **{{printf \"%d\" .Amount}} {{printf \"%s\" .CurrencyName}}** (at ${{printf \"%.2f\" .Price}}/share)."
+  },
+  "stockmarket.commands.you_don_t_have_that_many_shares.formatted": {
+    "other": "You don't have that many shares. You own **{{printf \"%.4f\" .OwnedShares}}**."
+  },
+  "stockmarket.commands.you_don_t_own_any_shares_of": {
+    "other": "You don't own any shares of this company."
+  },
+  "stockmarket.commands.you_have_no_stock_investments": {
+    "other": "You have no stock investments."
+  },
+  "stockmarket.commands.you_sold_shares_of_for_at_share.formatted": {
+    "other": "You sold **{{printf \"%.4f\" .SharesToSell}}** shares of **{{printf \"%s\" .Ticker}}** for **{{printf \"%d\" .Payout}} {{printf \"%s\" .CurrencyName}}** (at ${{printf \"%.2f\" .Price}}/share)."
+  },
+  "stockmarket.commands.your_stock_portfolio": {
+    "other": "Your Stock Portfolio"
+  }
+}

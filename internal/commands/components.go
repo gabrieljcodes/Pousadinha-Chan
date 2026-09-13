@@ -3,6 +3,7 @@ package commands
 import (
 	"bot/internal/gacha"
 	"bot/internal/games"
+	"bot/internal/locale"
 	"bot/pkg/config"
 	"bot/pkg/utils"
 	"strings"
@@ -31,7 +32,7 @@ func ComponentsHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Embeds: []*discordgo.MessageEmbed{utils.ErrorEmbed("❌ This bot can only be used in designated channels.")},
+				Embeds: []*discordgo.MessageEmbed{utils.ErrorEmbed(locale.Text("commands.components.this_bot_can_only_be_used_in"))},
 				Flags:  discordgo.MessageFlagsEphemeral,
 			},
 		})

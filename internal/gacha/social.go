@@ -1,9 +1,10 @@
 package gacha
 
 import (
+	"bot/internal/locale"
 	"context"
 	"database/sql"
-	"fmt"
+
 	"sort"
 	"time"
 )
@@ -48,14 +49,14 @@ func ownership(ctx context.Context, tx *sql.Tx, guild, user string, id int64) (s
 	var likes int
 	e := tx.QueryRowContext(ctx, `SELECT col.ownership_token::text,c.favourites FROM gacha_collection col JOIN gacha_characters c ON c.id=col.character_id WHERE col.guild_id=$1 AND col.user_id=$2 AND col.character_id=$3 FOR UPDATE OF col`, guild, user, id).Scan(&token, &likes)
 	if e == sql.ErrNoRows {
-		return "", 0, userError(fmt.Sprintf("Character #%d is not in the expected owner's harem.", id))
+		return "", 0, userError(locale.Text("gacha.social.character_is_not_in_the_expected_owner.formatted", locale.Data{"Id": id}))
 	}
 	return token, likes, e
 }
 func (s *Store) CreateAction(ctx context.Context, guild, channel, proposer, recipient, request, kind string, offered, requested int64) (Action, error) {
 	var a Action
 	if guild == "" || channel == "" || proposer == "" || request == "" {
-		return a, userError("Use this command in a server channel.")
+		return a, userError(locale.Text("gacha.social.use_this_command_in_a_server_channel"))
 	}
 	if offered <= 0 {
 		return a, invalidID()
@@ -63,21 +64,21 @@ func (s *Store) CreateAction(ctx context.Context, guild, channel, proposer, reci
 	switch kind {
 	case "divorce":
 		if recipient != "" || requested != 0 {
-			return a, userError("Divorce accepts one character.")
+			return a, userError(locale.Text("gacha.social.divorce_accepts_one_character"))
 		}
 	case "trade":
 		if requested <= 0 || requested == offered {
-			return a, userError("A trade needs two different character IDs.")
+			return a, userError(locale.Text("gacha.social.a_trade_needs_two_different_character_ids"))
 		}
 	case "gift":
 		if requested != 0 {
-			return a, userError("A gift accepts one character.")
+			return a, userError(locale.Text("gacha.social.a_gift_accepts_one_character"))
 		}
 	default:
-		return a, userError("Unknown action.")
+		return a, userError(locale.Text("gacha.social.unknown_action"))
 	}
 	if kind != "divorce" && (recipient == "" || recipient == proposer) {
-		return a, userError("Choose another server member.")
+		return a, userError(locale.Text("gacha.social.choose_another_server_member"))
 	}
 	tx, e := s.DB.BeginTx(ctx, nil)
 	if e != nil {
@@ -94,7 +95,7 @@ func (s *Store) CreateAction(ctx context.Context, guild, channel, proposer, reci
 	a, e = scanAction(tx.QueryRowContext(ctx, actionSelect+` WHERE request_id=$1`, request))
 	if e == nil {
 		if a.Guild != guild || a.Proposer != proposer || a.Channel != channel {
-			return Action{}, userError("This request belongs to another action.")
+			return Action{}, userError(locale.Text("gacha.social.this_request_belongs_to_another_action"))
 		}
 		return a, nil
 	}
@@ -107,7 +108,7 @@ func (s *Store) CreateAction(ctx context.Context, guild, channel, proposer, reci
 		return a, e
 	}
 	if pending >= 10 {
-		return a, userError("You already have 10 pending offers. Cancel one or wait for it to expire.")
+		return a, userError(locale.Text("gacha.social.you_already_have_pending_offers_cancel_one"))
 	}
 	token, _, e := ownership(ctx, tx, guild, proposer, offered)
 	if e != nil {
@@ -142,7 +143,7 @@ func (s *Store) CreateAction(ctx context.Context, guild, channel, proposer, reci
 func (s *Store) ResolveAction(ctx context.Context, guild, channel, user, id, decision string) (Action, error) {
 	var a Action
 	if decision != "accept" && decision != "decline" && decision != "cancel" {
-		return a, userError("Unknown action response.")
+		return a, userError(locale.Text("gacha.social.unknown_action_response"))
 	}
 	tx, e := s.DB.BeginTx(ctx, nil)
 	if e != nil {
@@ -151,7 +152,7 @@ func (s *Store) ResolveAction(ctx context.Context, guild, channel, user, id, dec
 	defer tx.Rollback()
 	a, e = scanAction(tx.QueryRowContext(ctx, actionSelect+` WHERE id=$1::uuid AND guild_id=$2 AND channel_id=$3 FOR UPDATE`, id, guild, channel))
 	if e == sql.ErrNoRows {
-		return a, userError("Offer not found in this channel.")
+		return a, userError(locale.Text("gacha.social.offer_not_found_in_this_channel"))
 	}
 	if e != nil {
 		return a, e
@@ -161,10 +162,10 @@ func (s *Store) ResolveAction(ctx context.Context, guild, channel, user, id, dec
 		allowed = a.Proposer
 	}
 	if user != allowed {
-		return a, userError("Only the named participant can respond to this offer.")
+		return a, userError(locale.Text("gacha.social.only_the_named_participant_can_respond_to"))
 	}
 	if a.Kind == "divorce" && decision == "decline" {
-		return a, userError("Use Cancel to keep your character.")
+		return a, userError(locale.Text("gacha.social.use_cancel_to_keep_your_character"))
 	}
 	if a.Status != "pending" {
 		return a, nil
@@ -288,9 +289,9 @@ type Ranking struct {
 
 func (s *Store) Rankings(ctx context.Context, guild string, page int) ([]Ranking, error) {
 	if page < 1 || page > 100000 {
-		return nil, userError("Invalid page.")
+		return nil, userError(locale.Text("gacha.discord.invalid_page"))
 	}
-	rows, e := s.DB.QueryContext(ctx, populationSQL+`SELECT col.user_id,count(*),sum(`+characterValueSQL+`)::bigint FROM gacha_collection col JOIN gacha_characters c ON c.id=col.character_id CROSS JOIN pop WHERE col.guild_id=$1 GROUP BY col.user_id ORDER BY sum(`+characterValueSQL+`) DESC,col.user_id LIMIT 10 OFFSET $2`, guild, (page-1)*10)
+	rows, e := s.DB.QueryContext(ctx, populationSQL+`SELECT col.user_id,count(*),sum(`+characterValueSQL+`)::bigint FROM gacha_collection col JOIN gacha_characters c ON c.id=col.character_id CROSS JOIN pop WHERE col.guild_id=$1 GROUP BY col.user_id ORDER BY sum(`+characterValueSQL+locale.Text("gacha.social.desc_col_user_id_limit_offset"), guild, (page-1)*10)
 	if e != nil {
 		return nil, e
 	}

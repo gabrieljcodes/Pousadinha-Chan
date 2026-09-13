@@ -1,11 +1,12 @@
 package games
 
 import (
-	"crypto/rand"
-	"encoding/binary"
 	"bot/internal/database"
+	"bot/internal/locale"
 	"bot/pkg/config"
 	"bot/pkg/utils"
+	"crypto/rand"
+	"encoding/binary"
 	"fmt"
 	"strings"
 	"sync"
@@ -172,7 +173,7 @@ func isBlackjack(hand Hand) bool {
 // StartBlackjackGame starts a blackjack game from a slash command
 func StartBlackjackGame(s *discordgo.Session, i *discordgo.InteractionCreate, bet int) {
 	if i.GuildID == "" {
-		respondEmbed(s, i, utils.ErrorEmbed("This game can only be played within a server."))
+		respondEmbed(s, i, utils.ErrorEmbed(locale.Text("games.aviator.this_game_can_only_be_played_within")))
 		return
 	}
 	guildID := i.GuildID
@@ -182,26 +183,26 @@ func StartBlackjackGame(s *discordgo.Session, i *discordgo.InteractionCreate, be
 	blackjackMu.Lock()
 	if _, exists := activeBlackjackGames[userID]; exists {
 		blackjackMu.Unlock()
-		respondEmbed(s, i, utils.ErrorEmbed("You already have an active Blackjack game! Finish it before starting another."))
+		respondEmbed(s, i, utils.ErrorEmbed(locale.Text("games.blackjack.you_already_have_an_active_blackjack_game")))
 		return
 	}
 	blackjackMu.Unlock()
 
 	// Validate bet
 	if bet < 10 {
-		respondEmbed(s, i, utils.ErrorEmbed(fmt.Sprintf("Minimum bet is 10 %s", config.Bot.CurrencySymbol)))
+		respondEmbed(s, i, utils.ErrorEmbed(locale.Text("games.blackjack.minimum_bet_is.formatted", locale.Data{"CurrencySymbol": config.Bot.CurrencySymbol})))
 		return
 	}
 
 	balance := database.GetBalance(guildID, userID)
 	if balance < bet {
-		respondEmbed(s, i, utils.ErrorEmbed(fmt.Sprintf("Insufficient balance! You have %d %s", balance, config.Bot.CurrencySymbol)))
+		respondEmbed(s, i, utils.ErrorEmbed(locale.Text("games.blackjack.insufficient_balance_you_have.formatted", locale.Data{"Balance": balance, "CurrencySymbol": config.Bot.CurrencySymbol})))
 		return
 	}
 
 	// Deduct bet atomically
 	if err := database.CollectLostBet(guildID, userID, bet); err != nil {
-		respondEmbed(s, i, utils.ErrorEmbed("Error deducting bet."))
+		respondEmbed(s, i, utils.ErrorEmbed(locale.Text("games.blackjack.error_deducting_bet")))
 		return
 	}
 
@@ -279,118 +280,6 @@ func StartBlackjackGame(s *discordgo.Session, i *discordgo.InteractionCreate, be
 	}
 }
 
-// StartBlackjackText starts a blackjack game from a text command
-func StartBlackjackText(s *discordgo.Session, m *discordgo.MessageCreate, bet int) {
-	if m.GuildID == "" {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("This game can only be played within a server."))
-		return
-	}
-	guildID := m.GuildID
-	userID := m.Author.ID
-
-	// Check if user already has an active game
-	blackjackMu.Lock()
-	if _, exists := activeBlackjackGames[userID]; exists {
-		blackjackMu.Unlock()
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("You already have an active Blackjack game! Finish it before starting another."))
-		return
-	}
-	blackjackMu.Unlock()
-
-	// Validate bet
-	if bet < 10 {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(fmt.Sprintf("Minimum bet is 10 %s", config.Bot.CurrencySymbol)))
-		return
-	}
-
-	balance := database.GetBalance(guildID, userID)
-	if balance < bet {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed(fmt.Sprintf("Insufficient balance! You have %d %s", balance, config.Bot.CurrencySymbol)))
-		return
-	}
-
-	// Deduct bet atomically
-	if err := database.CollectLostBet(guildID, userID, bet); err != nil {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Error deducting bet."))
-		return
-	}
-
-	// Initialize game
-	game := &BlackjackGame{
-		GuildID:   guildID,
-		UserID:    userID,
-		Bet:       bet,
-		Deck:      createDeck(),
-		Status:    "playing",
-		ChannelID: m.ChannelID,
-	}
-
-	// Deal initial cards
-	game.PlayerHand.Cards = append(game.PlayerHand.Cards, game.dealCard())
-	game.DealerHand.Cards = append(game.DealerHand.Cards, game.dealCard())
-	game.PlayerHand.Cards = append(game.PlayerHand.Cards, game.dealCard())
-	game.DealerHand.Cards = append(game.DealerHand.Cards, game.dealCard())
-
-	calculateScore(&game.PlayerHand)
-	calculateScore(&game.DealerHand)
-
-	playerBJ := isBlackjack(game.PlayerHand)
-	dealerShowsTen := game.DealerHand.Cards[1].Score == 10
-	dealerBJ := isBlackjack(game.DealerHand)
-
-	// Immediate resolution rules:
-	// 1. Natural Blackjack always resolves immediately:
-	//    - Push if dealer also has Blackjack
-	//    - 3:2 payout if dealer does not have Blackjack (never plays or pushes against non-BJ)
-	// 2. If dealer shows 10 and has Blackjack, dealer wins immediately.
-	// 3. If dealer shows Ace and player has no BJ, game continues to offer insurance.
-	if playerBJ {
-		if dealerBJ {
-			game.Status = "push"
-		} else {
-			game.Status = "blackjack"
-		}
-		game.endGameText(s, m.ChannelID)
-		return
-	} else if dealerShowsTen && dealerBJ {
-		game.Status = "dealer_win"
-		game.endGameText(s, m.ChannelID)
-		return
-	}
-
-	// Store game and attach inactivity timer (2 minutes)
-	blackjackMu.Lock()
-	activeBlackjackGames[userID] = game
-	blackjackMu.Unlock()
-
-	game.Timer = time.AfterFunc(2*time.Minute, func() {
-		game.handleInactivityTimeout(s)
-	})
-
-	// Send initial game state
-	embed := game.createGameEmbed(false)
-	embed.Footer.Text = fmt.Sprintf("Use: !bj hit | !bj stand | !bj double | !bj surrender (User: %s)", m.Author.Username)
-	components := game.createActionButtons()
-
-	msg, err := s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
-		Content:    fmt.Sprintf("<@%s> Your Blackjack game started!", userID),
-		Embeds:     []*discordgo.MessageEmbed{embed},
-		Components: components,
-	})
-
-	if err != nil {
-		game.stopTimer()
-		blackjackMu.Lock()
-		delete(activeBlackjackGames, userID)
-		blackjackMu.Unlock()
-		_ = database.AddCoins(guildID, userID, bet)
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Failed to start game."))
-		return
-	}
-
-	game.MessageID = msg.ID
-}
-
 func (g *BlackjackGame) stopTimer() {
 	if g.Timer != nil {
 		g.Timer.Stop()
@@ -434,7 +323,7 @@ func (g *BlackjackGame) handleInactivityTimeout(s *discordgo.Session) {
 	blackjackMu.Unlock()
 
 	if s != nil && channelID != "" {
-		timeoutNotice := fmt.Sprintf("⏰ <@%s> Inactivity timeout (2 min). Auto-stand executed!", g.UserID)
+		timeoutNotice := locale.Text("games.blackjack.inactivity_timeout_min_auto_stand_executed.formatted", locale.Data{"UserID": g.UserID})
 		if messageID != "" {
 			_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
 				ID:         messageID,
@@ -475,18 +364,18 @@ func (g *BlackjackGame) createGameEmbed(showDealer bool) *discordgo.MessageEmbed
 		totalBetStr = fmt.Sprintf("%d %s (%d + %d)", g.Bet+g.SplitBet, config.Bot.CurrencySymbol, g.Bet, g.SplitBet)
 	}
 	if g.Insurance {
-		totalBetStr += fmt.Sprintf(" *(+ %d %s insurance)*", g.InsuranceBet, config.Bot.CurrencySymbol)
+		totalBetStr += locale.Text("games.blackjack.insurance.formatted", locale.Data{"InsuranceBet": g.InsuranceBet, "CurrencySymbol": config.Bot.CurrencySymbol})
 	}
 
 	var fields []*discordgo.MessageEmbedField
 	fields = append(fields, &discordgo.MessageEmbedField{
-		Name:   "💰 Bet",
+		Name:   locale.Text("games.blackjack.bet"),
 		Value:  totalBetStr,
 		Inline: true,
 	})
 	fields = append(fields, &discordgo.MessageEmbedField{
-		Name:   "🎰 Dealer's Hand",
-		Value:  fmt.Sprintf("%s\nScore: **%s**", formatHand(g.DealerHand, !showDealer), dealerScore),
+		Name:   locale.Text("games.blackjack.dealer_s_hand"),
+		Value:  locale.Text("games.blackjack.score.formatted", locale.Data{"Value1": formatHand(g.DealerHand, !showDealer), "DealerScore": dealerScore}),
 		Inline: false,
 	})
 
@@ -494,52 +383,52 @@ func (g *BlackjackGame) createGameEmbed(showDealer bool) *discordgo.MessageEmbed
 		h1Tag := ""
 		h2Tag := ""
 		if g.ActiveHand == 0 {
-			h1Tag = " 🎯 **[ACTIVE]**"
+			h1Tag = locale.Text("games.blackjack.active")
 		} else {
-			h2Tag = " 🎯 **[ACTIVE]**"
+			h2Tag = locale.Text("games.blackjack.active")
 		}
 
-		h1Val := fmt.Sprintf("%s\nScore: **%d**", formatHand(g.PlayerHand, false), g.PlayerHand.Score)
+		h1Val := locale.Text("games.blackjack.score_27158a.formatted", locale.Data{"Value1": formatHand(g.PlayerHand, false), "Score": g.PlayerHand.Score})
 		if g.PlayerHand.Score > 21 {
-			h1Val += " *(Bust)*"
+			h1Val += locale.Text("games.blackjack.bust")
 		}
 		if g.DoubledDown {
-			h1Val += " *(Doubled)*"
+			h1Val += locale.Text("games.blackjack.doubled")
 		}
 
-		h2Val := fmt.Sprintf("%s\nScore: **%d**", formatHand(g.SplitHand, false), g.SplitHand.Score)
+		h2Val := locale.Text("games.blackjack.score_27158a.formatted", locale.Data{"Value1": formatHand(g.SplitHand, false), "Score": g.SplitHand.Score})
 		if g.SplitHand.Score > 21 {
-			h2Val += " *(Bust)*"
+			h2Val += locale.Text("games.blackjack.bust")
 		}
 		if g.SplitDoubledDown {
-			h2Val += " *(Doubled)*"
+			h2Val += locale.Text("games.blackjack.doubled")
 		}
 
 		fields = append(fields, &discordgo.MessageEmbedField{
-			Name:   fmt.Sprintf("🎴 Hand 1%s", h1Tag),
+			Name:   locale.Text("games.blackjack.hand.formatted", locale.Data{"H1Tag": h1Tag}),
 			Value:  h1Val,
 			Inline: true,
 		})
 		fields = append(fields, &discordgo.MessageEmbedField{
-			Name:   fmt.Sprintf("🎴 Hand 2%s", h2Tag),
+			Name:   locale.Text("games.blackjack.hand_9eb5b3.formatted", locale.Data{"H2Tag": h2Tag}),
 			Value:  h2Val,
 			Inline: true,
 		})
 	} else {
 		fields = append(fields, &discordgo.MessageEmbedField{
-			Name:   "🎴 Your Hand",
-			Value:  fmt.Sprintf("%s\nScore: **%d**", formatHand(g.PlayerHand, false), g.PlayerHand.Score),
+			Name:   locale.Text("games.blackjack.your_hand"),
+			Value:  locale.Text("games.blackjack.score_27158a.formatted", locale.Data{"Value1": formatHand(g.PlayerHand, false), "Score": g.PlayerHand.Score}),
 			Inline: false,
 		})
 	}
 
-	footerText := "Choose your action • Timeout in 2 min"
+	footerText := locale.Text("games.blackjack.choose_your_action_timeout_in_min")
 	if g.IsSplit {
-		footerText = fmt.Sprintf("Playing Hand %d • Timeout in 2 min", g.ActiveHand+1)
+		footerText = locale.Text("games.blackjack.playing_hand_timeout_in_min.formatted", locale.Data{"ActiveHand": g.ActiveHand + 1})
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title:  "🃏 Blackjack",
+		Title:  locale.Text("games.blackjack.blackjack"),
 		Color:  0x2F3136,
 		Fields: fields,
 		Footer: &discordgo.MessageEmbedFooter{
@@ -554,13 +443,13 @@ func (g *BlackjackGame) createGameEmbed(showDealer bool) *discordgo.MessageEmbed
 func (g *BlackjackGame) createActionButtons() []discordgo.MessageComponent {
 	buttons := []discordgo.MessageComponent{
 		discordgo.Button{
-			Label:    "Hit",
+			Label:    locale.Text("games.blackjack.hit"),
 			Style:    discordgo.SuccessButton,
 			CustomID: fmt.Sprintf("bj_hit_%s", g.UserID),
 			Emoji:    &discordgo.ComponentEmoji{Name: "🎯"},
 		},
 		discordgo.Button{
-			Label:    "Stand",
+			Label:    locale.Text("games.blackjack.stand"),
 			Style:    discordgo.PrimaryButton,
 			CustomID: fmt.Sprintf("bj_stand_%s", g.UserID),
 			Emoji:    &discordgo.ComponentEmoji{Name: "✋"},
@@ -584,7 +473,7 @@ func (g *BlackjackGame) createActionButtons() []discordgo.MessageComponent {
 			balance := database.GetBalance(g.GuildID, g.UserID)
 			if balance >= betAmount {
 				buttons = append(buttons, discordgo.Button{
-					Label:    "Double Down",
+					Label:    locale.Text("games.blackjack.double_down"),
 					Style:    discordgo.SecondaryButton,
 					CustomID: fmt.Sprintf("bj_double_%s", g.UserID),
 					Emoji:    &discordgo.ComponentEmoji{Name: "💎"},
@@ -604,7 +493,7 @@ func (g *BlackjackGame) createActionButtons() []discordgo.MessageComponent {
 		balance := database.GetBalance(g.GuildID, g.UserID)
 		if balance >= g.Bet {
 			buttons = append(buttons, discordgo.Button{
-				Label:    "Double Down",
+				Label:    locale.Text("games.blackjack.double_down"),
 				Style:    discordgo.SecondaryButton,
 				CustomID: fmt.Sprintf("bj_double_%s", g.UserID),
 				Emoji:    &discordgo.ComponentEmoji{Name: "💎"},
@@ -620,7 +509,7 @@ func (g *BlackjackGame) createActionButtons() []discordgo.MessageComponent {
 			balance := database.GetBalance(g.GuildID, g.UserID)
 			if balance >= g.Bet {
 				buttons = append(buttons, discordgo.Button{
-					Label:    "Split",
+					Label:    locale.Text("games.blackjack.split"),
 					Style:    discordgo.SecondaryButton,
 					CustomID: fmt.Sprintf("bj_split_%s", g.UserID),
 					Emoji:    &discordgo.ComponentEmoji{Name: "🔀"},
@@ -635,7 +524,7 @@ func (g *BlackjackGame) createActionButtons() []discordgo.MessageComponent {
 		balance := database.GetBalance(g.GuildID, g.UserID)
 		if balance >= insuranceAmount {
 			buttons = append(buttons, discordgo.Button{
-				Label:    "Insurance",
+				Label:    locale.Text("games.blackjack.insurance_e3149c"),
 				Style:    discordgo.SecondaryButton,
 				CustomID: fmt.Sprintf("bj_insurance_%s", g.UserID),
 				Emoji:    &discordgo.ComponentEmoji{Name: "🛡️"},
@@ -646,7 +535,7 @@ func (g *BlackjackGame) createActionButtons() []discordgo.MessageComponent {
 	// Offer surrender on opening two cards
 	if len(g.PlayerHand.Cards) == 2 && !g.DoubledDown && !g.Insurance {
 		buttons = append(buttons, discordgo.Button{
-			Label:    "Surrender",
+			Label:    locale.Text("games.blackjack.surrender"),
 			Style:    discordgo.DangerButton,
 			CustomID: fmt.Sprintf("bj_surrender_%s", g.UserID),
 			Emoji:    &discordgo.ComponentEmoji{Name: "🏳️"},
@@ -679,7 +568,7 @@ func HandleBlackjackHit(s *discordgo.Session, i *discordgo.InteractionCreate, us
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "❌ This is not your game!",
+				Content: locale.Text("games.blackjack.this_is_not_your_game"),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -691,7 +580,7 @@ func HandleBlackjackHit(s *discordgo.Session, i *discordgo.InteractionCreate, us
 	blackjackMu.Unlock()
 
 	if !exists {
-		respondEmbed(s, i, utils.ErrorEmbed("No active game found!"))
+		respondEmbed(s, i, utils.ErrorEmbed(locale.Text("games.blackjack.no_active_game_found")))
 		return
 	}
 
@@ -779,7 +668,7 @@ func HandleBlackjackStand(s *discordgo.Session, i *discordgo.InteractionCreate, 
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "❌ This is not your game!",
+				Content: locale.Text("games.blackjack.this_is_not_your_game"),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -791,7 +680,7 @@ func HandleBlackjackStand(s *discordgo.Session, i *discordgo.InteractionCreate, 
 	blackjackMu.Unlock()
 
 	if !exists {
-		respondEmbed(s, i, utils.ErrorEmbed("No active game found!"))
+		respondEmbed(s, i, utils.ErrorEmbed(locale.Text("games.blackjack.no_active_game_found")))
 		return
 	}
 
@@ -848,7 +737,7 @@ func HandleBlackjackDouble(s *discordgo.Session, i *discordgo.InteractionCreate,
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "❌ This is not your game!",
+				Content: locale.Text("games.blackjack.this_is_not_your_game"),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -860,7 +749,7 @@ func HandleBlackjackDouble(s *discordgo.Session, i *discordgo.InteractionCreate,
 	blackjackMu.Unlock()
 
 	if !exists {
-		respondEmbed(s, i, utils.ErrorEmbed("No active game found!"))
+		respondEmbed(s, i, utils.ErrorEmbed(locale.Text("games.blackjack.no_active_game_found")))
 		return
 	}
 
@@ -881,19 +770,19 @@ func HandleBlackjackDouble(s *discordgo.Session, i *discordgo.InteractionCreate,
 		}
 
 		if len(activeHand.Cards) != 2 || *activeDoubled {
-			respondEmbed(s, i, utils.ErrorEmbed("Cannot double down on this hand."))
+			respondEmbed(s, i, utils.ErrorEmbed(locale.Text("games.blackjack.cannot_double_down_on_this_hand")))
 			return
 		}
 
 		balance := database.GetBalance(game.GuildID, userID)
 		if balance < betAmount {
-			respondEmbed(s, i, utils.ErrorEmbed("Insufficient balance to double down!"))
+			respondEmbed(s, i, utils.ErrorEmbed(locale.Text("games.blackjack.insufficient_balance_to_double_down")))
 			return
 		}
 
 		// Deduct additional bet atomically
 		if err := database.CollectLostBet(game.GuildID, userID, betAmount); err != nil {
-			respondEmbed(s, i, utils.ErrorEmbed("Failed to deduct double down bet."))
+			respondEmbed(s, i, utils.ErrorEmbed(locale.Text("games.blackjack.failed_to_deduct_double_down_bet")))
 			return
 		}
 
@@ -936,13 +825,13 @@ func HandleBlackjackDouble(s *discordgo.Session, i *discordgo.InteractionCreate,
 	}
 
 	if len(game.PlayerHand.Cards) != 2 || game.DoubledDown {
-		respondEmbed(s, i, utils.ErrorEmbed("Cannot double down now."))
+		respondEmbed(s, i, utils.ErrorEmbed(locale.Text("games.blackjack.cannot_double_down_now")))
 		return
 	}
 
 	balance := database.GetBalance(game.GuildID, userID)
 	if balance < game.Bet {
-		respondEmbed(s, i, utils.ErrorEmbed("Insufficient balance to double down!"))
+		respondEmbed(s, i, utils.ErrorEmbed(locale.Text("games.blackjack.insufficient_balance_to_double_down")))
 		return
 	}
 
@@ -957,7 +846,7 @@ func HandleBlackjackDouble(s *discordgo.Session, i *discordgo.InteractionCreate,
 
 	// Deduct additional bet atomically
 	if err := database.CollectLostBet(game.GuildID, userID, game.Bet); err != nil {
-		respondEmbed(s, i, utils.ErrorEmbed("Failed to deduct double down bet."))
+		respondEmbed(s, i, utils.ErrorEmbed(locale.Text("games.blackjack.failed_to_deduct_double_down_bet")))
 		return
 	}
 
@@ -988,7 +877,7 @@ func HandleBlackjackSplit(s *discordgo.Session, i *discordgo.InteractionCreate, 
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "❌ This is not your game!",
+				Content: locale.Text("games.blackjack.this_is_not_your_game"),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -1000,7 +889,7 @@ func HandleBlackjackSplit(s *discordgo.Session, i *discordgo.InteractionCreate, 
 	blackjackMu.Unlock()
 
 	if !exists {
-		respondEmbed(s, i, utils.ErrorEmbed("No active game found!"))
+		respondEmbed(s, i, utils.ErrorEmbed(locale.Text("games.blackjack.no_active_game_found")))
 		return
 	}
 
@@ -1008,7 +897,7 @@ func HandleBlackjackSplit(s *discordgo.Session, i *discordgo.InteractionCreate, 
 	defer game.mu.Unlock()
 
 	if game.IsSplit || len(game.PlayerHand.Cards) != 2 || game.DoubledDown || game.Insurance {
-		respondEmbed(s, i, utils.ErrorEmbed("Cannot split now."))
+		respondEmbed(s, i, utils.ErrorEmbed(locale.Text("games.blackjack.cannot_split_now")))
 		return
 	}
 
@@ -1016,13 +905,13 @@ func HandleBlackjackSplit(s *discordgo.Session, i *discordgo.InteractionCreate, 
 	c0 := game.PlayerHand.Cards[0]
 	c1 := game.PlayerHand.Cards[1]
 	if c0.Value != c1.Value && c0.Score != c1.Score {
-		respondEmbed(s, i, utils.ErrorEmbed("You can only split cards of the same rank or value!"))
+		respondEmbed(s, i, utils.ErrorEmbed(locale.Text("games.blackjack.you_can_only_split_cards_of_the")))
 		return
 	}
 
 	balance := database.GetBalance(game.GuildID, userID)
 	if balance < game.Bet {
-		respondEmbed(s, i, utils.ErrorEmbed("Insufficient balance to split!"))
+		respondEmbed(s, i, utils.ErrorEmbed(locale.Text("games.blackjack.insufficient_balance_to_split")))
 		return
 	}
 
@@ -1037,7 +926,7 @@ func HandleBlackjackSplit(s *discordgo.Session, i *discordgo.InteractionCreate, 
 
 	// Deduct split bet atomically
 	if err := database.CollectLostBet(game.GuildID, userID, game.Bet); err != nil {
-		respondEmbed(s, i, utils.ErrorEmbed("Failed to deduct split bet."))
+		respondEmbed(s, i, utils.ErrorEmbed(locale.Text("games.blackjack.failed_to_deduct_split_bet")))
 		return
 	}
 
@@ -1083,7 +972,7 @@ func HandleBlackjackInsurance(s *discordgo.Session, i *discordgo.InteractionCrea
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "❌ This is not your game!",
+				Content: locale.Text("games.blackjack.this_is_not_your_game"),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -1095,7 +984,7 @@ func HandleBlackjackInsurance(s *discordgo.Session, i *discordgo.InteractionCrea
 	blackjackMu.Unlock()
 
 	if !exists {
-		respondEmbed(s, i, utils.ErrorEmbed("No active game found!"))
+		respondEmbed(s, i, utils.ErrorEmbed(locale.Text("games.blackjack.no_active_game_found")))
 		return
 	}
 
@@ -1103,19 +992,19 @@ func HandleBlackjackInsurance(s *discordgo.Session, i *discordgo.InteractionCrea
 	defer game.mu.Unlock()
 
 	if game.Insurance || game.DealerHand.Cards[1].Value != "A" {
-		respondEmbed(s, i, utils.ErrorEmbed("Insurance is not available."))
+		respondEmbed(s, i, utils.ErrorEmbed(locale.Text("games.blackjack.insurance_is_not_available")))
 		return
 	}
 
 	insuranceAmount := game.Bet / 2
 	balance := database.GetBalance(game.GuildID, userID)
 	if balance < insuranceAmount {
-		respondEmbed(s, i, utils.ErrorEmbed("Insufficient balance for insurance!"))
+		respondEmbed(s, i, utils.ErrorEmbed(locale.Text("games.blackjack.insufficient_balance_for_insurance")))
 		return
 	}
 
 	if err := database.CollectLostBet(game.GuildID, userID, insuranceAmount); err != nil {
-		respondEmbed(s, i, utils.ErrorEmbed("Failed to process insurance bet."))
+		respondEmbed(s, i, utils.ErrorEmbed(locale.Text("games.blackjack.failed_to_process_insurance_bet")))
 		return
 	}
 
@@ -1138,7 +1027,7 @@ func HandleBlackjackInsurance(s *discordgo.Session, i *discordgo.InteractionCrea
 
 	// Dealer does not have BJ, hand continues without dealer hole card revealed
 	embed := game.createGameEmbed(false)
-	embed.Footer.Text = fmt.Sprintf("🛡️ Insurance purchased (-%d %s). Dealer does NOT have Blackjack!", insuranceAmount, config.Bot.CurrencySymbol)
+	embed.Footer.Text = locale.Text("games.blackjack.insurance_purchased_dealer_does_not_have_blackjack.formatted", locale.Data{"InsuranceAmount": insuranceAmount, "CurrencySymbol": config.Bot.CurrencySymbol})
 	components := game.createActionButtons()
 
 	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
@@ -1156,7 +1045,7 @@ func HandleBlackjackSurrender(s *discordgo.Session, i *discordgo.InteractionCrea
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "❌ This is not your game!",
+				Content: locale.Text("games.blackjack.this_is_not_your_game"),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -1168,7 +1057,7 @@ func HandleBlackjackSurrender(s *discordgo.Session, i *discordgo.InteractionCrea
 	blackjackMu.Unlock()
 
 	if !exists {
-		respondEmbed(s, i, utils.ErrorEmbed("No active game found!"))
+		respondEmbed(s, i, utils.ErrorEmbed(locale.Text("games.blackjack.no_active_game_found")))
 		return
 	}
 
@@ -1176,391 +1065,13 @@ func HandleBlackjackSurrender(s *discordgo.Session, i *discordgo.InteractionCrea
 	defer game.mu.Unlock()
 
 	if len(game.PlayerHand.Cards) != 2 || game.DoubledDown || game.Insurance {
-		respondEmbed(s, i, utils.ErrorEmbed("Surrender is only allowed on your opening two cards."))
+		respondEmbed(s, i, utils.ErrorEmbed(locale.Text("games.blackjack.surrender_is_only_allowed_on_your_opening")))
 		return
 	}
 
 	game.Status = "surrender"
 	game.stopTimer()
 	game.endGameInteraction(s, i)
-}
-
-// Handle text action (!bj hit, !bj stand, !bj double, !bj insurance, !bj surrender)
-func HandleBlackjackTextAction(s *discordgo.Session, m *discordgo.MessageCreate, action string) {
-	userID := m.Author.ID
-
-	blackjackMu.Lock()
-	game, exists := activeBlackjackGames[userID]
-	blackjackMu.Unlock()
-
-	if !exists {
-		s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("You don't have an active Blackjack game! Use `!bj <amount>` to start."))
-		return
-	}
-
-	game.mu.Lock()
-	defer game.mu.Unlock()
-
-	switch strings.ToLower(action) {
-	case "hit":
-		if len(game.PlayerHand.Cards) == 2 && game.DealerHand.Cards[1].Value == "A" && !game.Insurance && !game.IsSplit {
-			if game.checkDealerBlackjackOnAction() {
-				game.stopTimer()
-				game.endGameText(s, m.ChannelID)
-				return
-			}
-		}
-
-		game.resetTimer(s)
-
-		if game.IsSplit {
-			if game.ActiveHand == 0 {
-				card := game.dealCard()
-				game.PlayerHand.Cards = append(game.PlayerHand.Cards, card)
-				calculateScore(&game.PlayerHand)
-				if game.PlayerHand.Score >= 21 {
-					game.ActiveHand = 1
-				}
-			} else {
-				card := game.dealCard()
-				game.SplitHand.Cards = append(game.SplitHand.Cards, card)
-				calculateScore(&game.SplitHand)
-				if game.SplitHand.Score >= 21 {
-					game.stopTimer()
-					if game.PlayerHand.Score > 21 && game.SplitHand.Score > 21 {
-						game.Status = "split_ended"
-					} else {
-						game.playDealer()
-					}
-					game.endGameText(s, m.ChannelID)
-					return
-				}
-			}
-
-			embed := game.createGameEmbed(false)
-			embed.Footer.Text = fmt.Sprintf("Use: !bj hit | !bj stand | !bj double (Playing Hand %d - %s)", game.ActiveHand+1, m.Author.Username)
-			components := game.createActionButtons()
-
-			if game.MessageID != "" {
-				_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
-					ID:         game.MessageID,
-					Channel:    game.ChannelID,
-					Embeds:     &[]*discordgo.MessageEmbed{embed},
-					Components: &components,
-				})
-			} else {
-				_, _ = s.ChannelMessageSendEmbed(m.ChannelID, embed)
-			}
-			return
-		}
-
-		card := game.dealCard()
-		game.PlayerHand.Cards = append(game.PlayerHand.Cards, card)
-		calculateScore(&game.PlayerHand)
-
-		if game.PlayerHand.Score > 21 {
-			game.Status = "player_bust"
-			game.stopTimer()
-			game.endGameText(s, m.ChannelID)
-			return
-		}
-
-		embed := game.createGameEmbed(false)
-		embed.Footer.Text = fmt.Sprintf("Use: !bj hit | !bj stand | !bj double (User: %s)", m.Author.Username)
-		components := game.createActionButtons()
-
-		if game.MessageID != "" {
-			_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
-				ID:         game.MessageID,
-				Channel:    game.ChannelID,
-				Embeds:     &[]*discordgo.MessageEmbed{embed},
-				Components: &components,
-			})
-		} else {
-			_, _ = s.ChannelMessageSendEmbed(m.ChannelID, embed)
-		}
-
-	case "stand":
-		game.stopTimer()
-		if len(game.PlayerHand.Cards) == 2 && game.DealerHand.Cards[1].Value == "A" && !game.Insurance && !game.IsSplit {
-			if game.checkDealerBlackjackOnAction() {
-				game.endGameText(s, m.ChannelID)
-				return
-			}
-		}
-
-		if game.IsSplit {
-			if game.ActiveHand == 0 {
-				game.ActiveHand = 1
-				game.resetTimer(s)
-				embed := game.createGameEmbed(false)
-				embed.Footer.Text = fmt.Sprintf("Use: !bj hit | !bj stand | !bj double (Playing Hand %d - %s)", game.ActiveHand+1, m.Author.Username)
-				components := game.createActionButtons()
-
-				if game.MessageID != "" {
-					_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
-						ID:         game.MessageID,
-						Channel:    game.ChannelID,
-						Embeds:     &[]*discordgo.MessageEmbed{embed},
-						Components: &components,
-					})
-				} else {
-					_, _ = s.ChannelMessageSendEmbed(m.ChannelID, embed)
-				}
-				return
-			} else {
-				if game.PlayerHand.Score > 21 && game.SplitHand.Score > 21 {
-					game.Status = "split_ended"
-				} else {
-					game.playDealer()
-				}
-				game.endGameText(s, m.ChannelID)
-				return
-			}
-		}
-
-		game.playDealer()
-		game.endGameText(s, m.ChannelID)
-
-	case "double":
-		if game.IsSplit {
-			var activeHand *Hand
-			var activeDoubled *bool
-			betAmount := game.Bet
-			if game.ActiveHand == 0 {
-				activeHand = &game.PlayerHand
-				activeDoubled = &game.DoubledDown
-			} else {
-				activeHand = &game.SplitHand
-				activeDoubled = &game.SplitDoubledDown
-				betAmount = game.SplitBet
-			}
-
-			if len(activeHand.Cards) != 2 || *activeDoubled {
-				s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Cannot double down on this hand."))
-				return
-			}
-
-			balance := database.GetBalance(game.GuildID, userID)
-			if balance < betAmount {
-				s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Insufficient balance to double down!"))
-				return
-			}
-
-			if err := database.CollectLostBet(game.GuildID, userID, betAmount); err != nil {
-				s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Failed to deduct double down bet."))
-				return
-			}
-
-			if game.ActiveHand == 0 {
-				game.Bet *= 2
-			} else {
-				game.SplitBet *= 2
-			}
-			*activeDoubled = true
-
-			card := game.dealCard()
-			activeHand.Cards = append(activeHand.Cards, card)
-			calculateScore(activeHand)
-
-			if game.ActiveHand == 0 {
-				game.ActiveHand = 1
-				game.resetTimer(s)
-				embed := game.createGameEmbed(false)
-				embed.Footer.Text = fmt.Sprintf("Use: !bj hit | !bj stand | !bj double (Playing Hand %d - %s)", game.ActiveHand+1, m.Author.Username)
-				components := game.createActionButtons()
-
-				if game.MessageID != "" {
-					_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
-						ID:         game.MessageID,
-						Channel:    game.ChannelID,
-						Embeds:     &[]*discordgo.MessageEmbed{embed},
-						Components: &components,
-					})
-				} else {
-					_, _ = s.ChannelMessageSendEmbed(m.ChannelID, embed)
-				}
-				return
-			} else {
-				game.stopTimer()
-				if game.PlayerHand.Score > 21 && game.SplitHand.Score > 21 {
-					game.Status = "split_ended"
-				} else {
-					game.playDealer()
-				}
-				game.endGameText(s, m.ChannelID)
-				return
-			}
-		}
-
-		if len(game.PlayerHand.Cards) != 2 || game.DoubledDown {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Cannot double down now."))
-			return
-		}
-
-		balance := database.GetBalance(game.GuildID, userID)
-		if balance < game.Bet {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Insufficient balance to double down!"))
-			return
-		}
-
-		// Check dealer BJ BEFORE deducting double down bet (protecting player from losing 2x)
-		if game.DealerHand.Cards[1].Value == "A" && !game.Insurance {
-			if game.checkDealerBlackjackOnAction() {
-				game.stopTimer()
-				game.endGameText(s, m.ChannelID)
-				return
-			}
-		}
-
-		if err := database.CollectLostBet(game.GuildID, userID, game.Bet); err != nil {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Failed to deduct double down bet."))
-			return
-		}
-
-		game.Bet *= 2
-		game.DoubledDown = true
-		game.stopTimer()
-
-		card := game.dealCard()
-		game.PlayerHand.Cards = append(game.PlayerHand.Cards, card)
-		calculateScore(&game.PlayerHand)
-
-		if game.PlayerHand.Score > 21 {
-			game.Status = "player_bust"
-			game.endGameText(s, m.ChannelID)
-			return
-		}
-
-		game.playDealer()
-		game.endGameText(s, m.ChannelID)
-
-	case "split", "dividir":
-		if game.IsSplit || len(game.PlayerHand.Cards) != 2 || game.DoubledDown || game.Insurance {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Cannot split now."))
-			return
-		}
-
-		c0 := game.PlayerHand.Cards[0]
-		c1 := game.PlayerHand.Cards[1]
-		if c0.Value != c1.Value && c0.Score != c1.Score {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("You can only split cards of the same rank or value!"))
-			return
-		}
-
-		balance := database.GetBalance(game.GuildID, userID)
-		if balance < game.Bet {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Insufficient balance to split!"))
-			return
-		}
-
-		if game.DealerHand.Cards[1].Value == "A" && !game.Insurance {
-			if game.checkDealerBlackjackOnAction() {
-				game.stopTimer()
-				game.endGameText(s, m.ChannelID)
-				return
-			}
-		}
-
-		if err := database.CollectLostBet(game.GuildID, userID, game.Bet); err != nil {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Failed to deduct split bet."))
-			return
-		}
-
-		game.IsSplit = true
-		game.ActiveHand = 0
-		game.SplitBet = game.Bet
-
-		game.PlayerHand.Cards = []Card{c0, game.dealCard()}
-		game.SplitHand.Cards = []Card{c1, game.dealCard()}
-		calculateScore(&game.PlayerHand)
-		calculateScore(&game.SplitHand)
-
-		if game.PlayerHand.Score == 21 {
-			game.ActiveHand = 1
-			if game.SplitHand.Score == 21 {
-				game.stopTimer()
-				game.playDealer()
-				game.endGameText(s, m.ChannelID)
-				return
-			}
-		}
-
-		game.resetTimer(s)
-
-		embed := game.createGameEmbed(false)
-		embed.Footer.Text = fmt.Sprintf("Use: !bj hit | !bj stand | !bj double (Playing Hand %d - %s)", game.ActiveHand+1, m.Author.Username)
-		components := game.createActionButtons()
-
-		if game.MessageID != "" {
-			_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
-				ID:         game.MessageID,
-				Channel:    game.ChannelID,
-				Embeds:     &[]*discordgo.MessageEmbed{embed},
-				Components: &components,
-			})
-		} else {
-			_, _ = s.ChannelMessageSendEmbed(m.ChannelID, embed)
-		}
-
-	case "insurance":
-		if game.Insurance || game.DealerHand.Cards[1].Value != "A" {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Insurance is not available."))
-			return
-		}
-
-		insuranceAmount := game.Bet / 2
-		balance := database.GetBalance(game.GuildID, userID)
-		if balance < insuranceAmount {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Insufficient balance for insurance!"))
-			return
-		}
-
-		if err := database.CollectLostBet(game.GuildID, userID, insuranceAmount); err != nil {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Failed to process insurance bet."))
-			return
-		}
-
-		game.Insurance = true
-		game.InsuranceBet = insuranceAmount
-		game.resetTimer(s)
-
-		if isBlackjack(game.DealerHand) {
-			if isBlackjack(game.PlayerHand) {
-				game.Status = "push"
-			} else {
-				game.Status = "dealer_win"
-			}
-			game.stopTimer()
-			game.endGameText(s, m.ChannelID)
-			return
-		}
-
-		embed := game.createGameEmbed(false)
-		embed.Footer.Text = fmt.Sprintf("🛡️ Insurance purchased (-%d %s). Dealer does NOT have Blackjack!", insuranceAmount, config.Bot.CurrencySymbol)
-		components := game.createActionButtons()
-
-		if game.MessageID != "" {
-			_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
-				ID:         game.MessageID,
-				Channel:    game.ChannelID,
-				Embeds:     &[]*discordgo.MessageEmbed{embed},
-				Components: &components,
-			})
-		} else {
-			_, _ = s.ChannelMessageSendEmbed(m.ChannelID, embed)
-		}
-
-	case "surrender":
-		if len(game.PlayerHand.Cards) != 2 || game.DoubledDown || game.Insurance {
-			s.ChannelMessageSendEmbed(m.ChannelID, utils.ErrorEmbed("Surrender is only allowed on your opening two cards."))
-			return
-		}
-
-		game.Status = "surrender"
-		game.stopTimer()
-		game.endGameText(s, m.ChannelID)
-	}
 }
 
 // Dealer plays according to rules (hits on 16 or less, stands on 17+)
@@ -1595,18 +1106,18 @@ func (g *BlackjackGame) buildSplitGameOverEmbed() *discordgo.MessageEmbed {
 
 	evalHand := func(hand Hand, bet int) (string, int) {
 		if hand.Score > 21 {
-			return "💥 **BUST - YOU LOSE**", 0
+			return locale.Text("games.blackjack.bust_you_lose"), 0
 		}
 		if g.DealerHand.Score > 21 {
-			return "💥 **DEALER BUST - YOU WIN!**", bet * 2
+			return locale.Text("games.blackjack.dealer_bust_you_win"), bet * 2
 		}
 		if hand.Score > g.DealerHand.Score {
-			return "✅ **YOU WIN!**", bet * 2
+			return locale.Text("games.blackjack.you_win"), bet * 2
 		}
 		if hand.Score < g.DealerHand.Score {
-			return "❌ **DEALER WINS**", 0
+			return locale.Text("games.blackjack.dealer_wins"), 0
 		}
-		return "🤝 **PUSH - TIE**", bet
+		return locale.Text("games.blackjack.push_tie"), bet
 	}
 
 	h1Result, h1Win := evalHand(g.PlayerHand, g.Bet)
@@ -1622,59 +1133,59 @@ func (g *BlackjackGame) buildSplitGameOverEmbed() *discordgo.MessageEmbed {
 	profitText := ""
 	if netProfit > 0 {
 		resultColor = 0x00FF00
-		profitText = fmt.Sprintf("💰 **Net Profit:** +%d %s", netProfit, config.Bot.CurrencySymbol)
+		profitText = locale.Text("games.blackjack.net_profit.formatted", locale.Data{"NetProfit": netProfit, "CurrencySymbol": config.Bot.CurrencySymbol})
 	} else if netProfit < 0 {
 		resultColor = 0xFF0000
-		profitText = fmt.Sprintf("💸 **Net Loss:** %d %s", netProfit, config.Bot.CurrencySymbol)
+		profitText = locale.Text("games.blackjack.net_loss.formatted", locale.Data{"NetProfit": netProfit, "CurrencySymbol": config.Bot.CurrencySymbol})
 	} else {
 		resultColor = 0xFFA500
-		profitText = fmt.Sprintf("⚖️ **Net Result:** Even (0 %s)", config.Bot.CurrencySymbol)
+		profitText = locale.Text("games.blackjack.net_result_even.formatted", locale.Data{"CurrencySymbol": config.Bot.CurrencySymbol})
 	}
 
 	newBalance := database.GetBalance(g.GuildID, g.UserID)
 
-	h1Title := "🎴 Hand 1"
+	h1Title := locale.Text("games.blackjack.hand_58e253")
 	if g.DoubledDown {
-		h1Title += " *(Doubled)*"
+		h1Title += locale.Text("games.blackjack.doubled")
 	}
-	h2Title := "🎴 Hand 2"
+	h2Title := locale.Text("games.blackjack.hand_e0c870")
 	if g.SplitDoubledDown {
-		h2Title += " *(Doubled)*"
+		h2Title += locale.Text("games.blackjack.doubled")
 	}
 
 	dealerScore := fmt.Sprintf("%d", g.DealerHand.Score)
 	if g.DealerHand.Score > 21 {
-		dealerScore = fmt.Sprintf("%d (Bust)", g.DealerHand.Score)
+		dealerScore = locale.Text("games.blackjack.bust_0fa043.formatted", locale.Data{"Score": g.DealerHand.Score})
 	}
 
 	return &discordgo.MessageEmbed{
-		Title:       "🃏 Blackjack - Game Over (Split)",
+		Title:       locale.Text("games.blackjack.blackjack_game_over_split"),
 		Description: profitText,
 		Color:       resultColor,
 		Fields: []*discordgo.MessageEmbedField{
 			{
-				Name:   "🎰 Dealer's Hand",
-				Value:  fmt.Sprintf("%s\nScore: **%s**", formatHand(g.DealerHand, false), dealerScore),
+				Name:   locale.Text("games.blackjack.dealer_s_hand"),
+				Value:  locale.Text("games.blackjack.score.formatted", locale.Data{"Value1": formatHand(g.DealerHand, false), "DealerScore": dealerScore}),
 				Inline: false,
 			},
 			{
 				Name:   h1Title,
-				Value:  fmt.Sprintf("%s\nScore: **%d**\nResult: %s", formatHand(g.PlayerHand, false), g.PlayerHand.Score, h1Result),
+				Value:  locale.Text("games.blackjack.score_result.formatted", locale.Data{"Value1": formatHand(g.PlayerHand, false), "Score": g.PlayerHand.Score, "H1Result": h1Result}),
 				Inline: true,
 			},
 			{
 				Name:   h2Title,
-				Value:  fmt.Sprintf("%s\nScore: **%d**\nResult: %s", formatHand(g.SplitHand, false), g.SplitHand.Score, h2Result),
+				Value:  locale.Text("games.blackjack.score_result.formatted1", locale.Data{"Value1": formatHand(g.SplitHand, false), "Score": g.SplitHand.Score, "H2Result": h2Result}),
 				Inline: true,
 			},
 			{
-				Name:   "💵 New Balance",
+				Name:   locale.Text("games.blackjack.new_balance"),
 				Value:  fmt.Sprintf("**%d %s**", newBalance, config.Bot.CurrencySymbol),
 				Inline: false,
 			},
 		},
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: "Game ended (Split)",
+			Text: locale.Text("games.blackjack.game_ended_split"),
 		},
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
@@ -1692,35 +1203,35 @@ func (g *BlackjackGame) buildGameOverEmbed() *discordgo.MessageEmbed {
 	switch g.Status {
 	case "blackjack":
 		winnings = int(float64(g.Bet) * 2.5) // Blackjack pays 3:2
-		resultText = "🎉 **BLACKJACK!**"
+		resultText = locale.Text("games.blackjack.blackjack_ee13d8")
 		resultColor = 0xFFD700
 
 	case "player_win":
 		winnings = g.Bet * 2
-		resultText = "✅ **YOU WIN!**"
+		resultText = locale.Text("games.blackjack.you_win")
 		resultColor = 0x00FF00
 
 	case "dealer_bust":
 		winnings = g.Bet * 2
-		resultText = "💥 **DEALER BUST - YOU WIN!**"
+		resultText = locale.Text("games.blackjack.dealer_bust_you_win")
 		resultColor = 0x00FF00
 
 	case "dealer_win":
-		resultText = "❌ **DEALER WINS**"
+		resultText = locale.Text("games.blackjack.dealer_wins")
 		resultColor = 0xFF0000
 
 	case "player_bust":
-		resultText = "💥 **BUST - YOU LOSE**"
+		resultText = locale.Text("games.blackjack.bust_you_lose")
 		resultColor = 0xFF0000
 
 	case "push":
 		winnings = g.Bet
-		resultText = "🤝 **PUSH - TIE**"
+		resultText = locale.Text("games.blackjack.push_tie")
 		resultColor = 0xFFA500
 
 	case "surrender":
 		winnings = g.Bet / 2 // Surrender refunds 50%
-		resultText = "🏳️ **SURRENDER - 50% REFUNDED**"
+		resultText = locale.Text("games.blackjack.surrender_refunded")
 		resultColor = 0x888888
 	}
 
@@ -1730,9 +1241,9 @@ func (g *BlackjackGame) buildGameOverEmbed() *discordgo.MessageEmbed {
 		if isBlackjack(g.DealerHand) {
 			insurancePayout := g.InsuranceBet * 3 // Insurance pays 2:1 (stake + 2x profit)
 			winnings += insurancePayout
-			insuranceText = fmt.Sprintf("\n🛡️ **Insurance paid:** +%d %s", insurancePayout, config.Bot.CurrencySymbol)
+			insuranceText = locale.Text("games.blackjack.insurance_paid.formatted", locale.Data{"InsurancePayout": insurancePayout, "CurrencySymbol": config.Bot.CurrencySymbol})
 		} else {
-			insuranceText = fmt.Sprintf("\n🛡️ **Insurance lost:** -%d %s", g.InsuranceBet, config.Bot.CurrencySymbol)
+			insuranceText = locale.Text("games.blackjack.insurance_lost.formatted", locale.Data{"InsuranceBet": g.InsuranceBet, "CurrencySymbol": config.Bot.CurrencySymbol})
 		}
 	}
 
@@ -1749,38 +1260,38 @@ func (g *BlackjackGame) buildGameOverEmbed() *discordgo.MessageEmbed {
 	netProfit := winnings - totalSpent
 	profitText := ""
 	if netProfit > 0 {
-		profitText = fmt.Sprintf("\n💰 **Net Profit:** +%d %s", netProfit, config.Bot.CurrencySymbol)
+		profitText = locale.Text("games.blackjack.net_profit_41a377.formatted", locale.Data{"NetProfit": netProfit, "CurrencySymbol": config.Bot.CurrencySymbol})
 	} else if netProfit < 0 {
-		profitText = fmt.Sprintf("\n💸 **Net Loss:** %d %s", netProfit, config.Bot.CurrencySymbol)
+		profitText = locale.Text("games.blackjack.net_loss_022d9e.formatted", locale.Data{"NetProfit": netProfit, "CurrencySymbol": config.Bot.CurrencySymbol})
 	} else {
-		profitText = fmt.Sprintf("\n⚖️ **Net Result:** Even (0 %s)", config.Bot.CurrencySymbol)
+		profitText = locale.Text("games.blackjack.net_result_even_19f468.formatted", locale.Data{"CurrencySymbol": config.Bot.CurrencySymbol})
 	}
 
 	newBalance := database.GetBalance(g.GuildID, g.UserID)
 
 	return &discordgo.MessageEmbed{
-		Title:       "🃏 Blackjack - Game Over",
+		Title:       locale.Text("games.blackjack.blackjack_game_over"),
 		Description: resultText + insuranceText + profitText,
 		Color:       resultColor,
 		Fields: []*discordgo.MessageEmbedField{
 			{
-				Name:   "🎰 Dealer's Hand",
-				Value:  fmt.Sprintf("%s\nScore: **%d**", formatHand(g.DealerHand, false), g.DealerHand.Score),
+				Name:   locale.Text("games.blackjack.dealer_s_hand"),
+				Value:  locale.Text("games.blackjack.score_27158a.formatted", locale.Data{"Value1": formatHand(g.DealerHand, false), "Score": g.DealerHand.Score}),
 				Inline: false,
 			},
 			{
-				Name:   "🎴 Your Hand",
-				Value:  fmt.Sprintf("%s\nScore: **%d**", formatHand(g.PlayerHand, false), g.PlayerHand.Score),
+				Name:   locale.Text("games.blackjack.your_hand"),
+				Value:  locale.Text("games.blackjack.score_27158a.formatted", locale.Data{"Value1": formatHand(g.PlayerHand, false), "Score": g.PlayerHand.Score}),
 				Inline: false,
 			},
 			{
-				Name:   "💵 New Balance",
+				Name:   locale.Text("games.blackjack.new_balance"),
 				Value:  fmt.Sprintf("**%d %s**", newBalance, config.Bot.CurrencySymbol),
 				Inline: true,
 			},
 		},
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: "Game ended",
+			Text: locale.Text("games.blackjack.game_ended"),
 		},
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
@@ -1797,26 +1308,6 @@ func (g *BlackjackGame) endGameInteraction(s *discordgo.Session, i *discordgo.In
 			Components: []discordgo.MessageComponent{}, // Remove buttons
 		},
 	})
-
-	blackjackMu.Lock()
-	delete(activeBlackjackGames, g.UserID)
-	blackjackMu.Unlock()
-}
-
-// endGameText ends the game for text commands
-func (g *BlackjackGame) endGameText(s *discordgo.Session, channelID string) {
-	embed := g.buildGameOverEmbed()
-
-	if g.MessageID != "" {
-		_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
-			ID:         g.MessageID,
-			Channel:    channelID,
-			Embeds:     &[]*discordgo.MessageEmbed{embed},
-			Components: &[]discordgo.MessageComponent{},
-		})
-	} else {
-		_, _ = s.ChannelMessageSendEmbed(channelID, embed)
-	}
 
 	blackjackMu.Lock()
 	delete(activeBlackjackGames, g.UserID)

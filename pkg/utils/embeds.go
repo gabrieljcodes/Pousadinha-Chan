@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"bot/internal/locale"
 	"bot/internal/webhook"
 
 	"github.com/bwmarrin/discordgo"
@@ -19,7 +20,7 @@ func NewEmbed() *discordgo.MessageEmbed {
 
 func ErrorEmbed(description string) *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
-		Title:       "❌ Error",
+		Title:       locale.Text("common.embeds.error"),
 		Description: description,
 		Color:       ColorRed,
 	}
