@@ -28,6 +28,7 @@ type DatabaseConfig struct {
 type GeneralConfig struct {
 	BotName           string         `json:"bot_name"`
 	Language          string         `json:"language"`
+	DevGuildID        string         `json:"dev_guild_id"`
 	CurrencyName      string         `json:"currency_name"`
 	CurrencySymbol    string         `json:"currency_symbol"`
 	EnableAPI         bool           `json:"enable_api"`
@@ -48,6 +49,9 @@ func Load() {
 	loadJSON("config.json", &Bot)
 
 	// Environment variable overrides
+	if devGuild := os.Getenv("DEV_GUILD_ID"); devGuild != "" {
+		Bot.DevGuildID = devGuild
+	}
 	if apiPort := os.Getenv("API_PORT"); apiPort != "" {
 		Bot.ApiPort = apiPort
 	}

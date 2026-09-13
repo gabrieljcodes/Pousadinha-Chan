@@ -123,13 +123,9 @@ func main() {
 	// Start loan overdue collector background worker
 	commands.StartLoanWorker(dg)
 
-	// Register Slash Commands in a single bulk request to avoid Discord rate limits
-	log.Println("Registering slash commands...")
-	_, err = dg.ApplicationCommandBulkOverwrite(dg.State.User.ID, "", commands.ApplicationCommands())
-	if err != nil {
-		log.Printf("Warning: cannot bulk overwrite slash commands: %v", err)
-	} else {
-		log.Printf("Successfully registered %d slash commands.", len(commands.SlashCommands))
+	// Synchronize Slash Commands with Discord only if schema changed to preserve client cache
+	if err := commands.SyncCommands(dg, dg.State.User.ID, config.Bot.DevGuildID); err != nil {
+		log.Printf("Warning: cannot synchronize slash commands: %v", err)
 	}
 
 	log.Println("Bot is now running. Press CTRL-C to exit.")

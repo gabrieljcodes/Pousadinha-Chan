@@ -345,6 +345,11 @@ func (p *PostgresDatabase) CreateTables() error {
 			language TEXT NOT NULL DEFAULT 'auto',
 			updated_at TIMESTAMPTZ DEFAULT NOW()
 		);`,
+		`CREATE TABLE IF NOT EXISTS bot_metadata (
+			key TEXT PRIMARY KEY,
+			value TEXT NOT NULL,
+			updated_at TIMESTAMPTZ DEFAULT NOW()
+		);`,
 	}
 
 	for _, query := range createTableQueries {

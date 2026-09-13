@@ -67,3 +67,17 @@ func TestSlashCommandCatalog(t *testing.T) {
 		}
 	}
 }
+
+func TestCatalogHashDeterministic(t *testing.T) {
+	h1 := CatalogHash()
+	h2 := CatalogHash()
+	if h1 == "" || h2 == "" {
+		t.Fatal("expected non-empty catalog hash")
+	}
+	if h1 != h2 {
+		t.Fatalf("expected deterministic catalog hash, got %s and %s", h1, h2)
+	}
+	if len(h1) != 64 {
+		t.Fatalf("expected 64-char sha256 hex string, got length %d", len(h1))
+	}
+}

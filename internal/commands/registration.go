@@ -1,6 +1,13 @@
 package commands
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"log"
+
+	"bot/internal/database"
 	"bot/internal/locale"
 	"github.com/bwmarrin/discordgo"
 )
@@ -48,4 +55,46 @@ func localizeChoices(choices []*discordgo.ApplicationCommandOptionChoice) []*dis
 		out[j] = &choiceCopy
 	}
 	return out
+}
+
+// CatalogHash returns a deterministic SHA-256 hash representing the current command catalog.
+func CatalogHash() string {
+	cmds := ApplicationCommands()
+	raw, err := json.Marshal(cmds)
+	if err != nil {
+		return ""
+	}
+	h := sha256.Sum256(raw)
+	return hex.EncodeToString(h[:])
+}
+
+// SyncCommands synchronizes slash commands with Discord only when the catalog schema changes.
+// Skipping redundant overwrites preserves Discord's client cache and prevents "This command is outdated" errors on restarts.
+func SyncCommands(s *discordgo.Session, appID string, devGuildID string) error {
+	currentHash := CatalogHash()
+	targetScope := "global"
+	if devGuildID != "" {
+		targetScope = "guild:" + devGuildID
+	}
+	metaKey := "slash_commands_hash_" + targetScope
+
+	storedHash, err := database.GetBotMetadata(metaKey)
+	if err == nil && storedHash != "" && storedHash == currentHash {
+		log.Printf("[Commands] Slash command schema is up to date (%s, hash: %s). Skipping registration to preserve Discord client cache.", targetScope, currentHash[:8])
+		return nil
+	}
+
+	log.Printf("[Commands] Slash command schema updated (scope: %s, hash: %s). Synchronizing with Discord...", targetScope, currentHash[:8])
+	cmds := ApplicationCommands()
+	_, err = s.ApplicationCommandBulkOverwrite(appID, devGuildID, cmds)
+	if err != nil {
+		return fmt.Errorf("bulk overwrite slash commands: %w", err)
+	}
+
+	if err := database.SetBotMetadata(metaKey, currentHash); err != nil {
+		log.Printf("[Commands] Warning: failed to save schema hash in database: %v", err)
+	}
+
+	log.Printf("[Commands] Successfully registered %d slash commands with Discord (%s).", len(cmds), targetScope)
+	return nil
 }
