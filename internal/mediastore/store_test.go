@@ -266,7 +266,7 @@ func TestS3Integration(t *testing.T) {
 	if err := b.Put(ctx, "mismatch.png", strings.NewReader("other"), "image/png"); err != nil {
 		t.Fatal(err)
 	}
-	if err := b.putIfAbsent(ctx, "mismatch.png", strings.NewReader("newer"), "image/png"); err != nil {
+	if _, err := b.putIfAbsent(ctx, "mismatch.png", strings.NewReader("newer"), "image/png"); err != nil {
 		t.Fatal(err)
 	}
 	if got := contents(t, store, "mismatch.png"); got != "other" {

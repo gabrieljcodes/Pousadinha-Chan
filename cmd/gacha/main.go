@@ -56,7 +56,7 @@ func run() error {
 	case "media-copy":
 		flags := flag.NewFlagSet("media-copy", flag.ContinueOnError)
 		apply := flags.Bool("apply", false, "Copy local media to S3 and verify contents; retain local originals")
-		workers := flags.Int("workers", 32, "Number of concurrent upload workers")
+		workers := flags.Int("workers", 64, "Number of concurrent upload workers")
 		if e = flags.Parse(args); e != nil {
 			return e
 		}

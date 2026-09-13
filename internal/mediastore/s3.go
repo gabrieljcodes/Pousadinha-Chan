@@ -46,8 +46,8 @@ func newS3(ctx context.Context, cfg Config) (*s3Backend, error) {
 	}
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.ResponseHeaderTimeout = 30 * time.Second
-	transport.MaxIdleConns = 100
-	transport.MaxIdleConnsPerHost = 100
+	transport.MaxIdleConns = 256
+	transport.MaxIdleConnsPerHost = 256
 	return &s3Backend{op: op, client: &http.Client{Transport: transport, Timeout: 2 * time.Minute, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}, nil
 }
 func (s *s3Backend) Close() { s.client.CloseIdleConnections(); s.op.Close() }
@@ -143,23 +143,24 @@ func (s *s3Backend) Open(ctx context.Context, key string) (*Object, error) {
 	return &Object{ReadSeekCloser: reader, Size: response.ContentLength, Modified: modified, ETag: etag}, nil
 }
 func (s *s3Backend) Put(ctx context.Context, key string, src io.ReadSeeker, contentType string) error {
-	return s.put(ctx, key, src, contentType, false)
-}
-func (s *s3Backend) putIfAbsent(ctx context.Context, key string, src io.ReadSeeker, contentType string) error {
-	err := s.put(ctx, key, src, contentType, true)
-	if errors.Is(err, fs.ErrExist) {
-		return nil
-	}
+	_, err := s.put(ctx, key, src, contentType, false)
 	return err
 }
-func (s *s3Backend) put(ctx context.Context, key string, src io.ReadSeeker, contentType string, absent bool) error {
+func (s *s3Backend) putIfAbsent(ctx context.Context, key string, src io.ReadSeeker, contentType string) (string, error) {
+	etag, err := s.put(ctx, key, src, contentType, true)
+	if errors.Is(err, fs.ErrExist) {
+		return "", nil
+	}
+	return etag, err
+}
+func (s *s3Backend) put(ctx context.Context, key string, src io.ReadSeeker, contentType string, absent bool) (string, error) {
 	req, err := s.request(ctx, key, s.op.PresignWrite)
 	if err != nil {
-		return err
+		return "", err
 	}
 	req.ContentLength, err = src.Seek(0, io.SeekEnd)
 	if err != nil {
-		return err
+		return "", err
 	}
 	req.Header.Set("Content-Type", contentType)
 	if absent {
@@ -167,7 +168,7 @@ func (s *s3Backend) put(ctx context.Context, key string, src io.ReadSeeker, cont
 	}
 	response, err := s.do(req, src)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer response.Body.Close()
 	if absent && response.StatusCode == http.StatusNotImplemented {
@@ -176,9 +177,9 @@ func (s *s3Backend) put(ctx context.Context, key string, src io.ReadSeeker, cont
 		return s.put(ctx, key, src, contentType, false)
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return statusError(response.StatusCode)
+		return "", statusError(response.StatusCode)
 	}
-	return nil
+	return response.Header.Get("ETag"), nil
 }
 
 // The S3 service does not support PresignDelete in the pinned binding. Use

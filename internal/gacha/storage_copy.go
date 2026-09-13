@@ -19,12 +19,12 @@ func (s *Store) CopyMediaToS3(ctx context.Context, apply bool, workers int, out 
 		return err
 	}
 	if workers <= 0 {
-		workers = 16
+		workers = 64
 	}
 	var after int64
 	total := 0
 	for {
-		rows, err := s.DB.QueryContext(ctx, `SELECT id,path,media_type FROM gacha_assets WHERE id>$1 AND path IS NOT NULL AND path<>'' ORDER BY id LIMIT 500`, after)
+		rows, err := s.DB.QueryContext(ctx, `SELECT id,path,media_type FROM gacha_assets WHERE id>$1 AND path IS NOT NULL AND path<>'' ORDER BY id LIMIT 1000`, after)
 		if err != nil {
 			return err
 		}
