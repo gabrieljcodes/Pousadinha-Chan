@@ -62,18 +62,48 @@ func (s *filesystem) Open(ctx context.Context, key string) (*Object, error) {
 		}
 		return nil, fs.ErrInvalid
 	}
-	s.mu.Lock()
-	meta, err := s.op.Stat(descriptorPath(file))
-	var reader *opendal.Reader
-	if err == nil {
-		reader, err = s.op.Reader(descriptorPath(file))
+	return &Object{ReadSeekCloser: &fileReader{ctx: ctx, file: file}, Size: info.Size(), Modified: info.ModTime()}, nil
+}
+
+type fileReader struct {
+	mu     sync.Mutex
+	ctx    context.Context
+	file   *os.File
+	closed bool
+}
+
+func (r *fileReader) Read(p []byte) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed {
+		return 0, fs.ErrClosed
 	}
-	s.mu.Unlock()
-	if err != nil {
-		file.Close()
-		return nil, nativeError(err)
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
 	}
-	return &Object{ReadSeekCloser: &nativeReader{ctx: ctx, reader: reader, file: file}, Size: int64(meta.ContentLength()), Modified: meta.LastModified()}, nil
+	return r.file.Read(p)
+}
+
+func (r *fileReader) Seek(offset int64, whence int) (int64, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed {
+		return 0, fs.ErrClosed
+	}
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return r.file.Seek(offset, whence)
+}
+
+func (r *fileReader) Close() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed {
+		return nil
+	}
+	r.closed = true
+	return r.file.Close()
 }
 
 func (s *filesystem) Put(ctx context.Context, key string, src io.ReadSeeker, _ string) error {

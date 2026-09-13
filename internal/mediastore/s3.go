@@ -187,7 +187,9 @@ func (s *s3Backend) Delete(ctx context.Context, key string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	s.signMu.Lock()
 	err := nativeError(s.op.Delete(key))
+	s.signMu.Unlock()
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil
 	}
