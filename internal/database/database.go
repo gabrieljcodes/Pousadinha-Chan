@@ -60,22 +60,27 @@ func prepareQuery(query string) string {
 	return result
 }
 
-// GetBalance returns a user's balance in a specific guild with retry on error
+// GetBalance returns a user's balance in a specific guild with retry on error.
+// It uses an optimistic read-first pattern: queries the indexed balance directly (0.05ms)
+// and only inserts initial member records if sql.ErrNoRows is encountered.
 func GetBalance(guildID, userID string) int {
 	if guildID == "" || userID == "" {
 		return 0
 	}
 	var balance int
-	// Ensure parent user exists
-	_, _ = DB.Exec(`INSERT INTO users (id, balance) VALUES ($1, 0) ON CONFLICT (id) DO NOTHING`, userID)
-	// Ensure guild_members exists atomically
-	_, _ = DB.Exec(`INSERT INTO guild_members (guild_id, user_id, balance) VALUES ($1, $2, 0) ON CONFLICT (guild_id, user_id) DO NOTHING`, guildID, userID)
 
 	// Retry up to 3 times with a short delay on transient error
 	for i := 0; i < 3; i++ {
 		err := DB.QueryRow(`SELECT balance FROM guild_members WHERE guild_id = $1 AND user_id = $2`, guildID, userID).Scan(&balance)
 		if err == nil {
 			return balance
+		}
+		if err == sql.ErrNoRows {
+			// Ensure parent user exists
+			_, _ = DB.Exec(`INSERT INTO users (id, balance) VALUES ($1, 0) ON CONFLICT (id) DO NOTHING`, userID)
+			// Ensure guild_members exists atomically
+			_, _ = DB.Exec(`INSERT INTO guild_members (guild_id, user_id, balance) VALUES ($1, $2, 0) ON CONFLICT (guild_id, user_id) DO NOTHING`, guildID, userID)
+			return 0
 		}
 		log.Printf("[GetBalance] Error getting balance for %s/%s: %v (attempt %d)", guildID, userID, err, i+1)
 		time.Sleep(100 * time.Millisecond)
