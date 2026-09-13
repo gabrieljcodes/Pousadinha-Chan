@@ -316,6 +316,15 @@ func CommandNameLocalizations(commandName string) *map[discordgo.Locale]string {
 	return &m
 }
 
+// OptionNameLocalizations returns translated names for command options.
+func OptionNameLocalizations(optionName string) map[discordgo.Locale]string {
+	res := CommandNameLocalizations(optionName)
+	if res == nil {
+		return nil
+	}
+	return *res
+}
+
 // OptionDescriptionLocalizations returns translated descriptions for command options.
 func OptionDescriptionLocalizations(englishText string) map[discordgo.Locale]string {
 	res := DescriptionLocalizations(englishText)

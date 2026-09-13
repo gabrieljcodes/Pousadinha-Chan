@@ -36,6 +36,7 @@ func localizeOptions(options []*discordgo.ApplicationCommandOption) []*discordgo
 	for i, opt := range options {
 		optCopy := *opt
 		optCopy.DescriptionLocalizations = locale.OptionDescriptionLocalizations(optCopy.Description)
+		optCopy.NameLocalizations = locale.OptionNameLocalizations(optCopy.Name)
 		if len(optCopy.Choices) > 0 {
 			optCopy.Choices = localizeChoices(optCopy.Choices)
 		}
