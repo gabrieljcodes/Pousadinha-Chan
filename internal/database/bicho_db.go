@@ -227,7 +227,7 @@ func PlaceBichoBetDB(roundID int64, userID, guildID, betType, scope, target stri
 	}
 
 	if currentBalance < amount {
-		return fmt.Errorf("insufficient balance: you have %d EC, but the bet costs %d EC", currentBalance, amount)
+		return fmt.Errorf("insufficient balance: you have %d, but the bet costs %d", currentBalance, amount)
 	}
 
 	// 2. Verify round is still open

@@ -129,12 +129,12 @@ func CreateMarketEmbed(market *database.DBPolymarketMarket, settings *database.D
 	fields := []*discordgo.MessageEmbedField{
 		{
 			Name:   locale.Text("polymarket.service.yes_price"),
-			Value:  locale.Text("polymarket.service.ec_share_payout_ec.formatted", locale.Data{"TotalCost": yesCost.TotalCost}),
+			Value:  locale.Text("polymarket.service.share_payout_currency.formatted", locale.Data{"TotalCost": yesCost.TotalCost, "CurrencySymbol": config.Bot.CurrencySymbol}),
 			Inline: true,
 		},
 		{
 			Name:   locale.Text("polymarket.service.no_price"),
-			Value:  locale.Text("polymarket.service.ec_share_payout_ec.formatted", locale.Data{"TotalCost": noCost.TotalCost}),
+			Value:  locale.Text("polymarket.service.share_payout_currency.formatted", locale.Data{"TotalCost": noCost.TotalCost, "CurrencySymbol": config.Bot.CurrencySymbol}),
 			Inline: true,
 		},
 		{
@@ -211,13 +211,13 @@ func CreateMarketComponents(market *database.DBPolymarketMarket, settings *datab
 		Components: []discordgo.MessageComponent{
 			discordgo.Button{
 				CustomID: fmt.Sprintf("poly_buy_yes_%s", market.ID),
-				Label:    locale.Text("polymarket.service.buy_yes_ec.formatted", locale.Data{"TotalCost": yesCost.TotalCost}),
+				Label:    locale.Text("polymarket.service.buy_yes_currency.formatted", locale.Data{"TotalCost": yesCost.TotalCost, "CurrencySymbol": config.Bot.CurrencySymbol}),
 				Style:    discordgo.SuccessButton,
 				Emoji:    &discordgo.ComponentEmoji{Name: "🟢"},
 			},
 			discordgo.Button{
 				CustomID: fmt.Sprintf("poly_buy_no_%s", market.ID),
-				Label:    locale.Text("polymarket.service.buy_no_ec.formatted", locale.Data{"TotalCost": noCost.TotalCost}),
+				Label:    locale.Text("polymarket.service.buy_no_currency.formatted", locale.Data{"TotalCost": noCost.TotalCost, "CurrencySymbol": config.Bot.CurrencySymbol}),
 				Style:    discordgo.DangerButton,
 				Emoji:    &discordgo.ComponentEmoji{Name: "🔴"},
 			},
@@ -261,9 +261,9 @@ func CreateBuyModal(marketID, outcome string, pricePerShare float64, houseEdge f
 					Components: []discordgo.MessageComponent{
 						discordgo.TextInput{
 							CustomID:    "shares",
-							Label:       locale.Text("polymarket.service.share_quantity_winning_shares_pay_ec"),
+							Label:       locale.Text("polymarket.service.share_quantity_winning_shares_pay.formatted", locale.Data{"CurrencySymbol": config.Bot.CurrencySymbol}),
 							Style:       discordgo.TextInputShort,
-							Placeholder: locale.Text("polymarket.service.example_estimated_cost_ec.formatted", locale.Data{"TotalCost": cost10.TotalCost}),
+							Placeholder: locale.Text("polymarket.service.example_estimated_cost_currency.formatted", locale.Data{"TotalCost": cost10.TotalCost, "CurrencySymbol": config.Bot.CurrencySymbol}),
 							Required:    true,
 							MinLength:   1,
 							MaxLength:   8,
@@ -276,7 +276,7 @@ func CreateBuyModal(marketID, outcome string, pricePerShare float64, houseEdge f
 							CustomID: "info_hint",
 							Label:    locale.Text("polymarket.service.current_price_per_share_including_fees"),
 							Style:    discordgo.TextInputShort,
-							Value:    locale.Text("polymarket.service.share_ec_pays_ec_if_it_wins.formatted", locale.Data{"TotalCost": cost1.TotalCost}),
+							Value:    locale.Text("polymarket.service.share_currency_pays_currency_if_it_wins.formatted", locale.Data{"TotalCost": cost1.TotalCost, "CurrencySymbol": config.Bot.CurrencySymbol}),
 							Required: false,
 						},
 					},
@@ -353,7 +353,7 @@ func CreatePortfolioEmbed(userID string, positions []*database.DBPolymarketPosit
 			},
 		},
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: locale.Text("polymarket.service.each_winning_share_is_automatically_redeemed_for"),
+			Text: locale.Text("polymarket.service.each_winning_share_is_automatically_redeemed_for.formatted", locale.Data{"CurrencySymbol": config.Bot.CurrencySymbol}),
 		},
 		Timestamp: time.Now().Format(time.RFC3339),
 	}

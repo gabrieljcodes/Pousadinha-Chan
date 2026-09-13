@@ -60,7 +60,7 @@ var SlashCommands = []*discordgo.ApplicationCommand{
 	},
 	{
 		Name:        "pay",
-		Description: locale.Text("commands.definitions.transfer_estudocoins_to_another_user"),
+		Description: locale.Text("commands.definitions.transfer_coins_to_another_user"),
 		Options: []*discordgo.ApplicationCommandOption{
 			{
 				Type:        discordgo.ApplicationCommandOptionUser,
@@ -510,7 +510,7 @@ var SlashCommands = []*discordgo.ApplicationCommand{
 					{
 						Type:        discordgo.ApplicationCommandOptionInteger,
 						Name:        "amount",
-						Description: locale.Text("commands.definitions.amount_of_ec_to_invest"),
+						Description: locale.Text("commands.definitions.amount_to_invest"),
 						Required:    true,
 						MinValue:    &minAmount,
 					},
@@ -565,7 +565,7 @@ var SlashCommands = []*discordgo.ApplicationCommand{
 					{
 						Type:        discordgo.ApplicationCommandOptionInteger,
 						Name:        "amount",
-						Description: locale.Text("commands.definitions.amount_of_ec_to_invest"),
+						Description: locale.Text("commands.definitions.amount_to_invest"),
 						Required:    true,
 						MinValue:    &minAmount,
 					},
@@ -766,7 +766,7 @@ var SlashCommands = []*discordgo.ApplicationCommand{
 					{
 						Type:        discordgo.ApplicationCommandOptionInteger,
 						Name:        "amount",
-						Description: locale.Text("commands.definitions.amount_to_bet_in_ec"),
+						Description: locale.Text("commands.definitions.amount_to_bet"),
 						Required:    true,
 					},
 					{

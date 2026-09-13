@@ -1,7 +1,7 @@
 {
   "bot_name": "Pousadinha-Chan",
-  "currency_name": "Coins",
-  "currency_symbol": "C",
+  "currency_name": "PouCoin",
+  "currency_symbol": "PC",
   "enable_api": true,
   "api_port": ":8080",
   "allowed_channels": [

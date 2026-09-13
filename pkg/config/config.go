@@ -55,6 +55,18 @@ func Load() {
 			Bot.EnableAPI = val
 		}
 	}
+	if cName := os.Getenv("CURRENCY_NAME"); cName != "" {
+		Bot.CurrencyName = cName
+	}
+	if cSym := os.Getenv("CURRENCY_SYMBOL"); cSym != "" {
+		Bot.CurrencySymbol = cSym
+	}
+	if Bot.CurrencyName == "" {
+		Bot.CurrencyName = "PouCoin"
+	}
+	if Bot.CurrencySymbol == "" {
+		Bot.CurrencySymbol = "PC"
+	}
 
 	// Configurar database defaults
 	setupDatabaseConfig()

@@ -133,7 +133,7 @@ func createBichoBetModal(roundID int64) *discordgo.InteractionResponse {
 					Components: []discordgo.MessageComponent{
 						discordgo.TextInput{
 							CustomID:    "amount",
-							Label:       locale.Text("commands.bicho_cmd.bet_amount_ec"),
+							Label:       locale.Text("commands.bicho_cmd.bet_amount_currency.formatted", locale.Data{"CurrencySymbol": config.Bot.CurrencySymbol}),
 							Style:       discordgo.TextInputShort,
 							Placeholder: "E.g. 100",
 							Required:    true,

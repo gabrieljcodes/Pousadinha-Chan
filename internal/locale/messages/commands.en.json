@@ -44,8 +44,8 @@
   "commands.bicho_cmd.animals_and_tens_each_animal_rules_consecutive": {
     "other": "• **25 Animals and 100 Tens:** Each animal rules 4 consecutive tens.\n• **Daily Draw:** Every day 5 four-digit numbers (1st to 5th prizes) are drawn.\n• **Head:** Top payout if your pick hits the **1st prize**.\n• **Board:** Splits payout across all 5 prizes (1st to 5th).\n\n**Examples:**\n• If `4528` is drawn as 1st prize, the tens are `28`, which belongs to **Ram (Group 07)**.\n• Betting on Ram on Head pays **18x**!\n• Betting on tens 28 on Head pays **60x**!"
   },
-  "commands.bicho_cmd.bet_amount_ec": {
-    "other": "Bet Amount (EC)"
+  "commands.bicho_cmd.bet_amount_currency.formatted": {
+    "other": "Bet Amount ({{printf \"%s\" .CurrencySymbol}})"
   },
   "commands.bicho_cmd.bettor_good_luck.formatted": {
     "other": "Bettor: {{printf \"%s\" .Username}} • Good luck!"
@@ -146,11 +146,11 @@
   "commands.definitions.all_users": {
     "other": "All Users"
   },
-  "commands.definitions.amount_of_ec_to_invest": {
-    "other": "Amount of EC to invest"
+  "commands.definitions.amount_to_invest": {
+    "other": "Amount to invest"
   },
-  "commands.definitions.amount_to_bet_in_ec": {
-    "other": "Amount to bet in EC"
+  "commands.definitions.amount_to_bet": {
+    "other": "Amount to bet"
   },
   "commands.definitions.amount_to_bet_min": {
     "other": "Amount to bet (Min 100)"
@@ -476,8 +476,8 @@
   "commands.definitions.timeout_a_user_from_text_and_voice": {
     "other": "Timeout a user from text and voice channels"
   },
-  "commands.definitions.transfer_estudocoins_to_another_user": {
-    "other": "Transfer EstudoCoins to another user"
+  "commands.definitions.transfer_coins_to_another_user": {
+    "other": "Transfer coins to another user"
   },
   "commands.definitions.trigger_the_lottery_draw_immediately_admin_only": {
     "other": "Trigger the lottery draw immediately (Admin only)"
@@ -1128,10 +1128,10 @@
     "other": "Settings Updated"
   },
   "commands.polymarket_cmd.shares_average_price_ec_invested_potential_payout.formatted": {
-    "other": "• **{{printf \"%s\" .Outcome}}:** {{printf \"%d\" .Shares}} shares (Average price: `{{printf \"%.1f\" .Avg}} EC` | Invested: `{{printf \"%d\" .TotalInvested}} {{printf \"%s\" .CurrencySymbol}}` | Potential payout: `+{{printf \"%d\" .Shares6}} {{printf \"%s\" .CurrencySymbol7}}`)"
+    "other": "• **{{printf \"%s\" .Outcome}}:** {{printf \"%d\" .Shares}} shares (Average price: `{{printf \"%.1f\" .Avg}} {{printf \"%s\" .CurrencySymbol}}` | Invested: `{{printf \"%d\" .TotalInvested}} {{printf \"%s\" .CurrencySymbol}}` | Potential payout: `+{{printf \"%d\" .Shares6}} {{printf \"%s\" .CurrencySymbol7}}`)"
   },
   "commands.polymarket_cmd.shares_purchased_market_outcome_quantity_shares_total.formatted": {
-    "other": "✅ **Shares Purchased**\n\n📌 **Market:** {{printf \"%s\" .Question}}\n🎯 **Outcome:** {{printf \"%s\" .Emoji}} **{{printf \"%s\" .Outcome}}**\n📦 **Quantity:** **{{printf \"%d\" .Shares}} shares**\n💵 **Total Paid:** **{{printf \"%d\" .TotalCost}} {{printf \"%s\" .CurrencySymbol}}** *(Cost: {{printf \"%d\" .RawCost}} EC + Fee: {{printf \"%d\" .Fee}} EC)*\n🏆 **Return if You Win:** **{{printf \"%d\" .PotentialPayout}} {{printf \"%s\" .CurrencySymbol10}}** *(Profit: +{{printf \"%d\" .PotentialProfit}} {{printf \"%s\" .CurrencySymbol12}})*\n\nYour shares are in `/poly portfolio`."
+    "other": "✅ **Shares Purchased**\n\n📌 **Market:** {{printf \"%s\" .Question}}\n🎯 **Outcome:** {{printf \"%s\" .Emoji}} **{{printf \"%s\" .Outcome}}**\n📦 **Quantity:** **{{printf \"%d\" .Shares}} shares**\n💵 **Total Paid:** **{{printf \"%d\" .TotalCost}} {{printf \"%s\" .CurrencySymbol}}** *(Cost: {{printf \"%d\" .RawCost}} {{printf \"%s\" .CurrencySymbol}} + Fee: {{printf \"%d\" .Fee}} {{printf \"%s\" .CurrencySymbol}})*\n🏆 **Return if You Win:** **{{printf \"%d\" .PotentialPayout}} {{printf \"%s\" .CurrencySymbol10}}** *(Profit: +{{printf \"%d\" .PotentialProfit}} {{printf \"%s\" .CurrencySymbol12}})*\n\nYour shares are in `/poly portfolio`."
   },
   "commands.polymarket_cmd.submitting_suggestion": {
     "other": "Submitting Suggestion..."

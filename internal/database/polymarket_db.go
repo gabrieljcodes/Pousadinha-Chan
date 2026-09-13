@@ -237,7 +237,7 @@ func ExecuteBuySharesTransaction(marketID, userID, outcome string, shares int64,
 	}
 
 	if currentBalance < totalCost {
-		return fmt.Errorf("insufficient balance: have %d EC, need %d EC", currentBalance, totalCost)
+		return fmt.Errorf("insufficient balance: have %d, need %d", currentBalance, totalCost)
 	}
 
 	// 2. Deduct balance
