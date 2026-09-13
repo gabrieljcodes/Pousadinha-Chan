@@ -27,12 +27,14 @@ func ComponentsHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	customID := i.MessageComponentData().CustomID
 
+	loc := locale.FromInteraction(i)
+
 	// Polymarket and Bicho component interactions are always allowed on their respective embeds
 	if !strings.HasPrefix(customID, "poly_") && !strings.HasPrefix(customID, "bicho_") && !config.Bot.IsChannelAllowed(i.ChannelID) {
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Embeds: []*discordgo.MessageEmbed{utils.ErrorEmbed(locale.Text("commands.components.this_bot_can_only_be_used_in"))},
+				Embeds: []*discordgo.MessageEmbed{utils.ErrorEmbed(loc.Text("commands.components.this_bot_can_only_be_used_in"))},
 				Flags:  discordgo.MessageFlagsEphemeral,
 			},
 		})

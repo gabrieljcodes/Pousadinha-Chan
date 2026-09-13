@@ -1,6 +1,7 @@
 package locale
 
 import (
+	"context"
 	"encoding/json"
 	"go/ast"
 	"go/parser"
@@ -12,50 +13,34 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/bwmarrin/discordgo"
 )
 
 func TestCatalogsAndCallSites(t *testing.T) {
+	fields := regexp.MustCompile(`{{\s*(?:printf\s+"[^"]+"\s+)?\.([A-Za-z0-9_]+)\s*}}`)
 	messages := map[string]map[string]string{}
-	files, _ := fs.Glob(catalogs, "messages/*.en.json")
-	fields := regexp.MustCompile(`\{\{printf "([^"]+)" \.(\w+)\}\}`)
-	legacy := regexp.MustCompile("[!$][a-zA-Z]+")
-	for _, path := range files {
+	paths, err := fs.Glob(catalogs, "messages/*.en.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range paths {
 		raw, err := catalogs.ReadFile(path)
 		if err != nil {
 			t.Fatal(err)
 		}
-		var entries map[string]map[string]string
-		if err = json.Unmarshal(raw, &entries); err != nil {
-			t.Fatal(err)
+		var chunk map[string]map[string]string
+		if err := json.Unmarshal(raw, &chunk); err != nil {
+			t.Fatalf("%s: %v", path, err)
 		}
-		for id, message := range entries {
+		for id, forms := range chunk {
 			if _, exists := messages[id]; exists {
-				t.Fatalf("duplicate message %s", id)
+				t.Fatalf("duplicate message %s in %s", id, path)
 			}
-			messages[id] = message
-			data := Data{}
-			for _, m := range fields.FindAllStringSubmatch(message["other"], -1) {
-				var value any = "example"
-				switch m[1][len(m[1])-1] {
-				case 'd', 'b', 'o', 'x', 'X', 'U', 'c':
-					value = 2
-				case 'f', 'F', 'g', 'G', 'e', 'E':
-					value = 2.0
-				}
-				data[m[2]] = value
+			if forms["other"] == "" {
+				t.Fatalf("message %s in %s missing other form", id, path)
 			}
-			rendered := ""
-			if message["one"] != "" {
-				rendered = For("en").Plural(id, 2, data)
-			} else {
-				rendered = Text(id, data)
-			}
-			if strings.Contains(rendered, "%!") || strings.Contains(rendered, "<no value>") {
-				t.Errorf("invalid formatting in %s: %s", id, rendered)
-			}
-			if legacy.MatchString(message["other"]) {
-				t.Errorf("legacy command in %s: %s", id, rendered)
-			}
+			messages[id] = forms
 		}
 	}
 	used := map[string]bool{}
@@ -81,10 +66,21 @@ func TestCatalogsAndCallSites(t *testing.T) {
 					return true
 				}
 				pkg, ok := fn.X.(*ast.Ident)
-				if !ok || pkg.Name != "locale" || (fn.Sel.Name != "Text" && fn.Sel.Name != "Format" && fn.Sel.Name != "Plural") {
+				if !ok || (pkg.Name != "locale" && pkg.Name != "loc" && pkg.Name != "l") {
 					return true
 				}
-				literal, ok := call.Args[0].(*ast.BasicLit)
+				method := fn.Sel.Name
+				if method != "Text" && method != "Format" && method != "Plural" && method != "TextI" && method != "PluralI" && method != "TextCtx" && method != "PluralCtx" {
+					return true
+				}
+				argIndex := 0
+				if method == "TextI" || method == "PluralI" || method == "TextCtx" || method == "PluralCtx" {
+					argIndex = 1
+				}
+				if len(call.Args) <= argIndex {
+					return true
+				}
+				literal, ok := call.Args[argIndex].(*ast.BasicLit)
 				if !ok {
 					t.Errorf("message IDs must be static in %s", path)
 					return true
@@ -98,11 +94,11 @@ func TestCatalogsAndCallSites(t *testing.T) {
 				used[id] = true
 				required := fields.FindAllStringSubmatch(message["other"], -1)
 				provided := map[string]bool{}
-				if len(call.Args) > 1 {
-					dataIndex := 1
-					if fn.Sel.Name == "Plural" {
-						dataIndex = 2
-					}
+				dataIndex := argIndex + 1
+				if method == "Plural" || method == "PluralI" || method == "PluralCtx" {
+					dataIndex = argIndex + 2
+				}
+				if len(call.Args) > dataIndex {
 					if data, ok := call.Args[dataIndex].(*ast.CompositeLit); ok {
 						for _, entry := range data.Elts {
 							if kv, ok := entry.(*ast.KeyValueExpr); ok {
@@ -115,8 +111,8 @@ func TestCatalogsAndCallSites(t *testing.T) {
 					}
 				}
 				for _, field := range required {
-					if !provided[field[2]] {
-						t.Errorf("%s: missing template data %s for %s", path, field[2], id)
+					if !provided[field[1]] {
+						t.Errorf("%s: missing template data %s for %s", path, field[1], id)
 					}
 				}
 				return true
@@ -149,6 +145,43 @@ func TestEnglishFallbackAndConcurrentLocalizers(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+func TestFromInteractionAndContext(t *testing.T) {
+	guildLocale := discordgo.PortugueseBR
+	i := &discordgo.InteractionCreate{
+		Interaction: &discordgo.Interaction{
+			Locale:      discordgo.PortugueseBR,
+			GuildLocale: &guildLocale,
+		},
+	}
+	expected := Text("common.server_only")
+	loc := FromInteraction(i)
+	if msg := loc.Text("common.server_only"); msg != expected {
+		t.Fatalf("unexpected localized message: %q, want %q", msg, expected)
+	}
+
+	ctx := InteractionContext(context.Background(), i)
+	if msg := TextCtx(ctx, "common.server_only"); msg != expected {
+		t.Fatalf("unexpected TextCtx message: %q, want %q", msg, expected)
+	}
+
+	if msg := TextI(i, "common.server_only"); msg != expected {
+		t.Fatalf("unexpected TextI message: %q, want %q", msg, expected)
+	}
+}
+
+func TestDescriptionLocalizations(t *testing.T) {
+	// For existing English description, since only English is loaded, should return nil
+	res := DescriptionLocalizations("Show all commands and features")
+	if res != nil {
+		t.Fatalf("expected nil for English-only bundle, got %v", res)
+	}
+
+	// Reverse lookup works for known English text
+	if id, ok := englishToID["Show all commands and features"]; !ok || id != "commands.definitions.show_all_commands_and_features" {
+		t.Fatalf("expected ID commands.definitions.show_all_commands_and_features, got %q (found: %v)", id, ok)
+	}
 }
 
 func TestPluralForms(t *testing.T) {

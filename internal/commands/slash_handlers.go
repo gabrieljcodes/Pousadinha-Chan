@@ -30,10 +30,12 @@ func SlashHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		return
 	}
 
+	loc := locale.FromInteraction(i)
+
 	if i.GuildID == "" || i.Member == nil || i.Member.User == nil {
 		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{Content: locale.Text("common.server_only"), Flags: discordgo.MessageFlagsEphemeral},
+			Data: &discordgo.InteractionResponseData{Content: loc.Text("common.server_only"), Flags: discordgo.MessageFlagsEphemeral},
 		})
 		return
 	}
@@ -57,7 +59,7 @@ func SlashHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
 				Data: &discordgo.InteractionResponseData{
-					Embeds: []*discordgo.MessageEmbed{utils.ErrorEmbed(locale.Text("commands.components.this_bot_can_only_be_used_in"))},
+					Embeds: []*discordgo.MessageEmbed{utils.ErrorEmbed(loc.Text("commands.components.this_bot_can_only_be_used_in"))},
 					Flags:  discordgo.MessageFlagsEphemeral,
 				},
 			})
