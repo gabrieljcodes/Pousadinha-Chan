@@ -27,6 +27,7 @@ type DatabaseConfig struct {
 
 type GeneralConfig struct {
 	BotName           string         `json:"bot_name"`
+	Language          string         `json:"language"`
 	CurrencyName      string         `json:"currency_name"`
 	CurrencySymbol    string         `json:"currency_symbol"`
 	EnableAPI         bool           `json:"enable_api"`
@@ -54,6 +55,12 @@ func Load() {
 		if val, err := strconv.ParseBool(enableAPI); err == nil {
 			Bot.EnableAPI = val
 		}
+	}
+	if lang := os.Getenv("BOT_LANGUAGE"); lang != "" {
+		Bot.Language = lang
+	}
+	if Bot.Language == "" {
+		Bot.Language = "auto"
 	}
 	if cName := os.Getenv("CURRENCY_NAME"); cName != "" {
 		Bot.CurrencyName = cName

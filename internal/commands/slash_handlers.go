@@ -17,6 +17,9 @@ import (
 
 // Helper to send interaction response easily
 func respondEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) {
+	if s == nil || i == nil || i.Interaction == nil {
+		return
+	}
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
@@ -30,6 +33,7 @@ func SlashHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		return
 	}
 
+	defer locale.EnterInteraction(i)()
 	loc := locale.FromInteraction(i)
 
 	if i.GuildID == "" || i.Member == nil || i.Member.User == nil {
@@ -112,6 +116,8 @@ func SlashHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		HandleSlashPolymarket(s, i)
 	case "bicho":
 		HandleSlashBicho(s, i)
+	case "language":
+		HandleSlashLanguage(s, i)
 	}
 }
 

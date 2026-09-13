@@ -25,6 +25,7 @@ func ComponentsHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		return
 	}
 
+	defer locale.EnterInteraction(i)()
 	customID := i.MessageComponentData().CustomID
 
 	loc := locale.FromInteraction(i)

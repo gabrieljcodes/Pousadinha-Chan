@@ -825,4 +825,42 @@ var SlashCommands = []*discordgo.ApplicationCommand{
 			},
 		},
 	},
+	{
+		Name:        "language",
+		Description: locale.Text("commands.definitions.configure_bot_language_settings"),
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Type:        discordgo.ApplicationCommandOptionSubCommand,
+				Name:        "set",
+				Description: locale.Text("commands.definitions.set_the_server_language_mode"),
+				Options: []*discordgo.ApplicationCommandOption{
+					{
+						Type:        discordgo.ApplicationCommandOptionString,
+						Name:        "mode",
+						Description: locale.Text("commands.definitions.language_mode_to_apply"),
+						Required:    true,
+						Choices: []*discordgo.ApplicationCommandOptionChoice{
+							{
+								Name:  locale.Text("commands.definitions.auto_detect_user_language"),
+								Value: "auto",
+							},
+							{
+								Name:  locale.Text("commands.definitions.portuguese_brazil"),
+								Value: "pt-BR",
+							},
+							{
+								Name:  locale.Text("commands.definitions.english"),
+								Value: "en",
+							},
+						},
+					},
+				},
+			},
+			{
+				Type:        discordgo.ApplicationCommandOptionSubCommand,
+				Name:        "status",
+				Description: locale.Text("commands.definitions.view_current_server_language_setting"),
+			},
+		},
+	},
 }

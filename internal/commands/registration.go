@@ -15,6 +15,7 @@ func ApplicationCommands() []*discordgo.ApplicationCommand {
 		dm := false
 		cmdCopy.DMPermission = &dm
 		cmdCopy.DescriptionLocalizations = locale.DescriptionLocalizations(cmdCopy.Description)
+		cmdCopy.NameLocalizations = locale.CommandNameLocalizations(cmdCopy.Name)
 		if len(cmdCopy.Options) > 0 {
 			cmdCopy.Options = localizeOptions(cmdCopy.Options)
 		}

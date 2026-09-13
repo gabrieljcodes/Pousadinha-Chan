@@ -7,6 +7,7 @@ import (
 	"bot/internal/events"
 	"bot/internal/gacha"
 	"bot/internal/games"
+	"bot/internal/locale"
 	"bot/internal/polymarket"
 	"bot/internal/stockmarket"
 	"bot/pkg/config"
@@ -34,6 +35,7 @@ func main() {
 
 	database.Initialize()
 	defer database.DB.Close()
+	locale.SetGuildLanguageResolver(database.GetGuildLanguageCached)
 	gachaConfig, err := gacha.LoadConfig()
 	if err != nil {
 		log.Fatal(err)

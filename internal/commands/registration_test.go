@@ -56,7 +56,7 @@ func TestSlashCommandCatalog(t *testing.T) {
 		}
 		checkOptions(c.Options)
 	}
-	for _, name := range []string{"profile", "gallery", "trade", "gift", "divorce", "event"} {
+	for _, name := range []string{"profile", "gallery", "trade", "gift", "divorce", "event", "language"} {
 		if !seen[name] {
 			t.Errorf("missing command %s", name)
 		}

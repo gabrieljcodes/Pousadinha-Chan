@@ -1,5 +1,6 @@
 {
   "bot_name": "Pousadinha-Chan",
+  "language": "auto",
   "currency_name": "PouCoin",
   "currency_symbol": "PC",
   "enable_api": true,

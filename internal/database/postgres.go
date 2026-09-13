@@ -340,6 +340,11 @@ func (p *PostgresDatabase) CreateTables() error {
 		`CREATE INDEX IF NOT EXISTS idx_bicho_rounds_guild_status ON bicho_rounds(guild_id, status);`,
 		`CREATE INDEX IF NOT EXISTS idx_bicho_bets_round ON bicho_bets(round_id);`,
 		`CREATE INDEX IF NOT EXISTS idx_bicho_bets_user ON bicho_bets(user_id);`,
+		`CREATE TABLE IF NOT EXISTS guild_settings (
+			guild_id TEXT PRIMARY KEY,
+			language TEXT NOT NULL DEFAULT 'auto',
+			updated_at TIMESTAMPTZ DEFAULT NOW()
+		);`,
 	}
 
 	for _, query := range createTableQueries {

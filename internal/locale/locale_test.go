@@ -49,7 +49,7 @@ func TestCatalogsAndCallSites(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			if d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			if d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") || strings.HasSuffix(path, "locale/locale.go") {
 				return nil
 			}
 			file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
@@ -124,6 +124,9 @@ func TestCatalogsAndCallSites(t *testing.T) {
 		}
 	}
 	for id := range messages {
+		if strings.HasPrefix(id, "commands.names.") {
+			continue
+		}
 		if !used[id] {
 			t.Errorf("unused catalog message %s", id)
 		}
@@ -192,5 +195,84 @@ func TestPluralForms(t *testing.T) {
 		if got := Plural("gacha.wishlist.count", tc.count, Data{"Count": tc.count}); got != tc.want {
 			t.Errorf("plural %d: %q", tc.count, got)
 		}
+	}
+}
+
+func TestEnterInteraction(t *testing.T) {
+	i := &discordgo.InteractionCreate{
+		Interaction: &discordgo.Interaction{
+			Locale: discordgo.PortugueseBR,
+		},
+	}
+	cleanup := EnterInteraction(i)
+	// Inside the interaction goroutine
+	msg := Text("common.server_only")
+	if msg == "" {
+		t.Fatal("expected non-empty message")
+	}
+	cleanup()
+
+	// In another goroutine where no interaction is active
+	var otherMsg string
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		otherMsg = Text("common.server_only")
+	}()
+	wg.Wait()
+	if otherMsg == "" {
+		t.Fatal("expected non-empty fallback message")
+	}
+}
+
+func TestLanguageResolutionHierarchy(t *testing.T) {
+	// Set mock resolver
+	SetGuildLanguageResolver(func(guildID string) string {
+		if guildID == "guild_pt" {
+			return "pt-BR"
+		}
+		if guildID == "guild_auto" {
+			return "auto"
+		}
+		return "auto"
+	})
+	defer SetGuildLanguageResolver(nil)
+
+	// Case 1: Guild language set by admin (highest priority)
+	iGuildPt := &discordgo.InteractionCreate{
+		Interaction: &discordgo.Interaction{
+			GuildID: "guild_pt",
+			Locale:  discordgo.EnglishUS,
+		},
+	}
+	langs := ResolveLanguages(iGuildPt)
+	if len(langs) < 2 || langs[0] != "pt-BR" {
+		t.Fatalf("expected pt-BR as first language for guild_pt, got %v", langs)
+	}
+
+	// Case 2: Guild language auto, user has Locale
+	iUserPt := &discordgo.InteractionCreate{
+		Interaction: &discordgo.Interaction{
+			GuildID: "guild_auto",
+			Locale:  discordgo.PortugueseBR,
+		},
+	}
+	langs = ResolveLanguages(iUserPt)
+	if len(langs) < 2 || langs[0] != string(discordgo.PortugueseBR) {
+		t.Fatalf("expected user locale pt-BR when guild is auto, got %v", langs)
+	}
+
+	// Case 3: Empty interaction
+	langs = ResolveLanguages(nil)
+	if len(langs) != 1 || langs[0] != "en" {
+		t.Fatalf("expected fallback en for nil interaction, got %v", langs)
+	}
+}
+
+func TestCommandNameLocalizations(t *testing.T) {
+	res := CommandNameLocalizations("language")
+	if res != nil {
+		t.Fatalf("expected nil for English-only bundle, got %v", res)
 	}
 }

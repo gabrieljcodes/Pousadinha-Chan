@@ -167,6 +167,9 @@
   "commands.definitions.amount_to_transfer": {
     "other": "Amount to transfer"
   },
+  "commands.definitions.auto_detect_user_language": {
+    "other": "Auto (detect user language)"
+  },
   "commands.definitions.animal_or_number_e_g_monkey_or": {
     "other": "Animal or number (E.g. Monkey, 28, 528, 4528, or Monkey Lion)"
   },
@@ -230,6 +233,9 @@
   "commands.definitions.company_ticker_symbol_e_g_nvda_aapl": {
     "other": "Company ticker symbol (e.g., NVDA, AAPL, BTC)"
   },
+  "commands.definitions.configure_bot_language_settings": {
+    "other": "Configure bot language settings"
+  },
   "commands.definitions.configure_lottery_channel_and_daily_schedule_admin": {
     "other": "Configure lottery channel and daily schedule (Admin only)"
   },
@@ -278,6 +284,9 @@
   "commands.definitions.enable_or_disable_jogo_do_bicho": {
     "other": "Enable or disable Jogo do Bicho"
   },
+  "commands.definitions.english": {
+    "other": "English"
+  },
   "commands.definitions.even": {
     "other": "Even (1:1)"
   },
@@ -310,6 +319,9 @@
   },
   "commands.definitions.loan_system_lend_or_borrow_money": {
     "other": "Loan system - Lend or borrow money"
+  },
+  "commands.definitions.language_mode_to_apply": {
+    "other": "Language mode to apply"
   },
   "commands.definitions.low": {
     "other": "Low 1-18 (1:1)"
@@ -392,6 +404,9 @@
   "commands.definitions.polymarket_slug_id_or_full_url": {
     "other": "Polymarket slug, ID, or full URL"
   },
+  "commands.definitions.portuguese_brazil": {
+    "other": "Português (Brasil)"
+  },
   "commands.definitions.rd_dozen": {
     "other": "3rd Dozen 25-36 (2:1)"
   },
@@ -427,6 +442,9 @@
   },
   "commands.definitions.show_all_commands_and_features": {
     "other": "Show all commands and features"
+  },
+  "commands.definitions.set_the_server_language_mode": {
+    "other": "Set the server language mode"
   },
   "commands.definitions.specific_number": {
     "other": "Specific Number 0-36 (35:1)"
@@ -490,6 +508,9 @@
   },
   "commands.definitions.view_current_crypto_prices": {
     "other": "View current crypto prices"
+  },
+  "commands.definitions.view_current_server_language_setting": {
+    "other": "View current server language setting"
   },
   "commands.definitions.view_current_stock_market_prices": {
     "other": "View current stock market prices"
@@ -883,6 +904,27 @@
   },
   "commands.general.voice_rewards": {
     "other": "Voice Rewards"
+  },
+  "commands.language.admin_permission_required": {
+    "other": "You need Administrator permissions to change the server language."
+  },
+  "commands.language.failed_to_save": {
+    "other": "Failed to save language settings. Please try again."
+  },
+  "commands.language.invalid_mode": {
+    "other": "Invalid language mode. Choose auto, pt-BR, or en."
+  },
+  "commands.language.server_language_set.formatted": {
+    "other": "Server language mode set to **{{printf \"%s\" .Mode}}**."
+  },
+  "commands.language.server_language_status.formatted": {
+    "other": "Server language mode: **{{printf \"%s\" .Mode}}** (Effective: **{{printf \"%s\" .Effective}}**)."
+  },
+  "commands.language.title": {
+    "other": "Language Settings"
+  },
+  "commands.names.language": {
+    "other": "language"
   },
   "commands.loans.accept": {
     "other": "Accept"
