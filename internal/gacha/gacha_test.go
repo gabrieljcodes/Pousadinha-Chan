@@ -58,8 +58,27 @@ func TestConfig(t *testing.T) {
 	t.Setenv("GACHA_PUBLIC_URL", "https://pousadinha.com")
 	t.Setenv("GACHA_ROLLS_PER_HOUR", "10")
 	t.Setenv("GACHA_CLAIM_HOURS", "3")
-	if _, e := LoadConfig(); e != nil {
+	cfg, e := LoadConfig()
+	if e != nil {
 		t.Fatal(e)
+	}
+	if cfg.WishBonusPercent != 2.0 {
+		t.Fatalf("expected default WishBonusPercent=2.0, got %f", cfg.WishBonusPercent)
+	}
+	if cfg.WishlistLimit != 5 {
+		t.Fatalf("expected default WishlistLimit=5, got %d", cfg.WishlistLimit)
+	}
+	t.Setenv("GACHA_WISHLIST_LIMIT", "8")
+	t.Setenv("GACHA_WISH_BONUS_PERCENT", "3.5")
+	cfg2, e := LoadConfig()
+	if e != nil {
+		t.Fatal(e)
+	}
+	if cfg2.WishlistLimit != 8 {
+		t.Fatalf("expected WishlistLimit=8, got %d", cfg2.WishlistLimit)
+	}
+	if cfg2.WishBonusPercent != 3.5 {
+		t.Fatalf("expected WishBonusPercent=3.5, got %f", cfg2.WishBonusPercent)
 	}
 	for _, u := range []string{"http://pousadinha.com", "https://user:pass@example.com", "https://example.com/x", "https://example.com?x=1"} {
 		t.Setenv("GACHA_PUBLIC_URL", u)

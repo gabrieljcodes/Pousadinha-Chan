@@ -454,6 +454,26 @@ func testSocial(t *testing.T, s *Store) {
 		t.Fatalf("unexpected unwishMsg: %q", unwishMsg.Content)
 	}
 
+	// Test Wishlist 5-slot limit
+	limitUser := "wishlist-limit-user"
+	for n := 0; n < 5; n++ {
+		must(s.Wish(ctx, "social", limitUser, ids[n], false))
+	}
+	// 6th wish must exceed the limit of 5
+	errOverLimit := s.Wish(ctx, "social", limitUser, ids[5], false)
+	if errOverLimit == nil || !strings.Contains(errOverLimit.Error(), "5 characters") {
+		t.Fatalf("expected wishlist full error with 5 characters, got %v", errOverLimit)
+	}
+	// Viewing the wishlist should display 5/5
+	wishesLimitView, e := s.Execute(ctx, "social", "channel", limitUser, "wishlist-limit-view", "wishes", "", 1)
+	must(e)
+	if len(wishesLimitView.Embeds) == 0 || wishesLimitView.Embeds[0].Footer == nil || !strings.Contains(wishesLimitView.Embeds[0].Footer.Text, "5/5") {
+		t.Fatalf("expected 5/5 in wishlist footer, got: %v", wishesLimitView.Embeds)
+	}
+	// Remove one wish and add the 6th character
+	must(s.Wish(ctx, "social", limitUser, ids[0], true))
+	must(s.Wish(ctx, "social", limitUser, ids[5], false))
+
 	// Test SearchCharacters ordering by favourites and including work
 	_, e = db.Exec(`UPDATE gacha_characters SET aliases='["SocialAlias"]'::jsonb, favourites=500 WHERE id=$1`, ids[1])
 	must(e)

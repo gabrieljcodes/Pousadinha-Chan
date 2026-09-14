@@ -191,10 +191,13 @@ func TestPluralForms(t *testing.T) {
 	for _, tc := range []struct {
 		count int
 		want  string
-	}{{0, "0/20 wished characters"}, {1, "1/20 wished character"}, {2, "2/20 wished characters"}} {
+	}{{0, "0/5 wished characters"}, {1, "1/5 wished character"}, {2, "2/5 wished characters"}} {
 		if got := Plural("gacha.wishlist.count", tc.count, Data{"Count": tc.count}); got != tc.want {
 			t.Errorf("plural %d: %q", tc.count, got)
 		}
+	}
+	if got := Plural("gacha.wishlist.count", 3, Data{"Count": 3, "Limit": 10}); got != "3/10 wished characters" {
+		t.Errorf("expected 3/10 wished characters, got %q", got)
 	}
 }
 

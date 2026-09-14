@@ -15,10 +15,11 @@ type Config struct {
 	MediaDir, PublicURL      string
 	RollsPerHour, ClaimHours int
 	WishBonusPercent         float64
+	WishlistLimit            int
 }
 
 func LoadConfig() (Config, error) {
-	c := Config{Enabled: os.Getenv("GACHA_ENABLED") == "true", MediaDir: os.Getenv("GACHA_MEDIA_DIR"), PublicURL: strings.TrimRight(os.Getenv("GACHA_PUBLIC_URL"), "/"), RollsPerHour: 10, ClaimHours: 3, WishBonusPercent: 5.0}
+	c := Config{Enabled: os.Getenv("GACHA_ENABLED") == "true", MediaDir: os.Getenv("GACHA_MEDIA_DIR"), PublicURL: strings.TrimRight(os.Getenv("GACHA_PUBLIC_URL"), "/"), RollsPerHour: 10, ClaimHours: 3, WishBonusPercent: 2.0, WishlistLimit: 5}
 	if c.MediaDir == "" {
 		c.MediaDir = "data/gacha"
 	}
@@ -37,7 +38,7 @@ func LoadConfig() (Config, error) {
 		key string
 		dst *int
 		max int
-	}{{"GACHA_ROLLS_PER_HOUR", &c.RollsPerHour, 100}, {"GACHA_CLAIM_HOURS", &c.ClaimHours, 168}} {
+	}{{"GACHA_ROLLS_PER_HOUR", &c.RollsPerHour, 100}, {"GACHA_CLAIM_HOURS", &c.ClaimHours, 168}, {"GACHA_WISHLIST_LIMIT", &c.WishlistLimit, 100}} {
 		if raw := os.Getenv(v.key); raw != "" {
 			n, e := strconv.Atoi(raw)
 			if e != nil || n < 1 || n > v.max {

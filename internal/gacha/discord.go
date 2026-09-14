@@ -591,7 +591,7 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 			Title:       locale.Text("gacha.discord.your_wishlist"),
 			Description: b.String(),
 			Color:       0x9b59b6,
-			Footer:      &discordgo.MessageEmbedFooter{Text: locale.Plural("gacha.wishlist.count", count, locale.Data{"Count": count})},
+			Footer:      &discordgo.MessageEmbedFooter{Text: locale.Plural("gacha.wishlist.count", count, locale.Data{"Count": count, "Limit": s.WishlistLimit()})},
 		}
 		msg.Embeds = []*discordgo.MessageEmbed{embed}
 	default:

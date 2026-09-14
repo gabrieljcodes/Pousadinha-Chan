@@ -11,7 +11,7 @@ Gacha com catálogo global e coleções exclusivas por servidor. Integração em
 - `/harem`: coleção pessoal ou de outro membro, em lista ou fotos.
 - `/search` e `/info`: pesquisa e detalhes de personagens.
 - `/gallery`: imagens aprovadas.
-- `/wishlist`: até 20 desejos; não altera a chance de sorteio.
+- `/wishlist`: 5 slots iniciais e +2% de chance de spawn para personagens desejados.
 - `/profile`: cotas e disponibilidade de claim.
 - `/keys`, `/top`, `/harem-ranking`, `/trade`, `/gift`, `/divorce` e `/offers`: progressão, rankings e gerenciamento da coleção.
 

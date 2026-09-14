@@ -41,9 +41,9 @@ rolls; rolling your own character earns a key.
 | `/offers [action] [id]` | List or respond to pending offers |
 | `/help` | Bot command reference |
 
-Use internal catalog IDs, not AniList IDs. Wishlists hold up to 20 characters;
-wishes mark rolls without changing their odds. Pagination buttons open a private
-copy of a public listing. Harem lists show 10 characters per page ordered by
+Use internal catalog IDs, not AniList IDs. Wishlists start with 5 slots
+and provide a +2% bonus chance to spawn wished characters in rolls.
+Pagination buttons open a private copy of a public listing. Harem lists show 10 characters per page ordered by
 current value, including keys. The visual mode shows one card at a time.
 
 ## Character value and divorce

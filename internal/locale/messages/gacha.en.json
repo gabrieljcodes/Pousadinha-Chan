@@ -219,7 +219,7 @@
     "other": "This character is owned, the roll expired, or your claim is on cooldown."
   },
   "gacha.game.your_wishlist_is_full_characters_remove_a": {
-    "other": "Your wishlist is full (20 characters). Remove a wish first."
+    "other": "Your wishlist is full ({{if .Limit}}{{printf \"%d\" .Limit}}{{else}}5{{end}} characters). Remove a wish first."
   },
   "gacha.pools.all_anime_characters": {
     "other": "All anime characters"
@@ -384,8 +384,8 @@
     "other": "You cannot trade with or gift to a bot."
   },
   "gacha.wishlist.count": {
-    "one": "{{printf \"%d\" .Count}}/20 wished character",
-    "other": "{{printf \"%d\" .Count}}/20 wished characters"
+    "one": "{{printf \"%d\" .Count}}/{{if .Limit}}{{printf \"%d\" .Limit}}{{else}}5{{end}} wished character",
+    "other": "{{printf \"%d\" .Count}}/{{if .Limit}}{{printf \"%d\" .Limit}}{{else}}5{{end}} wished characters"
   },
   "gacha.social.must_be_married_to_set_alias": {
     "other": "You must be married to this character in this server to change their alias."

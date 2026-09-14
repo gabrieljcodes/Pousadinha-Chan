@@ -369,6 +369,13 @@ func (s *Store) Cards(ctx context.Context, guild, user, search string, page int)
 	}
 	return out, nil
 }
+func (s *Store) WishlistLimit() int {
+	if s != nil && s.Config.WishlistLimit > 0 {
+		return s.Config.WishlistLimit
+	}
+	return 5
+}
+
 func (s *Store) Wish(ctx context.Context, guild, user string, id int64, remove bool) error {
 	tx, e := s.DB.BeginTx(ctx, nil)
 	if e != nil {
@@ -390,8 +397,9 @@ func (s *Store) Wish(ctx context.Context, guild, user string, id int64, remove b
 		if e != nil {
 			return e
 		}
-		if n >= 20 {
-			return userError(locale.Text("gacha.game.your_wishlist_is_full_characters_remove_a"))
+		limit := s.WishlistLimit()
+		if n >= limit {
+			return userError(locale.Text("gacha.game.your_wishlist_is_full_characters_remove_a", locale.Data{"Limit": limit}))
 		}
 		var res sql.Result
 		res, e = tx.ExecContext(ctx, `INSERT INTO gacha_wishes(guild_id,user_id,character_id) SELECT $1,$2,id FROM gacha_characters WHERE id=$3 ON CONFLICT(guild_id,user_id,character_id) DO UPDATE SET character_id=excluded.character_id`, guild, user, id)
