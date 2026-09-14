@@ -504,20 +504,29 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 		msg.Components = navigationTopChar(claimFilter, genderFilter, p, p < maxPages)
 		return msg, nil
 	case "status":
-		var used int
-		var reset, claim time.Time
-		e := s.DB.QueryRowContext(ctx, `SELECT CASE WHEN window_start<=now()-interval '1 hour' THEN 0 ELSE rolls_used END,GREATEST(window_start+interval '1 hour',now()),GREATEST(claim_after,now()) FROM gacha_players WHERE guild_id=$1 AND user_id=$2`, guild, user).Scan(&used, &reset, &claim)
+		schedule := s.GuildSchedule(ctx, guild)
+		now := time.Now()
+		rollWin := schedule.RollWindow(now)
 
-		rollsLeft := s.Config.RollsPerHour
+		var used int
+		var windowStart, claimReset time.Time
+		var claimActive bool
+		e := s.DB.QueryRowContext(ctx, `SELECT rolls_used, window_start, CASE WHEN claim_after > now() THEN claim_after ELSE now() END, claim_after > now() FROM gacha_players WHERE guild_id=$1 AND user_id=$2`, guild, user).Scan(&used, &windowStart, &claimReset, &claimActive)
+
+		rollsLeft := schedule.RollsPerHour
 		if e == nil {
-			rollsLeft = max(0, s.Config.RollsPerHour-used)
+			if windowStart.Before(rollWin.CurrentStart) {
+				rollsLeft = schedule.RollsPerHour
+			} else {
+				rollsLeft = max(0, schedule.RollsPerHour-used)
+			}
 		} else if e != sql.ErrNoRows {
 			return nil, e
 		}
 
 		claimStatus := locale.Text("gacha.discord.available_now")
-		if e == nil && claim.After(time.Now()) {
-			claimStatus = locale.Text("gacha.discord.available_t_r.formatted", locale.Data{"Claim": claim.Unix()})
+		if e == nil && claimActive {
+			claimStatus = locale.Text("gacha.discord.available_t_r.formatted", locale.Data{"Claim": claimReset.Unix()})
 		}
 
 		count, value, _ := s.HaremSummary(ctx, guild, user)
@@ -525,7 +534,7 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 		_ = s.DB.QueryRowContext(ctx, `SELECT gacha_claimed_count($1)`, guild).Scan(&claimedTotal)
 
 		var desc strings.Builder
-		desc.WriteString(locale.Text("gacha.discord.rolls_resets_t_r.formatted", locale.Data{"RollsLeft": rollsLeft, "RollsPerHour": s.Config.RollsPerHour, "Reset": reset.Unix()}))
+		desc.WriteString(locale.Text("gacha.discord.rolls_resets_t_r.formatted", locale.Data{"RollsLeft": rollsLeft, "RollsPerHour": schedule.RollsPerHour, "Reset": rollWin.NextReset.Unix()}))
 		desc.WriteString(locale.Text("gacha.discord.marry_claim.formatted", locale.Data{"ClaimStatus": claimStatus}))
 		desc.WriteString(locale.Text("gacha.discord.your_harem_characters_total_value.formatted", locale.Data{"Count": count, "Value": value}))
 		desc.WriteString(locale.Text("gacha.discord.server_bonus_claimed_characters.formatted", locale.Data{"Value1": float64(claimedTotal) / 100, "ClaimedTotal": claimedTotal}))
@@ -634,7 +643,8 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 		}
 		msg.Embeds = []*discordgo.MessageEmbed{embed}
 	default:
-		msg.Content = locale.Text("gacha.discord.pousadinha_gacha_use_roll_top_info_harem.formatted", locale.Data{"RollsPerHour": s.Config.RollsPerHour, "ClaimHours": s.Config.ClaimHours})
+		sch := s.GuildSchedule(ctx, guild)
+		msg.Content = locale.Text("gacha.discord.pousadinha_gacha_use_roll_top_info_harem.formatted", locale.Data{"RollsPerHour": sch.RollsPerHour, "ClaimHours": sch.ClaimHours})
 	}
 	return msg, nil
 }

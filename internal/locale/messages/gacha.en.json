@@ -443,5 +443,39 @@
   },
   "gacha.discord.original_name": {
     "other": "Original Name"
+  },
+  "gacha.config.admin_only": {
+    "other": "❌ You must have Administrator or Manage Server permissions to configure gacha settings."
+  },
+  "gacha.config.set_no_options": {
+    "other": "⚠️ Specify at least one option to change: reset_minute (0-59), rolls (1-100), or claim_interval (1-24)."
+  },
+  "gacha.config.view_title": {
+    "other": "⚙️ Gacha Server Settings"
+  },
+  "gacha.config.updated_title": {
+    "other": "✅ Gacha Settings Updated"
+  },
+  "gacha.config.reset_title": {
+    "other": "🔄 Gacha Settings Restored to Defaults"
+  },
+  "gacha.config.roll_reset_info.formatted": {
+    "other": "🕒 **Roll Reset:** Every hour at :{{printf \"%s\" .Minute}} (e.g. 04:{{printf \"%s\" .Minute}}, 05:{{printf \"%s\" .Minute}})"
+  },
+  "gacha.config.rolls_quota_info.formatted": {
+    "other": "🎲 **Roll Quota:** {{printf \"%d\" .Rolls}} rolls per hour"
+  },
+  "gacha.config.claim_interval_info.formatted": {
+    "other": "💍 **Claim Interval:** Every {{printf \"%d\" .ClaimHours}} hours ({{printf \"%d\" .ClaimHours}} roll resets)"
+  },
+  "gacha.config.next_roll_reset.formatted": {
+    "other": "⏳ **Next Roll Reset:** <t:{{printf \"%d\" .Unix}}:R> (<t:{{printf \"%d\" .Unix}}:T>)"
+  },
+  "gacha.config.next_claim_reset.formatted": {
+    "other": "💍 **Next Claim Reset:** <t:{{printf \"%d\" .Unix}}:R> (<t:{{printf \"%d\" .Unix}}:T>)"
+  },
+  "gacha.config.footer": {
+    "other": "Pousadinha Gacha • Synchronized fixed-clock reset schedule"
   }
 }
+

@@ -31,3 +31,6 @@ var RemoteAssets string
 
 //go:embed 013_gacha_runtime.sql
 var GachaRuntime string
+
+//go:embed 014_gacha_schedule.sql
+var GachaSchedule string

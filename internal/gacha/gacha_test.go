@@ -349,6 +349,7 @@ func TestPostgresGame(t *testing.T) {
 	t.Run("progression", func(t *testing.T) { testProgression(t, store) })
 	t.Run("batch", func(t *testing.T) { testBatch(t, store); testBatchCache(t, store) })
 	t.Run("runtime", func(t *testing.T) { testRuntime(t, store) })
+	t.Run("schedule", func(t *testing.T) { testScheduleIntegration(t, store) })
 	t.Run("s3_catalog", func(t *testing.T) { testS3Catalog(t, store) })
 
 }

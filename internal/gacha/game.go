@@ -104,11 +104,13 @@ func (s *Store) rollPoolSnapshot(ctx context.Context, guild, channel, user, requ
 	if e != sql.ErrNoRows {
 		return r, e
 	}
-	_, e = tx.ExecContext(ctx, `UPDATE gacha_players SET window_start=now(),rolls_used=0 WHERE guild_id=$1 AND user_id=$2 AND window_start <= now()-interval '1 hour'`, guild, user)
+	schedule := s.GuildSchedule(ctx, guild)
+	rollWin := schedule.RollWindow(time.Now())
+	_, e = tx.ExecContext(ctx, `UPDATE gacha_players SET window_start=$3,rolls_used=0 WHERE guild_id=$1 AND user_id=$2 AND window_start<$3`, guild, user, rollWin.CurrentStart)
 	if e != nil {
 		return r, e
 	}
-	e = tx.QueryRowContext(ctx, `UPDATE gacha_players SET rolls_used=rolls_used+1 WHERE guild_id=$1 AND user_id=$2 AND rolls_used<$3 RETURNING rolls_used`, guild, user, s.Config.RollsPerHour).Scan(&used)
+	e = tx.QueryRowContext(ctx, `UPDATE gacha_players SET rolls_used=rolls_used+1 WHERE guild_id=$1 AND user_id=$2 AND rolls_used<$3 RETURNING rolls_used`, guild, user, schedule.RollsPerHour).Scan(&used)
 	if e == sql.ErrNoRows {
 		return r, ErrLimit
 	}
@@ -241,7 +243,9 @@ func (s *Store) Claim(ctx context.Context, guild, channel, user, roll string) er
 	if n == 0 {
 		return ErrClaim
 	}
-	_, e = tx.ExecContext(ctx, `UPDATE gacha_players SET claim_after=now()+($3 * interval '1 hour') WHERE guild_id=$1 AND user_id=$2`, guild, user, s.Config.ClaimHours)
+	schedule := s.GuildSchedule(ctx, guild)
+	claimWin := schedule.ClaimWindow(time.Now())
+	_, e = tx.ExecContext(ctx, `UPDATE gacha_players SET claim_after=$3 WHERE guild_id=$1 AND user_id=$2`, guild, user, claimWin.NextReset)
 	if e != nil {
 		return e
 	}

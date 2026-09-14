@@ -6,13 +6,16 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"sync"
 )
 
 type Store struct {
-	DB      *sql.DB
-	Config  Config
-	runtime poolRuntime
-	media   mediaRuntime
+	DB            *sql.DB
+	Config        Config
+	runtime       poolRuntime
+	media         mediaRuntime
+	scheduleMu    sync.RWMutex
+	scheduleCache map[string]ResetSchedule
 }
 
 func (s *Store) Migrate(ctx context.Context) error {
@@ -49,6 +52,9 @@ func (s *Store) Migrate(ctx context.Context) error {
 		return e
 	}
 	if _, e = tx.ExecContext(ctx, migrations.GachaRuntime); e != nil {
+		return e
+	}
+	if _, e = tx.ExecContext(ctx, migrations.GachaSchedule); e != nil {
 		return e
 	}
 	return tx.Commit()

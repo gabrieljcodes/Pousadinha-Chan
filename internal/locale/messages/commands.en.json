@@ -860,6 +860,27 @@
   "commands.gacha.alias_to_set_or_list": {
     "other": "New alias from character's profile to set (leave empty to view aliases, or 'default' to reset)"
   },
+  "commands.gacha.configure_reset_schedule_and_quotas": {
+    "other": "Configure gacha reset times, roll quotas, and claim intervals (Admin only)"
+  },
+  "commands.gacha.view_current_reset_schedule": {
+    "other": "View current server gacha reset schedule and quotas"
+  },
+  "commands.gacha.set_reset_schedule_and_quotas": {
+    "other": "Update server gacha reset schedule and quotas"
+  },
+  "commands.gacha.minute_past_hour_when_rolls_reset": {
+    "other": "Minute past the hour when rolls reset (0-59, e.g. 35)"
+  },
+  "commands.gacha.number_of_rolls_per_hour": {
+    "other": "Number of rolls per hour (1-100)"
+  },
+  "commands.gacha.claim_reset_interval_in_hours": {
+    "other": "Claim reset interval in hours/resets (1-24)"
+  },
+  "commands.gacha.restore_default_gacha_settings": {
+    "other": "Restore server default gacha settings (:00 minute, 10 rolls, 3h claim)"
+  },
   "commands.general.animal_lottery": {
     "other": "Animal Lottery"
   },

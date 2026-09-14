@@ -14,12 +14,13 @@ type Config struct {
 	Storage                  mediastore.Config
 	MediaDir, PublicURL      string
 	RollsPerHour, ClaimHours int
+	ResetMinute              int
 	WishBonusPercent         float64
 	WishlistLimit            int
 }
 
 func LoadConfig() (Config, error) {
-	c := Config{Enabled: os.Getenv("GACHA_ENABLED") == "true", MediaDir: os.Getenv("GACHA_MEDIA_DIR"), PublicURL: strings.TrimRight(os.Getenv("GACHA_PUBLIC_URL"), "/"), RollsPerHour: 10, ClaimHours: 3, WishBonusPercent: 2.0, WishlistLimit: 5}
+	c := Config{Enabled: os.Getenv("GACHA_ENABLED") == "true", MediaDir: os.Getenv("GACHA_MEDIA_DIR"), PublicURL: strings.TrimRight(os.Getenv("GACHA_PUBLIC_URL"), "/"), RollsPerHour: 10, ClaimHours: 3, ResetMinute: 0, WishBonusPercent: 2.0, WishlistLimit: 5}
 	if c.MediaDir == "" {
 		c.MediaDir = "data/gacha"
 	}
@@ -46,6 +47,13 @@ func LoadConfig() (Config, error) {
 			}
 			*v.dst = n
 		}
+	}
+	if raw := os.Getenv("GACHA_RESET_MINUTE"); raw != "" {
+		m, e := strconv.Atoi(raw)
+		if e != nil || m < 0 || m > 59 {
+			return c, fmt.Errorf("GACHA_RESET_MINUTE must be between 0 and 59")
+		}
+		c.ResetMinute = m
 	}
 	if raw := os.Getenv("GACHA_WISH_BONUS_PERCENT"); raw != "" {
 		p, err := strconv.ParseFloat(raw, 64)

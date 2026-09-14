@@ -59,6 +59,9 @@ func SlashHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 				allowedInSpecial = true
 			}
 		}
+		if i.ApplicationCommandData().Name == "gachaconfig" && i.Member != nil && (i.Member.Permissions&(discordgo.PermissionAdministrator|discordgo.PermissionManageServer) != 0) {
+			allowedInSpecial = true
+		}
 		if !allowedInSpecial {
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -74,6 +77,8 @@ func SlashHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	switch i.ApplicationCommandData().Name {
 	case "roll", "top", "info", "harem", "profile", "gallery", "wishlist", "wish", "unwish", "trade", "gift", "divorce", "keys", "offers", "search", "harem-ranking", "alias", "series":
 		gacha.Slash(s, i)
+	case "gachaconfig":
+		gacha.HandleConfigSlash(s, i)
 	case "event":
 		games.HandleEventCommand(s, i)
 	case "help":
