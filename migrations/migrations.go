@@ -37,3 +37,6 @@ var GachaSchedule string
 
 //go:embed 015_wishlist_confirmations.sql
 var WishlistConfirmations string
+
+//go:embed 016_gacha_performance_indexes.sql
+var GachaPerformanceIndexes string

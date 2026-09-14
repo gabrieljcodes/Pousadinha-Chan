@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"errors"
+	"fmt"
 	"github.com/google/uuid"
 	"math/big"
 	"strconv"
@@ -469,7 +470,25 @@ func (s *Store) Cards(ctx context.Context, guild, user, search string, page int)
 	if page < 1 || page > 100000 {
 		return nil, userError(locale.Text("gacha.discord.invalid_page"))
 	}
-	rows, e := s.DB.QueryContext(ctx, cardSelect+` LEFT JOIN gacha_collection valued ON valued.character_id=c.id AND valued.guild_id=$2 LEFT JOIN gacha_guild_character_aliases ga ON ga.character_id=c.id AND ga.guild_id=$2 CROSS JOIN (SELECT gacha_claimed_count($2) AS claimed) population WHERE ($1='' OR EXISTS(SELECT 1 FROM gacha_collection col WHERE col.character_id=c.id AND col.guild_id=$2 AND col.user_id=$1)) AND ($3='' OR c.name ILIKE '%'||$3||'%' OR c.id::text=$3 OR c.native_name ILIKE '%'||$3||'%' OR EXISTS(SELECT 1 FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(c.aliases)='array' THEN c.aliases ELSE '[]'::jsonb END) alias WHERE alias ILIKE '%'||$3||'%') OR ga.alias ILIKE '%'||$3||'%') ORDER BY gacha_character_value(c.favourites,population.claimed,COALESCE(valued.keys,0)) DESC,c.id LIMIT 10 OFFSET $4`, user, guild, search, (page-1)*10)
+	var rows *sql.Rows
+	var e error
+	if user != "" {
+		const userCardsSQL = `SELECT c.id, c.name, c.favourites,
+       COALESCE((SELECT w.title FROM gacha_character_works cw JOIN gacha_works w ON w.id=cw.work_id WHERE cw.character_id=c.id ORDER BY CASE cw.role WHEN 'MAIN' THEN 0 ELSE 1 END,w.id LIMIT 1), 'Original'),
+       COALESCE(a.path,''), COALESCE(a.source_url,''), COALESCE(a.attribution,'')
+FROM gacha_collection col
+JOIN gacha_characters c ON c.id = col.character_id
+LEFT JOIN LATERAL (SELECT path,source_url,attribution FROM gacha_assets WHERE character_id=c.id AND status='approved' ORDER BY is_primary DESC,id LIMIT 1) a ON true
+LEFT JOIN gacha_guild_character_aliases ga ON ga.character_id=c.id AND ga.guild_id=$2
+CROSS JOIN (SELECT gacha_claimed_count($2) AS claimed) population
+WHERE col.guild_id=$2 AND col.user_id=$1
+  AND ($3='' OR c.name ILIKE '%'||$3||'%' OR c.id::text=$3 OR c.native_name ILIKE '%'||$3||'%' OR ga.alias ILIKE '%'||$3||'%' OR EXISTS(SELECT 1 FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(c.aliases)='array' THEN c.aliases ELSE '[]'::jsonb END) alias WHERE alias ILIKE '%'||$3||'%'))
+ORDER BY gacha_character_value(c.favourites,population.claimed,COALESCE(col.keys,0)) DESC, c.id
+LIMIT 10 OFFSET $4`
+		rows, e = s.DB.QueryContext(ctx, userCardsSQL, user, guild, search, (page-1)*10)
+	} else {
+		rows, e = s.DB.QueryContext(ctx, cardSelect+` LEFT JOIN gacha_collection valued ON valued.character_id=c.id AND valued.guild_id=$2 LEFT JOIN gacha_guild_character_aliases ga ON ga.character_id=c.id AND ga.guild_id=$2 CROSS JOIN (SELECT gacha_claimed_count($2) AS claimed) population WHERE ($1='' OR EXISTS(SELECT 1 FROM gacha_collection col WHERE col.character_id=c.id AND col.guild_id=$2 AND col.user_id=$1)) AND ($3='' OR c.name ILIKE '%'||$3||'%' OR c.id::text=$3 OR c.native_name ILIKE '%'||$3||'%' OR EXISTS(SELECT 1 FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(c.aliases)='array' THEN c.aliases ELSE '[]'::jsonb END) alias WHERE alias ILIKE '%'||$3||'%') OR ga.alias ILIKE '%'||$3||'%') ORDER BY gacha_character_value(c.favourites,population.claimed,COALESCE(valued.keys,0)) DESC,c.id LIMIT 10 OFFSET $4`, user, guild, search, (page-1)*10)
+	}
 
 	if e != nil {
 		return nil, e
@@ -699,16 +718,8 @@ func (s *Store) TopCharacters(ctx context.Context, guild string, claimFilter str
 		gender = ""
 	}
 
-	const countSQL = `
-SELECT count(*)
-FROM gacha_characters c
-LEFT JOIN gacha_collection col ON col.character_id=c.id AND col.guild_id=$1
-WHERE c.enabled AND EXISTS(SELECT 1 FROM gacha_assets a WHERE a.character_id=c.id AND a.status='approved')
-  AND ($2 = '' OR lower(trim(c.gender)) LIKE $2 || '%')
-  AND ($3 = 'all' OR ($3 = 'unclaimed' AND col.user_id IS NULL) OR ($3 = 'claimed' AND col.user_id IS NOT NULL))`
-
-	var total int64
-	if err := s.DB.QueryRowContext(ctx, countSQL, guild, gender, claimFilter).Scan(&total); err != nil {
+	total, err := s.topCharactersCount(ctx, guild, claimFilter, gender)
+	if err != nil {
 		return nil, 0, err
 	}
 
@@ -784,4 +795,72 @@ LIMIT 1 OFFSET $3`
 		return Card{}, total, err
 	}
 	return c, total, nil
+}
+
+type topCountCacheItem struct {
+	total     int64
+	expiresAt time.Time
+}
+
+func (s *Store) topCharactersCount(ctx context.Context, guild, claimFilter, gender string) (int64, error) {
+	cacheKey := fmt.Sprintf("%s:%s:%s", guild, claimFilter, gender)
+	if val, ok := s.topCountCache.Load(cacheKey); ok {
+		item := val.(topCountCacheItem)
+		if time.Now().Before(item.expiresAt) {
+			return item.total, nil
+		}
+	}
+
+	var total int64
+	var err error
+
+	if claimFilter == "all" {
+		const allCountSQL = `
+SELECT count(*)
+FROM gacha_characters c
+WHERE c.enabled AND EXISTS(SELECT 1 FROM gacha_assets a WHERE a.character_id=c.id AND a.status='approved')
+  AND ($1 = '' OR lower(trim(c.gender)) LIKE $1 || '%')`
+		err = s.DB.QueryRowContext(ctx, allCountSQL, gender).Scan(&total)
+	} else if claimFilter == "claimed" {
+		const claimedCountSQL = `
+SELECT count(*)
+FROM gacha_collection col
+JOIN gacha_characters c ON c.id=col.character_id
+WHERE col.guild_id=$1 AND c.enabled AND EXISTS(SELECT 1 FROM gacha_assets a WHERE a.character_id=c.id AND a.status='approved')
+  AND ($2 = '' OR lower(trim(c.gender)) LIKE $2 || '%')`
+		err = s.DB.QueryRowContext(ctx, claimedCountSQL, guild, gender).Scan(&total)
+	} else {
+		// unclaimed: count total minus claimed
+		allTotal, errAll := s.topCharactersCount(ctx, guild, "all", gender)
+		if errAll != nil {
+			return 0, errAll
+		}
+		claimedTotal, errClaimed := s.topCharactersCount(ctx, guild, "claimed", gender)
+		if errClaimed != nil {
+			return 0, errClaimed
+		}
+		total = allTotal - claimedTotal
+		if total < 0 {
+			total = 0
+		}
+	}
+
+	if err != nil {
+		return 0, err
+	}
+
+	s.topCountCache.Store(cacheKey, topCountCacheItem{
+		total:     total,
+		expiresAt: time.Now().Add(10 * time.Minute),
+	})
+	return total, nil
+}
+
+// PurgeExpiredRolls deletes rolls that expired more than 7 days ago and were never claimed.
+func (s *Store) PurgeExpiredRolls(ctx context.Context) (int64, error) {
+	result, err := s.DB.ExecContext(ctx, `DELETE FROM gacha_rolls WHERE expires_at < now() - interval '7 days' AND claimed_by IS NULL`)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }

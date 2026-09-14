@@ -60,13 +60,18 @@ func main() {
 			defer store.ClosePoolCache()
 			warmCtx, warmCancel := context.WithTimeout(context.Background(), time.Minute)
 			warmErr := store.WarmRollPools(warmCtx)
-			warmCancel()
 			if warmErr != nil {
 				log.Printf("Gacha pool warmup failed: %v", warmErr)
 			} else {
 				stats := store.PoolCacheStats()
 				log.Printf("Gacha pools ready: characters=%d builds=%d shared_hits=%d cache_errors=%d", stats.Characters, stats.Builds, stats.SharedHits, stats.CacheErrors)
 			}
+			if purged, purgeErr := store.PurgeExpiredRolls(warmCtx); purgeErr != nil {
+				log.Printf("Gacha expired rolls cleanup: %v", purgeErr)
+			} else if purged > 0 {
+				log.Printf("Gacha expired rolls purged: %d", purged)
+			}
+			warmCancel()
 			gacha.Default = store
 		}
 	}

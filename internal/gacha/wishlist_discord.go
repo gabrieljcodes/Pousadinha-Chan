@@ -98,7 +98,7 @@ func HandleWishlistClear(session *discordgo.Session, i *discordgo.InteractionCre
 	if err := session.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredMessageUpdate}); err != nil {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
 	removed, err := Default.ResolveWishlistClear(ctx, i.GuildID, i.ChannelID, i.Member.User.ID, parts[2], parts[3] == "confirm")
 	content := locale.Text("gacha.wishlist.cancelled")

@@ -287,7 +287,7 @@ func HandleAction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if e := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredChannelMessageWithSource, Data: &discordgo.InteractionResponseData{Flags: discordgo.MessageFlagsEphemeral}}); e != nil {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
 	parts := strings.SplitN(strings.TrimPrefix(i.MessageComponentData().CustomID, "gacha_action_"), "_", 2)
 	content := locale.Text("gacha.social_discord.invalid_offer_button")
@@ -405,7 +405,7 @@ func HandlePage(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	parts := strings.Split(strings.TrimPrefix(i.MessageComponentData().CustomID, "gacha_page_"), "_")
 	content := locale.Text("gacha.social_discord.invalid_page_button")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
 
 	if len(parts) >= 3 && (parts[0] == "search" || parts[0] == "series") {

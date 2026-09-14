@@ -16,6 +16,7 @@ type Store struct {
 	media         mediaRuntime
 	scheduleMu    sync.RWMutex
 	scheduleCache map[string]ResetSchedule
+	topCountCache sync.Map
 }
 
 func (s *Store) Migrate(ctx context.Context) error {
@@ -58,6 +59,9 @@ func (s *Store) Migrate(ctx context.Context) error {
 		return e
 	}
 	if _, e = tx.ExecContext(ctx, migrations.WishlistConfirmations); e != nil {
+		return e
+	}
+	if _, e = tx.ExecContext(ctx, migrations.GachaPerformanceIndexes); e != nil {
 		return e
 	}
 	return tx.Commit()

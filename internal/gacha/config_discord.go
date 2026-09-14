@@ -35,7 +35,7 @@ func HandleConfigSlash(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
 
 	data := i.ApplicationCommandData()

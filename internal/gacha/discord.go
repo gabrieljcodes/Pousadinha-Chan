@@ -649,7 +649,7 @@ func HandleClaim(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if e := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredChannelMessageWithSource, Data: &discordgo.InteractionResponseData{Flags: discordgo.MessageFlagsEphemeral}}); e != nil {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
 	e := Default.Claim(ctx, i.GuildID, i.ChannelID, i.Member.User.ID, strings.TrimPrefix(i.MessageComponentData().CustomID, "gacha_claim_"))
 	content := locale.Text("gacha.discord.character_claimed_check_your_harem")
@@ -685,7 +685,7 @@ func Slash(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &content})
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
 	msg, e := Default.Execute(ctx, i.GuildID, i.ChannelID, i.Member.User.ID, i.ID, action, query, page)
 	if e != nil {
