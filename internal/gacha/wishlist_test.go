@@ -134,6 +134,30 @@ func testWishlistRegression(t *testing.T, original *Store) {
 	if remaining != 1 {
 		t.Fatal("replay deleted new wishes")
 	}
+
+	// Resolve a whole batch of canonical names without falling back to aliases.
+	names := []string{"Wishlist regression 3", "Wishlist regression 4", "Wishlist regression 5", "Wishlist regression 6", "Wishlist regression 7"}
+	result, err = store.UpdateWishlist(ctx, "wishlist-names", "alice", names, false)
+	must(err)
+	if len(result.Changed) != 5 {
+		t.Fatalf("name batch: %+v", result)
+	}
+	// An exact canonical name takes precedence over another character's alias.
+	_, err = db.Exec(`UPDATE gacha_characters SET aliases='["Wishlist regression 3"]'::jsonb WHERE id=$1`, ids[6])
+	must(err)
+	result, err = store.UpdateWishlist(ctx, "wishlist-exact", "alice", names[:1], false)
+	must(err)
+	if len(result.Changed) != 1 || result.Changed[0].ID != ids[3] {
+		t.Fatalf("canonical precedence: %+v", result)
+	}
+	// Duplicate canonical names are still ambiguous and require an ID.
+	_, err = db.Exec(`UPDATE gacha_characters SET name=$2 WHERE id=$1`, ids[7], names[0])
+	must(err)
+	result, err = store.UpdateWishlist(ctx, "wishlist-ambiguous", "alice", names[:1], false)
+	must(err)
+	if len(result.Ambiguous) != 1 || len(result.Changed) != 0 {
+		t.Fatalf("duplicate canonical names: %+v", result)
+	}
 	// Separate batches race for the same five slots.
 	var wg sync.WaitGroup
 	errs := make(chan error, 8)

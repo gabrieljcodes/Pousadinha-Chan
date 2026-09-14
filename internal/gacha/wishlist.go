@@ -69,19 +69,63 @@ func lockWishlist(ctx context.Context, tx *sql.Tx, guild, user string) error {
 // visibility or available portraits. It never resolves through priced cards.
 func resolveWish(ctx context.Context, tx *sql.Tx, guild, user, query string, remove bool) (WishEntry, bool, error) {
 	id, _ := strconv.ParseInt(strings.TrimPrefix(query, "#"), 10, 64)
-	rows, err := tx.QueryContext(ctx, `
-WITH candidates AS (
- SELECT c.id,COALESCE(ga.alias,c.name) AS name,
- CASE WHEN c.id=$4 OR lower(c.name)=lower($3) OR lower(c.native_name)=lower($3) OR lower(ga.alias)=lower($3)
+
+	// Resolve IDs and canonical names through their indexes before expanding
+	// aliases or searching substrings across the catalog. Canonical names take
+	// precedence over aliases; duplicate canonical names remain ambiguous.
+	exactSQL := `SELECT c.id,COALESCE(ga.alias,c.name)
+ FROM gacha_characters c
+ LEFT JOIN gacha_guild_character_aliases ga ON ga.guild_id=$1 AND ga.character_id=c.id
+ WHERE `
+	var match any = query
+	if id > 0 {
+		exactSQL += `c.id=$3`
+		match = id
+	} else {
+		exactSQL += `lower(c.name)=lower($3)`
+	}
+	exactSQL += ` AND ((NOT $4::boolean AND ($5::boolean OR (c.enabled AND c.archived_at IS NULL AND EXISTS(SELECT 1 FROM gacha_assets WHERE character_id=c.id AND status='approved'))))
+ OR ($4::boolean AND EXISTS(SELECT 1 FROM gacha_wishes WHERE guild_id=$1 AND user_id=$2 AND character_id=c.id))) ORDER BY c.id LIMIT 2`
+	rows, err := tx.QueryContext(ctx, exactSQL, guild, user, match, remove, id > 0)
+	if err != nil {
+		return WishEntry{}, false, err
+	}
+	var exact []WishEntry
+	for rows.Next() {
+		var entry WishEntry
+		if err := rows.Scan(&entry.ID, &entry.Name); err != nil {
+			rows.Close()
+			return WishEntry{}, false, err
+		}
+		exact = append(exact, entry)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return WishEntry{}, false, err
+	}
+	if len(exact) > 0 {
+		return exact[0], len(exact) > 1, nil
+	}
+	if id > 0 {
+		return WishEntry{}, false, sql.ErrNoRows
+	}
+	// Materialize name matches before portrait checks, so a partial search
+	// cannot probe the asset table once for every character in the catalog.
+	rows, err = tx.QueryContext(ctx, `
+WITH matches AS MATERIALIZED (
+ SELECT c.id,COALESCE(ga.alias,c.name) AS name,c.enabled,c.archived_at,
+ CASE WHEN lower(c.name)=lower($3) OR lower(c.native_name)=lower($3) OR lower(ga.alias)=lower($3)
  OR EXISTS(SELECT 1 FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(c.aliases)='array' THEN c.aliases ELSE '[]'::jsonb END) a WHERE lower(a)=lower($3)) THEN 0 ELSE 1 END AS priority
  FROM gacha_characters c
  LEFT JOIN gacha_guild_character_aliases ga ON ga.guild_id=$1 AND ga.character_id=c.id
- WHERE ((NOT $5::boolean AND (c.id=$4 OR (c.enabled AND c.archived_at IS NULL AND EXISTS(SELECT 1 FROM gacha_assets WHERE character_id=c.id AND status='approved'))))
- OR ($5::boolean AND EXISTS(SELECT 1 FROM gacha_wishes WHERE guild_id=$1 AND user_id=$2 AND character_id=c.id)))
- AND (($4>0 AND c.id=$4) OR ($4=0 AND (strpos(lower(c.name),lower($3))>0 OR strpos(lower(c.native_name),lower($3))>0 OR strpos(lower(ga.alias),lower($3))>0
- OR EXISTS(SELECT 1 FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(c.aliases)='array' THEN c.aliases ELSE '[]'::jsonb END) a WHERE strpos(lower(a),lower($3))>0))))
+ WHERE (NOT $4::boolean OR EXISTS(SELECT 1 FROM gacha_wishes WHERE guild_id=$1 AND user_id=$2 AND character_id=c.id))
+ AND (strpos(lower(c.name),lower($3))>0 OR strpos(lower(c.native_name),lower($3))>0 OR strpos(lower(ga.alias),lower($3))>0
+ OR EXISTS(SELECT 1 FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(c.aliases)='array' THEN c.aliases ELSE '[]'::jsonb END) a WHERE strpos(lower(a),lower($3))>0))
 )
-SELECT id,name,priority FROM candidates ORDER BY priority,id LIMIT 2`, guild, user, query, max(id, 0), remove)
+SELECT id,name,priority FROM matches
+WHERE $4::boolean OR (enabled AND archived_at IS NULL AND EXISTS(SELECT 1 FROM gacha_assets WHERE character_id=matches.id AND status='approved'))
+ORDER BY priority,id LIMIT 2`, guild, user, query, remove)
 	if err != nil {
 		return WishEntry{}, false, err
 	}
