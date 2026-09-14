@@ -60,6 +60,27 @@ func init() {
 				},
 				{
 					Type:        discordgo.ApplicationCommandOptionSubCommand,
+					Name:        "channels",
+					Description: locale.Text("commands.gacha.configure_channels"),
+					Options: []*discordgo.ApplicationCommandOption{
+						{
+							Type:         discordgo.ApplicationCommandOptionChannel,
+							Name:         "roll_channel",
+							Description:  locale.Text("commands.gacha.roll_channel_description"),
+							ChannelTypes: []discordgo.ChannelType{discordgo.ChannelTypeGuildText},
+							Required:     false,
+						},
+						{
+							Type:         discordgo.ApplicationCommandOptionChannel,
+							Name:         "command_channel",
+							Description:  locale.Text("commands.gacha.command_channel_description"),
+							ChannelTypes: []discordgo.ChannelType{discordgo.ChannelTypeGuildText},
+							Required:     false,
+						},
+					},
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionSubCommand,
 					Name:        "reset",
 					Description: locale.Text("commands.gacha.restore_default_gacha_settings"),
 				},

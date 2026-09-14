@@ -680,6 +680,11 @@ func Slash(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		return
 	}
 	action, query, page := parseSlash(i.ApplicationCommandData())
+	if e := Default.validateChannel(context.Background(), i.GuildID, i.ChannelID, action); e != nil {
+		content := friendly(e)
+		_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &content})
+		return
+	}
 	if e := validateTarget(s, i.GuildID, i.Member.User.ID, action, query); e != nil {
 		content := friendly(e)
 		_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &content})
@@ -820,3 +825,36 @@ func parseSlash(data discordgo.ApplicationCommandInteractionData) (string, strin
 
 	return action, query, page
 }
+
+func isRollAction(action string) bool {
+	action = normalizeAction(action)
+	switch action {
+	case "roll", "w", "h", "wa", "ha", "ma", "wg", "hg", "mg":
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *Store) validateChannel(ctx context.Context, guildID, channelID, action string) error {
+	if guildID == "" || channelID == "" || action == "gachaconfig" {
+		return nil
+	}
+	sch := s.GuildSchedule(ctx, guildID)
+	// If channels are not yet configured on this server
+	if sch.RollChannelID == "" || sch.CmdChannelID == "" {
+		return userError(locale.Text("gacha.channels.not_configured"))
+	}
+
+	if isRollAction(action) {
+		if channelID != sch.RollChannelID {
+			return userError(locale.Text("gacha.channels.rolls_only_in.formatted", locale.Data{"Channel": sch.RollChannelID}))
+		}
+	} else {
+		if channelID != sch.CmdChannelID {
+			return userError(locale.Text("gacha.channels.commands_only_in.formatted", locale.Data{"Channel": sch.CmdChannelID}))
+		}
+	}
+	return nil
+}
+

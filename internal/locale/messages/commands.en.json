@@ -869,6 +869,15 @@
   "commands.gacha.restore_default_gacha_settings": {
     "other": "Restore server default gacha settings (:00 minute, 10 rolls, 3h claim)"
   },
+  "commands.gacha.configure_channels": {
+    "other": "Configure dedicated channels for rolls and gacha commands (Admin only)"
+  },
+  "commands.gacha.roll_channel_description": {
+    "other": "Channel where gacha rolls (!w, !h, /roll) are allowed"
+  },
+  "commands.gacha.command_channel_description": {
+    "other": "Channel where gacha management commands (/harem, /top, /wishlist) are allowed"
+  },
   "commands.general.animal_lottery": {
     "other": "Animal Lottery"
   },

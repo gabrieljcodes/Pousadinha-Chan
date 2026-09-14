@@ -40,3 +40,7 @@ var WishlistConfirmations string
 
 //go:embed 016_gacha_performance_indexes.sql
 var GachaPerformanceIndexes string
+
+//go:embed 017_gacha_channels.sql
+var GachaChannels string
+

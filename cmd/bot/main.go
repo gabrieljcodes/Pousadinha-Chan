@@ -94,9 +94,12 @@ func main() {
 	dg.AddHandler(commands.SlashHandler)
 	dg.AddHandler(commands.ComponentsHandler)
 	dg.AddHandler(events.VoiceStateUpdate)
+	if gachaConfig.Enabled {
+		dg.AddHandler(gacha.PrefixHandler)
+	}
 
 	// Identify Intent
-	dg.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildVoiceStates
+	dg.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildVoiceStates | discordgo.IntentsGuildMessages | discordgo.IntentMessageContent
 
 	// Open Websocket
 	err = dg.Open()

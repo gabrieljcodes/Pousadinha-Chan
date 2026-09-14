@@ -7,11 +7,13 @@ import (
 	"time"
 )
 
-// ResetSchedule holds the synchronized reset configuration for a guild.
+// ResetSchedule holds the synchronized reset configuration and channel settings for a guild.
 type ResetSchedule struct {
-	ResetMinute  int // 0..59: minute past the hour when rolls reset
-	RollsPerHour int // 1..100: rolls allocated per hourly window
-	ClaimHours   int // 1..24: interval in hours/resets between claims
+	ResetMinute   int    // 0..59: minute past the hour when rolls reset
+	RollsPerHour  int    // 1..100: rolls allocated per hourly window
+	ClaimHours    int    // 1..24: interval in hours/resets between claims
+	RollChannelID string // channel where rolls are allowed
+	CmdChannelID  string // channel where other gacha commands are allowed
 }
 
 // WindowInfo contains the exact boundaries of a reset window.
@@ -131,12 +133,15 @@ func (s *Store) GuildSchedule(ctx context.Context, guildID string) ResetSchedule
 	}
 
 	var minute, rolls, claimHours int
-	err := s.DB.QueryRowContext(ctx, `SELECT reset_minute, rolls_per_hour, claim_hours FROM gacha_guild_settings WHERE guild_id=$1`, guildID).Scan(&minute, &rolls, &claimHours)
+	var rollChannel, cmdChannel sql.NullString
+	err := s.DB.QueryRowContext(ctx, `SELECT reset_minute, rolls_per_hour, claim_hours, roll_channel_id, cmd_channel_id FROM gacha_guild_settings WHERE guild_id=$1`, guildID).Scan(&minute, &rolls, &claimHours, &rollChannel, &cmdChannel)
 	if err == nil {
 		sch := ResetSchedule{
-			ResetMinute:  minute,
-			RollsPerHour: rolls,
-			ClaimHours:   claimHours,
+			ResetMinute:   minute,
+			RollsPerHour:  rolls,
+			ClaimHours:    claimHours,
+			RollChannelID: rollChannel.String,
+			CmdChannelID:  cmdChannel.String,
 		}
 		s.setCachedSchedule(guildID, sch)
 		return sch
@@ -146,7 +151,7 @@ func (s *Store) GuildSchedule(ctx context.Context, guildID string) ResetSchedule
 	return def
 }
 
-// SetGuildSchedule persists custom reset settings for a guild.
+// SetGuildSchedule persists custom reset settings for a guild while preserving channel configurations.
 func (s *Store) SetGuildSchedule(ctx context.Context, guildID string, resetMinute, rollsPerHour, claimHours int) error {
 	if guildID == "" {
 		return fmt.Errorf("guild ID cannot be empty")
@@ -161,23 +166,64 @@ func (s *Store) SetGuildSchedule(ctx context.Context, guildID string, resetMinut
 		return fmt.Errorf("claim interval must be between 1 and 24 hours")
 	}
 
+	current := s.GuildSchedule(ctx, guildID)
 	_, err := s.DB.ExecContext(ctx, `
-INSERT INTO gacha_guild_settings(guild_id, reset_minute, rolls_per_hour, claim_hours, updated_at)
-VALUES($1, $2, $3, $4, now())
+INSERT INTO gacha_guild_settings(guild_id, reset_minute, rolls_per_hour, claim_hours, roll_channel_id, cmd_channel_id, updated_at)
+VALUES($1, $2, $3, $4, $5, $6, now())
 ON CONFLICT(guild_id) DO UPDATE SET
     reset_minute = EXCLUDED.reset_minute,
     rolls_per_hour = EXCLUDED.rolls_per_hour,
     claim_hours = EXCLUDED.claim_hours,
     updated_at = now()
-`, guildID, resetMinute, rollsPerHour, claimHours)
+`, guildID, resetMinute, rollsPerHour, claimHours, current.RollChannelID, current.CmdChannelID)
 	if err != nil {
 		return err
 	}
 
 	s.setCachedSchedule(guildID, ResetSchedule{
-		ResetMinute:  resetMinute,
-		RollsPerHour: rollsPerHour,
-		ClaimHours:   claimHours,
+		ResetMinute:   resetMinute,
+		RollsPerHour:  rollsPerHour,
+		ClaimHours:    claimHours,
+		RollChannelID: current.RollChannelID,
+		CmdChannelID:  current.CmdChannelID,
+	})
+	return nil
+}
+
+// SetGuildChannels persists custom dedicated channels for rolls and gacha commands.
+func (s *Store) SetGuildChannels(ctx context.Context, guildID, rollChannelID, cmdChannelID string) error {
+	if guildID == "" {
+		return fmt.Errorf("guild ID cannot be empty")
+	}
+
+	current := s.GuildSchedule(ctx, guildID)
+	newRoll := current.RollChannelID
+	if rollChannelID != "" {
+		newRoll = rollChannelID
+	}
+	newCmd := current.CmdChannelID
+	if cmdChannelID != "" {
+		newCmd = cmdChannelID
+	}
+
+	_, err := s.DB.ExecContext(ctx, `
+INSERT INTO gacha_guild_settings(guild_id, reset_minute, rolls_per_hour, claim_hours, roll_channel_id, cmd_channel_id, updated_at)
+VALUES($1, $2, $3, $4, $5, $6, now())
+ON CONFLICT(guild_id) DO UPDATE SET
+    roll_channel_id = EXCLUDED.roll_channel_id,
+    cmd_channel_id = EXCLUDED.cmd_channel_id,
+    updated_at = now()
+`, guildID, current.ResetMinute, current.RollsPerHour, current.ClaimHours, newRoll, newCmd)
+	if err != nil {
+		return err
+	}
+
+	s.setCachedSchedule(guildID, ResetSchedule{
+		ResetMinute:   current.ResetMinute,
+		RollsPerHour:  current.RollsPerHour,
+		ClaimHours:    current.ClaimHours,
+		RollChannelID: newRoll,
+		CmdChannelID:  newCmd,
 	})
 	return nil
 }

@@ -465,6 +465,27 @@
   "gacha.config.claim_interval_info.formatted": {
     "other": "💍 **Claim Interval:** Every {{printf \"%d\" .ClaimHours}} hours ({{printf \"%d\" .ClaimHours}} roll resets)"
   },
+  "gacha.config.roll_channel_info.formatted": {
+    "other": "🎰 **Rolls Channel:** {{if .Channel}}<#{{printf \"%s\" .Channel}}>{{else}}*Not configured*{{end}}"
+  },
+  "gacha.config.command_channel_info.formatted": {
+    "other": "💬 **Commands Channel:** {{if .Channel}}<#{{printf \"%s\" .Channel}}>{{else}}*Not configured*{{end}}"
+  },
+  "gacha.config.channels_title": {
+    "other": "📍 Gacha Channels Configuration"
+  },
+  "gacha.config.channels_no_options": {
+    "other": "⚠️ Specify at least one channel to configure: roll_channel or command_channel."
+  },
+  "gacha.channels.not_configured": {
+    "other": "❌ Gacha channels are not configured on this server. An administrator must set up the roll and command channels using `/gachaconfig channels`."
+  },
+  "gacha.channels.rolls_only_in.formatted": {
+    "other": "🎰 Rolls are only allowed in <#{{printf \"%s\" .Channel}}>."
+  },
+  "gacha.channels.commands_only_in.formatted": {
+    "other": "💬 Gacha commands are only allowed in <#{{printf \"%s\" .Channel}}>. Keep the rolls channel clear for rolls!"
+  },
   "gacha.config.next_roll_reset.formatted": {
     "other": "⏳ **Next Roll Reset:** <t:{{printf \"%d\" .Unix}}:R> (<t:{{printf \"%d\" .Unix}}:T>)"
   },

@@ -103,6 +103,56 @@ func HandleConfigSlash(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			},
 		})
 
+	case "channels":
+		var rollChannelOpt, cmdChannelOpt string
+		if len(data.Options) > 0 {
+			for _, o := range data.Options[0].Options {
+				ch := o.ChannelValue(s)
+				var chID string
+				if ch != nil {
+					chID = ch.ID
+				} else {
+					chID = o.StringValue()
+				}
+				switch o.Name {
+				case "roll_channel":
+					rollChannelOpt = chID
+				case "command_channel":
+					cmdChannelOpt = chID
+				}
+			}
+		}
+
+		if rollChannelOpt == "" && cmdChannelOpt == "" {
+			_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Content: locale.Text("gacha.config.channels_no_options"),
+					Flags:   discordgo.MessageFlagsEphemeral,
+				},
+			})
+			return
+		}
+
+		if err := Default.SetGuildChannels(ctx, i.GuildID, rollChannelOpt, cmdChannelOpt); err != nil {
+			_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Content: fmt.Sprintf("❌ %s", err.Error()),
+					Flags:   discordgo.MessageFlagsEphemeral,
+				},
+			})
+			return
+		}
+
+		embed := renderScheduleEmbed(Default.GuildSchedule(ctx, i.GuildID), locale.Text("gacha.config.channels_title"))
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Embeds: []*discordgo.MessageEmbed{embed},
+			},
+		})
+
 	case "reset":
 		if err := Default.ResetGuildSchedule(ctx, i.GuildID); err != nil {
 			_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
@@ -145,6 +195,10 @@ func renderScheduleEmbed(sch ResetSchedule, title string) *discordgo.MessageEmbe
 	b.WriteString(locale.Text("gacha.config.rolls_quota_info.formatted", locale.Data{"Rolls": sch.RollsPerHour}))
 	b.WriteString("\n")
 	b.WriteString(locale.Text("gacha.config.claim_interval_info.formatted", locale.Data{"ClaimHours": sch.ClaimHours}))
+	b.WriteString("\n\n")
+	b.WriteString(locale.Text("gacha.config.roll_channel_info.formatted", locale.Data{"Channel": sch.RollChannelID}))
+	b.WriteString("\n")
+	b.WriteString(locale.Text("gacha.config.command_channel_info.formatted", locale.Data{"Channel": sch.CmdChannelID}))
 	b.WriteString("\n\n")
 	b.WriteString(locale.Text("gacha.config.next_roll_reset.formatted", locale.Data{"Unix": rWin.NextReset.Unix()}))
 	b.WriteString("\n")
