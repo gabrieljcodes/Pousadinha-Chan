@@ -359,6 +359,7 @@ func TestPostgresGame(t *testing.T) {
 	t.Run("runtime", func(t *testing.T) { testRuntime(t, store) })
 	t.Run("schedule", func(t *testing.T) { testScheduleIntegration(t, store) })
 	t.Run("s3_catalog", func(t *testing.T) { testS3Catalog(t, store) })
+	t.Run("gems", func(t *testing.T) { testGemsIntegration(t, store) })
 
 }
 

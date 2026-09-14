@@ -554,5 +554,23 @@
   },
   "gacha.wishlist.already": {
     "other": "`{{.Id}}` {{.Name}} is already on your wishlist."
+  },
+  "gacha.discord.gem_power_status.formatted": {
+    "other": "💎 **Poder Astral:** **{{printf \"%d\" .Power}}%** / {{printf \"%d\" .Max}}% • Reset <t:{{printf \"%d\" .Reset}}:R>\n"
+  },
+  "gacha.gems.already_claimed.formatted": {
+    "other": "⚠️ Esta Gem já foi absorvida por <@{{printf \"%s\" .User}}>!"
+  },
+  "gacha.gems.expired": {
+    "other": "⏳ Esta Gem já expirou!"
+  },
+  "gacha.gems.insufficient_power.formatted": {
+    "other": "❌ Você não tem Poder Astral suficiente! Você tem **{{printf \"%d\" .Current}}%**, mas esta Gem requer **{{printf \"%d\" .Required}}%**.\nSeu Poder Astral resetará para 100% <t:{{printf \"%d\" .Reset}}:R>."
+  },
+  "gacha.gems.claim_success.formatted": {
+    "other": "✨ Você absorveu a Gem {{printf \"%s\" .Emoji}} **{{printf \"%s\" .Gem}}**!\nRecebeu **+{{printf \"%d\" .Value}} {{printf \"%s\" .Currency}}**.\nPoder Astral restante: **{{printf \"%d\" .RemainingPower}}%** (reset <t:{{printf \"%d\" .Reset}}:R>)."
+  },
+  "gacha.gems.absorbed_by.formatted": {
+    "other": "Gem {{printf \"%s\" .Emoji}} absorvida por <@{{printf \"%s\" .User}}> (+{{printf \"%d\" .Value}} {{printf \"%s\" .Currency}})"
   }
 }

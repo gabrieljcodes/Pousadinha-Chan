@@ -878,6 +878,9 @@
   "commands.gacha.command_channel_description": {
     "other": "Channel where gacha management commands (/harem, /top, /wishlist) are allowed"
   },
+  "commands.gacha.view_remaining_rolls_and_gem_power": {
+    "other": "View your remaining rolls, claim reset countdown, and current Gem Power"
+  },
   "commands.general.animal_lottery": {
     "other": "Animal Lottery"
   },

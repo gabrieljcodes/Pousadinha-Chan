@@ -44,3 +44,6 @@ var GachaPerformanceIndexes string
 //go:embed 017_gacha_channels.sql
 var GachaChannels string
 
+//go:embed 018_gacha_gems.sql
+var GachaGems string
+

@@ -84,6 +84,13 @@ func init() {
 			},
 		},
 
+		// /rolls
+		&discordgo.ApplicationCommand{
+			Name:         "rolls",
+			Description:  locale.Text("commands.gacha.view_remaining_rolls_and_gem_power"),
+			DMPermission: &dm,
+		},
+
 		// 2. /top
 		&discordgo.ApplicationCommand{
 			Name:         "top",

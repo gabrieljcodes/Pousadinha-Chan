@@ -30,7 +30,7 @@ func respondEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, embed *d
 
 func isGachaCommand(name string) bool {
 	switch name {
-	case "roll", "top", "info", "harem", "profile", "gallery", "wishlist", "wish", "unwish", "wishclear", "trade", "gift", "divorce", "keys", "offers", "search", "harem-ranking", "alias", "series":
+	case "roll", "rolls", "top", "info", "harem", "profile", "gallery", "wishlist", "wish", "unwish", "wishclear", "trade", "gift", "divorce", "keys", "offers", "search", "harem-ranking", "alias", "series":
 		return true
 	default:
 		return false
@@ -88,7 +88,7 @@ func SlashHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	}
 
 	switch i.ApplicationCommandData().Name {
-	case "roll", "top", "info", "harem", "profile", "gallery", "wishlist", "wish", "unwish", "wishclear", "trade", "gift", "divorce", "keys", "offers", "search", "harem-ranking", "alias", "series":
+	case "roll", "rolls", "top", "info", "harem", "profile", "gallery", "wishlist", "wish", "unwish", "wishclear", "trade", "gift", "divorce", "keys", "offers", "search", "harem-ranking", "alias", "series":
 		gacha.Slash(s, i)
 	case "gachaconfig":
 		gacha.HandleConfigSlash(s, i)

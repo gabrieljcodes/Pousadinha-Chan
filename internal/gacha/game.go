@@ -31,6 +31,7 @@ type Roll struct {
 	ID        string
 	Card      Card
 	Expires   time.Time
+	Gem       *Gem
 }
 
 const cardSelect = `SELECT c.id,c.name,c.favourites,COALESCE((SELECT w.title FROM gacha_character_works cw JOIN gacha_works w ON w.id=cw.work_id WHERE cw.character_id=c.id ORDER BY CASE cw.role WHEN 'MAIN' THEN 0 ELSE 1 END,w.id LIMIT 1), 'Original'),COALESCE(a.path,''),COALESCE(a.source_url,''),COALESCE(a.attribution,'') FROM gacha_characters c LEFT JOIN LATERAL (SELECT path,source_url,attribution FROM gacha_assets WHERE character_id=c.id AND status='approved' ORDER BY is_primary DESC,id LIMIT 1) a ON true `
@@ -107,7 +108,7 @@ func (s *Store) rollPoolSnapshot(ctx context.Context, guild, channel, user, requ
 	}
 	schedule := s.GuildSchedule(ctx, guild)
 	rollWin := schedule.RollWindow(time.Now())
-	_, e = tx.ExecContext(ctx, `UPDATE gacha_players SET window_start=$3,rolls_used=0 WHERE guild_id=$1 AND user_id=$2 AND window_start<$3`, guild, user, rollWin.CurrentStart)
+	_, e = tx.ExecContext(ctx, `UPDATE gacha_players SET window_start=$3,rolls_used=0,gem_power=100 WHERE guild_id=$1 AND user_id=$2 AND window_start<$3`, guild, user, rollWin.CurrentStart)
 	if e != nil {
 		return r, e
 	}
@@ -205,6 +206,19 @@ WHERE w.guild_id = $1 AND w.user_id = $2
 	}
 	if e = priceCards(ctx, tx, guild, &r.Card); e != nil {
 		return r, e
+	}
+	if r.Card.Owner != "" {
+		if gem, spawned := RollGem(r.KeyEarned); spawned {
+			r.Gem = &gem
+			_, e = tx.ExecContext(ctx, `
+				UPDATE gacha_rolls 
+				SET gem_type=$1, gem_value=$2, gem_power_cost=$3 
+				WHERE id=$4
+			`, gem.Type, gem.Value, gem.PowerCost, r.ID)
+			if e != nil {
+				return r, e
+			}
+		}
 	}
 	return r, tx.Commit()
 }

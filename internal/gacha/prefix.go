@@ -158,10 +158,12 @@ func handlePrefixStatus(ctx context.Context, s *discordgo.Session, m *discordgo.
 	var count int
 	_ = Default.DB.QueryRowContext(ctx, `SELECT count(*) FROM gacha_rolls WHERE guild_id=$1 AND user_id=$2 AND created_at >= $3`, m.GuildID, m.Author.ID, rWin.CurrentStart).Scan(&count)
 	remaining := max(0, sch.RollsPerHour-count)
+	gemPower, _ := Default.GetEffectiveGemPower(ctx, m.GuildID, m.Author.ID, now)
 
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("🎲 **Rolls:** **%d** / %d left • Next reset <t:%d:R>\n", remaining, sch.RollsPerHour, rWin.NextReset.Unix()))
-	b.WriteString(fmt.Sprintf("💍 **Claim:** Next reset <t:%d:R>", cWin.NextReset.Unix()))
+	b.WriteString(fmt.Sprintf("💍 **Claim:** Next reset <t:%d:R>\n", cWin.NextReset.Unix()))
+	b.WriteString(fmt.Sprintf("💎 **Poder Astral:** **%d%%** / %d%% • Next reset <t:%d:R>", gemPower, MaxGemPower, rWin.NextReset.Unix()))
 
 	_, _ = s.ChannelMessageSendReply(m.ChannelID, b.String(), m.Reference())
 }

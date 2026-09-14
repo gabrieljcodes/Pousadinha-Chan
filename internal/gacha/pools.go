@@ -35,7 +35,7 @@ func normalizeAction(action string) string {
 	aliases := map[string]string{
 		"info": "character", "profile": "status", "wishlist": "wishes",
 		"top": "topchar", "harem-ranking": "ranking",
-		"work": "series", "clear": "wishclear",
+		"work": "series", "clear": "wishclear", "rolls": "status",
 	}
 	if a, ok := aliases[action]; ok {
 		return a

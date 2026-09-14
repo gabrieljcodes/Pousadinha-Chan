@@ -2,6 +2,7 @@ package gacha
 
 import (
 	"bot/internal/locale"
+	"bot/pkg/config"
 	"context"
 	"database/sql"
 	"errors"
@@ -122,7 +123,32 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 			embed.Description += "\n" + locale.Text("gacha.discord.wished_by.formatted", locale.Data{"Users": strings.Join(mentions, ", ")})
 		}
 		msg.Embeds = []*discordgo.MessageEmbed{embed}
-		msg.Components = []discordgo.MessageComponent{discordgo.ActionsRow{Components: []discordgo.MessageComponent{discordgo.Button{Label: locale.Text("gacha.discord.claim_character"), Style: discordgo.SuccessButton, CustomID: "gacha_claim_" + r.ID, Disabled: r.Card.Owner != "" || !r.Expires.After(time.Now())}}}}
+		buttons := []discordgo.MessageComponent{
+			discordgo.Button{
+				Label:    locale.Text("gacha.discord.claim_character"),
+				Style:    discordgo.SuccessButton,
+				CustomID: "gacha_claim_" + r.ID,
+				Disabled: r.Card.Owner != "" || !r.Expires.After(time.Now()),
+			},
+		}
+		if r.Gem != nil {
+			currencyName := config.Bot.CurrencyName
+			if currencyName == "" {
+				currencyName = "Coins"
+			}
+			gemBtn := discordgo.Button{
+				Label:    fmt.Sprintf("%s (+%d)", r.Gem.Name, r.Gem.Value),
+				Style:    discordgo.SecondaryButton,
+				CustomID: "gacha_gem_" + r.ID,
+				Emoji:    r.Gem.ComponentEmoji(),
+			}
+			buttons = append(buttons, gemBtn)
+			embed.Description += fmt.Sprintf("\n%s **%s (+%d %s)**", r.Gem.DiscordString(), r.Gem.Name, r.Gem.Value, currencyName)
+			if r.Gem.Description != "" {
+				embed.Description += fmt.Sprintf(" • *%s*", r.Gem.Description)
+			}
+		}
+		msg.Components = []discordgo.MessageComponent{discordgo.ActionsRow{Components: buttons}}
 	case "harem", "harem_visual":
 		owner := user
 		isVisual := action == "harem_visual"
@@ -510,14 +536,18 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 		var used int
 		var windowStart, claimReset time.Time
 		var claimActive bool
-		e := s.DB.QueryRowContext(ctx, `SELECT rolls_used, window_start, CASE WHEN claim_after > now() THEN claim_after ELSE now() END, claim_after > now() FROM gacha_players WHERE guild_id=$1 AND user_id=$2`, guild, user).Scan(&used, &windowStart, &claimReset, &claimActive)
+		var gemPower int
+		e := s.DB.QueryRowContext(ctx, `SELECT rolls_used, window_start, CASE WHEN claim_after > now() THEN claim_after ELSE now() END, claim_after > now(), COALESCE(gem_power, 100) FROM gacha_players WHERE guild_id=$1 AND user_id=$2`, guild, user).Scan(&used, &windowStart, &claimReset, &claimActive, &gemPower)
 
 		rollsLeft := schedule.RollsPerHour
+		effectiveGemPower := MaxGemPower
 		if e == nil {
 			if windowStart.Before(rollWin.CurrentStart) {
 				rollsLeft = schedule.RollsPerHour
+				effectiveGemPower = MaxGemPower
 			} else {
 				rollsLeft = max(0, schedule.RollsPerHour-used)
+				effectiveGemPower = max(0, min(MaxGemPower, gemPower))
 			}
 		} else if e != sql.ErrNoRows {
 			return nil, e
@@ -535,6 +565,7 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 		var desc strings.Builder
 		desc.WriteString(locale.Text("gacha.discord.rolls_resets_t_r.formatted", locale.Data{"RollsLeft": rollsLeft, "RollsPerHour": schedule.RollsPerHour, "Reset": rollWin.NextReset.Unix()}))
 		desc.WriteString(locale.Text("gacha.discord.marry_claim.formatted", locale.Data{"ClaimStatus": claimStatus}))
+		desc.WriteString(locale.Text("gacha.discord.gem_power_status.formatted", locale.Data{"Power": effectiveGemPower, "Max": MaxGemPower, "Reset": rollWin.NextReset.Unix()}))
 		desc.WriteString(locale.Text("gacha.discord.your_harem_characters_total_value.formatted", locale.Data{"Count": count, "Value": value}))
 		desc.WriteString(locale.Text("gacha.discord.server_bonus_claimed_characters.formatted", locale.Data{"Value1": float64(claimedTotal) / 100, "ClaimedTotal": claimedTotal}))
 
@@ -668,6 +699,121 @@ func HandleClaim(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			embeds = append(embeds, &copyEmbed)
 		}
 		_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{ID: i.Message.ID, Channel: i.ChannelID, Components: &components, Embeds: &embeds, AllowedMentions: &discordgo.MessageAllowedMentions{}})
+	}
+}
+
+// HandleClaimGem handles button interactions when a user clicks to absorb a gem.
+func HandleClaimGem(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	if Default == nil || i.Member == nil || i.Member.User == nil || i.GuildID == "" {
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: locale.Text("gacha.discord.gacha_is_unavailable_use_it_in_a"),
+				Flags:   discordgo.MessageFlagsEphemeral,
+			},
+		})
+		return
+	}
+
+	rollID := strings.TrimPrefix(i.MessageComponentData().CustomID, "gacha_gem_")
+	if rollID == "" {
+		return
+	}
+
+	if e := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{Flags: discordgo.MessageFlagsEphemeral},
+	}); e != nil {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	defer cancel()
+
+	res, err := Default.ClaimGemAtomic(ctx, i.GuildID, i.ChannelID, rollID, i.Member.User.ID)
+	if err != nil {
+		errContent := fmt.Sprintf("❌ %s", err.Error())
+		_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &errContent})
+		return
+	}
+
+	if res.AlreadyClaimed {
+		claimedContent := locale.Text("gacha.gems.already_claimed.formatted", locale.Data{"User": res.ClaimedByOther})
+		_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &claimedContent})
+		return
+	}
+
+	if res.Expired {
+		expiredContent := locale.Text("gacha.gems.expired")
+		_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &expiredContent})
+		return
+	}
+
+	if res.InsufficientPower {
+		insufficientContent := locale.Text("gacha.gems.insufficient_power.formatted", locale.Data{
+			"Current":  res.CurrentPower,
+			"Required": res.RequiredPower,
+			"Reset":    res.NextReset.Unix(),
+		})
+		_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &insufficientContent})
+		return
+	}
+
+	currencyName := config.Bot.CurrencyName
+	if currencyName == "" {
+		currencyName = "Coins"
+	}
+	successContent := locale.Text("gacha.gems.claim_success.formatted", locale.Data{
+		"Emoji":          res.Gem.DiscordString(),
+		"Gem":            res.Gem.Name,
+		"Value":          res.Gem.Value,
+		"Currency":       currencyName,
+		"RemainingPower": res.RemainingPower,
+		"Reset":          res.NextReset.Unix(),
+	})
+	_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &successContent})
+
+	if i.Message != nil {
+		newComponents := make([]discordgo.MessageComponent, len(i.Message.Components))
+		for cIdx, rowComp := range i.Message.Components {
+			row, ok := rowComp.(discordgo.ActionsRow)
+			if !ok {
+				newComponents[cIdx] = rowComp
+				continue
+			}
+			newRowBtns := make([]discordgo.MessageComponent, len(row.Components))
+			for bIdx, btnComp := range row.Components {
+				btn, isBtn := btnComp.(discordgo.Button)
+				if isBtn && btn.CustomID == "gacha_gem_"+rollID {
+					btn.Disabled = true
+					btn.Style = discordgo.SecondaryButton
+					btn.Label = fmt.Sprintf("%s (%s)", res.Gem.Name, i.Member.User.Username)
+				}
+				newRowBtns[bIdx] = btn
+			}
+			newComponents[cIdx] = discordgo.ActionsRow{Components: newRowBtns}
+		}
+
+		newEmbeds := make([]*discordgo.MessageEmbed, len(i.Message.Embeds))
+		for eIdx, origEmbed := range i.Message.Embeds {
+			cp := *origEmbed
+			claimedLine := "\n" + locale.Text("gacha.gems.absorbed_by.formatted", locale.Data{
+				"Emoji":    res.Gem.DiscordString(),
+				"User":     i.Member.User.ID,
+				"Value":    res.Gem.Value,
+				"Currency": currencyName,
+			})
+			cp.Description += claimedLine
+			newEmbeds[eIdx] = &cp
+		}
+
+		_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
+			ID:              i.Message.ID,
+			Channel:         i.ChannelID,
+			Components:      &newComponents,
+			Embeds:          &newEmbeds,
+			AllowedMentions: &discordgo.MessageAllowedMentions{},
+		})
 	}
 }
 
@@ -844,6 +990,18 @@ func (s *Store) validateChannel(ctx context.Context, guildID, channelID, action 
 
 	if sch.RollChannelID == "" && sch.CmdChannelID == "" {
 		return userError(locale.Text("gacha.channels.not_configured"))
+	}
+
+	norm := normalizeAction(action)
+	if norm == "status" {
+		if (sch.RollChannelID != "" && channelID == sch.RollChannelID) || (sch.CmdChannelID != "" && channelID == sch.CmdChannelID) {
+			return nil
+		}
+		target := sch.CmdChannelID
+		if target == "" {
+			target = sch.RollChannelID
+		}
+		return userError(locale.Text("gacha.channels.commands_only_in.formatted", locale.Data{"Channel": target}))
 	}
 
 	if isRollAction(action) {

@@ -67,6 +67,9 @@ func (s *Store) Migrate(ctx context.Context) error {
 	if _, e = tx.ExecContext(ctx, migrations.GachaChannels); e != nil {
 		return e
 	}
+	if _, e = tx.ExecContext(ctx, migrations.GachaGems); e != nil {
+		return e
+	}
 	return tx.Commit()
 }
 
