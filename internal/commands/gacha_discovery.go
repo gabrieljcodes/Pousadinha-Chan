@@ -8,7 +8,7 @@ import (
 func init() {
 	dm := false
 	id := func() *discordgo.ApplicationCommandOption {
-		return &discordgo.ApplicationCommandOption{Type: discordgo.ApplicationCommandOptionInteger, Name: "character", Description: locale.Text("commands.discovery.character_id"), Required: true, MinValue: ptr(1)}
+		return &discordgo.ApplicationCommandOption{Type: discordgo.ApplicationCommandOptionString, Name: "character", Description: locale.Text("commands.discovery.character_id"), Required: true}
 	}
 	page := func() *discordgo.ApplicationCommandOption {
 		return &discordgo.ApplicationCommandOption{Type: discordgo.ApplicationCommandOptionInteger, Name: "page", Description: locale.Text("commands.discovery.page"), MinValue: ptr(1), MaxValue: 100000}

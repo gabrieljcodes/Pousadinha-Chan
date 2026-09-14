@@ -28,11 +28,10 @@ func init() {
 	}
 	character := func(name, description string, required bool) *discordgo.ApplicationCommandOption {
 		return &discordgo.ApplicationCommandOption{
-			Type:        discordgo.ApplicationCommandOptionInteger,
+			Type:        discordgo.ApplicationCommandOptionString,
 			Name:        name,
 			Description: description,
 			Required:    required,
-			MinValue:    &min,
 		}
 	}
 
@@ -145,8 +144,28 @@ func init() {
 			Description:  locale.Text("commands.gacha.manage_your_character_wishlist"),
 			DMPermission: &dm,
 			Options: []*discordgo.ApplicationCommandOption{
-				{Type: discordgo.ApplicationCommandOptionString, Name: "action", Description: locale.Text("commands.gacha.wishlist_action"), Required: true, Choices: wishlistActionChoices},
-				character("character", locale.Text("commands.gacha.character_id_required_to_add_or_remove"), false),
+				{Type: discordgo.ApplicationCommandOptionString, Name: "action", Description: locale.Text("commands.gacha.wishlist_action"), Required: false, Choices: wishlistActionChoices},
+				{Type: discordgo.ApplicationCommandOptionString, Name: "character", Description: locale.Text("commands.gacha.character_id_required_to_add_or_remove"), Required: false},
+			},
+		},
+
+		// /wish
+		&discordgo.ApplicationCommand{
+			Name:         "wish",
+			Description:  locale.Text("commands.gacha.add_a_character_to_your_wishlist"),
+			DMPermission: &dm,
+			Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionString, Name: "character", Description: locale.Text("commands.gacha.character_name_or_id"), Required: true},
+			},
+		},
+
+		// /unwish
+		&discordgo.ApplicationCommand{
+			Name:         "unwish",
+			Description:  locale.Text("commands.gacha.remove_a_character_from_your_wishlist"),
+			DMPermission: &dm,
+			Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionString, Name: "character", Description: locale.Text("commands.gacha.character_name_or_id"), Required: true},
 			},
 		},
 
@@ -180,6 +199,22 @@ func init() {
 			DMPermission: &dm,
 			Options: []*discordgo.ApplicationCommandOption{
 				character("character", locale.Text("commands.gacha.id_of_the_character_to_release"), true),
+			},
+		},
+
+		// 11. /alias
+		&discordgo.ApplicationCommand{
+			Name:         "alias",
+			Description:  locale.Text("commands.gacha.change_alias_of_married_character"),
+			DMPermission: &dm,
+			Options: []*discordgo.ApplicationCommandOption{
+				character("character", locale.Text("commands.gacha.id_or_name_of_the_character"), true),
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "alias",
+					Description: locale.Text("commands.gacha.alias_to_set_or_list"),
+					Required:    false,
+				},
 			},
 		},
 	)

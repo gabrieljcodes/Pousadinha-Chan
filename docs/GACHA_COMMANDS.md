@@ -37,6 +37,7 @@ rolls; rolling your own character earns a key.
 | `/gallery character:<ID> [page]` | Approved images |
 | `/keys character:<ID>` | Keys and the next value milestone |
 | `/wishlist action:<action> [character]` | View, add or remove wishes |
+| `/alias character:<name or ID> [alias]` | Change or list the display alias of a married character |
 | `/offers [action] [id]` | List or respond to pending offers |
 | `/help` | Bot command reference |
 

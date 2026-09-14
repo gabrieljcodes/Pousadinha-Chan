@@ -99,30 +99,40 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 		if r.KeyEarned {
 			embed.Description += locale.Text("gacha.discord.key_total.formatted", locale.Data{"Keys": r.Card.Keys})
 		}
-		var wished bool
-		if e = s.DB.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM gacha_wishes WHERE guild_id=$1 AND character_id=$2)`, guild, r.Card.ID).Scan(&wished); e != nil {
-			return nil, e
+		wishRows, qErr := s.DB.QueryContext(ctx, `SELECT user_id FROM gacha_wishes WHERE guild_id=$1 AND character_id=$2 ORDER BY (user_id=$3) DESC, user_id ASC`, guild, r.Card.ID, user)
+		if qErr != nil {
+			return nil, qErr
 		}
-		if wished {
-			embed.Description += locale.Text("gacha.discord.wished_in_this_server")
+		var wishUsers []string
+		for wishRows.Next() {
+			var wUID string
+			if scanErr := wishRows.Scan(&wUID); scanErr == nil {
+				wishUsers = append(wishUsers, wUID)
+			}
+		}
+		wishRows.Close()
+		if len(wishUsers) > 0 {
+			embed.Color = 0xffd700
+			var mentions []string
+			for _, uid := range wishUsers {
+				mentions = append(mentions, "<@"+uid+">")
+			}
+			msg.Content = strings.Join(mentions, " ")
+			msg.AllowedMentions = &discordgo.MessageAllowedMentions{Users: wishUsers}
+			embed.Description += "\n" + locale.Text("gacha.discord.wished_by.formatted", locale.Data{"Users": strings.Join(mentions, ", ")})
 		}
 		msg.Embeds = []*discordgo.MessageEmbed{embed}
 		msg.Components = []discordgo.MessageComponent{discordgo.ActionsRow{Components: []discordgo.MessageComponent{discordgo.Button{Label: locale.Text("gacha.discord.claim_character"), Style: discordgo.SuccessButton, CustomID: "gacha_claim_" + r.ID, Disabled: r.Card.Owner != "" || !r.Expires.After(time.Now())}}}}
-	case "harem", "harem_visual", "search":
-		owner := ""
+	case "harem", "harem_visual":
+		owner := user
 		isVisual := action == "harem_visual"
-		cleanQuery := query
-
-		if action == "harem" || action == "harem_visual" {
-			owner = user
-			if query != "" {
-				parsedOwner, err := parseMember(query)
-				if err != nil {
-					return nil, err
-				}
-				owner = parsedOwner
+		cleanQuery := ""
+		if query != "" {
+			parsedOwner, err := parseMember(query)
+			if err != nil {
+				return nil, err
 			}
-			cleanQuery = ""
+			owner = parsedOwner
 		}
 
 		if isVisual {
@@ -162,15 +172,141 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 			b.WriteString(locale.Text("gacha.discord.no_characters_found_on_this_page"))
 		}
 		msg.Embeds = []*discordgo.MessageEmbed{{Title: locale.Text("gacha.discord.catalog_page.formatted", locale.Data{"Page": page}), Description: b.String(), Color: 0xe67e22, Footer: &discordgo.MessageEmbedFooter{Text: locale.Text("gacha.discord.per_page_use_character_id_for_details")}}}
-		if action == "harem" || action == "harem_visual" {
-			count, value, e := s.HaremSummary(ctx, guild, owner)
-			if e != nil {
-				return nil, e
-			}
-			msg.Components = navigation(action, owner, page, page*10 < count)
-			msg.Embeds[0].Title = locale.Text("gacha.discord.harem_page.formatted", locale.Data{"Page": page})
-			msg.Embeds[0].Description = locale.Text("gacha.discord.characters_coins.formatted", locale.Data{"Owner": owner, "Count": count, "Value": value}) + msg.Embeds[0].Description
+		count, value, e := s.HaremSummary(ctx, guild, owner)
+		if e != nil {
+			return nil, e
 		}
+		msg.Components = navigation(action, owner, page, page*10 < count)
+		msg.Embeds[0].Title = locale.Text("gacha.discord.harem_page.formatted", locale.Data{"Page": page})
+		msg.Embeds[0].Description = locale.Text("gacha.discord.characters_coins.formatted", locale.Data{"Owner": owner, "Count": count, "Value": value}) + msg.Embeds[0].Description
+	case "search":
+		entries, total, err := s.SearchCharacters(ctx, guild, query, page, 10)
+		if err != nil {
+			return nil, err
+		}
+		if total == 0 {
+			msg.Content = locale.Text("gacha.discord.character_not_found_try_another_name_with.formatted", locale.Data{"Query": query})
+			return msg, nil
+		}
+
+		totalPages := int((total + 9) / 10)
+		title := fmt.Sprintf("🔍 %s • %s", clip(query, 30), locale.Text("gacha.discord.catalog_page.formatted", locale.Data{"Page": page}))
+		if totalPages > 1 {
+			title = fmt.Sprintf("🔍 %s • Page %d/%d (%d)", clip(query, 30), page, totalPages, total)
+		}
+
+		var b strings.Builder
+		for _, item := range entries {
+			ownerInfo := ""
+			if item.Owner != "" {
+				ownerInfo = fmt.Sprintf(" · 💍 <@%s>", item.Owner)
+			}
+			fmt.Fprintf(&b, "**#%d** `#%d` **%s** — *%s*\n♥ %d%s\n\n", item.Rank, item.ID, clip(safe(item.Name), 40), clip(safe(item.Work), 40), item.Favourites, ownerInfo)
+		}
+
+		embed := &discordgo.MessageEmbed{
+			Title:       title,
+			Description: b.String(),
+			Color:       0x3498db,
+			Footer: &discordgo.MessageEmbedFooter{
+				Text: locale.Text("gacha.discord.per_page_use_character_id_for_details"),
+			},
+		}
+		msg.Embeds = []*discordgo.MessageEmbed{embed}
+		msg.Components = navigation("search", clip(query, 40), page, page < totalPages)
+	case "alias":
+		var charQuery, aliasChoice string
+		if strings.Contains(query, " | ") {
+			parts := strings.SplitN(query, " | ", 2)
+			charQuery = strings.TrimSpace(parts[0])
+			aliasChoice = strings.TrimSpace(parts[1])
+		} else {
+			trimmed := strings.TrimSpace(query)
+			fields := strings.Fields(trimmed)
+			if len(fields) >= 2 {
+				if _, err := strconv.ParseInt(fields[0], 10, 64); err == nil {
+					charQuery = fields[0]
+					aliasChoice = strings.Join(fields[1:], " ")
+				} else {
+					if _, err := s.ResolveCharacterID(ctx, guild, user, trimmed, true); err == nil {
+						charQuery = trimmed
+						aliasChoice = ""
+					} else {
+						charQuery = fields[0]
+						aliasChoice = strings.Join(fields[1:], " ")
+					}
+				}
+			} else {
+				charQuery = trimmed
+				aliasChoice = ""
+			}
+		}
+
+		if charQuery == "" {
+			return nil, userError(locale.Text("gacha.discord.enter_character_to_manage_alias"))
+		}
+
+		charID, err := s.ResolveCharacterID(ctx, guild, user, charQuery, true)
+		if err != nil {
+			return nil, err
+		}
+
+		res, err := s.SetCharacterAlias(ctx, guild, user, charID, aliasChoice)
+		if err != nil {
+			return nil, err
+		}
+
+		if res.Reset {
+			embed := &discordgo.MessageEmbed{
+				Title:       locale.Text("gacha.discord.alias_reset_title"),
+				Description: locale.Text("gacha.discord.alias_reset_success.formatted", locale.Data{"Name": res.CanonicalName}),
+				Color:       0x2ecc71,
+			}
+			msg.Embeds = []*discordgo.MessageEmbed{embed}
+			return msg, nil
+		}
+
+		if aliasChoice == "" {
+			var aliasLines []string
+			for _, a := range res.Available {
+				aliasLines = append(aliasLines, fmt.Sprintf("• **%s**", a))
+			}
+			activeStatus := locale.Text("gacha.discord.no_alias_active")
+			if res.ActiveAlias != "" {
+				activeStatus = locale.Text("gacha.discord.current_alias_server.formatted", locale.Data{"Alias": res.ActiveAlias})
+			}
+
+			desc := fmt.Sprintf("%s\n\n%s\n\n%s",
+				locale.Text("gacha.discord.available_aliases_for.formatted", locale.Data{"Name": res.CanonicalName}),
+				strings.Join(aliasLines, "\n"),
+				activeStatus,
+			)
+
+			embed := &discordgo.MessageEmbed{
+				Title:       fmt.Sprintf("🏷️ %s", res.CanonicalName),
+				Description: desc,
+				Color:       0x3498db,
+				Footer: &discordgo.MessageEmbedFooter{
+					Text: locale.Text("gacha.discord.alias_instructions.formatted", locale.Data{"Name": res.CanonicalName}),
+				},
+			}
+			msg.Embeds = []*discordgo.MessageEmbed{embed}
+			return msg, nil
+		}
+
+		embed := &discordgo.MessageEmbed{
+			Title: locale.Text("gacha.discord.alias_changed_title"),
+			Description: locale.Text("gacha.discord.alias_set_success.formatted", locale.Data{
+				"Name":  res.CanonicalName,
+				"Alias": res.ActiveAlias,
+			}),
+			Color: 0x2ecc71,
+			Footer: &discordgo.MessageEmbedFooter{
+				Text: locale.Text("gacha.discord.alias_persist_note"),
+			},
+		}
+		msg.Embeds = []*discordgo.MessageEmbed{embed}
+		return msg, nil
 	case "character", "gallery", "keys":
 		var c Card
 		if action == "character" {
@@ -185,6 +321,10 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 			embed := s.cardEmbed(c)
 			embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: locale.Text("gacha.discord.character_value"), Value: valueLabel(c), Inline: true})
 			embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: locale.Text("gacha.discord.catalog"), Value: fmt.Sprintf("#%d", c.ID), Inline: true})
+			if c.OriginalName != "" {
+				embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: locale.Text("gacha.discord.original_name"), Value: clip(safe(c.OriginalName), 100), Inline: true})
+			}
+
 
 			if c.Owner != "" {
 				embed.Description += locale.Text("gacha.discord.claimed_by.formatted", locale.Data{"Owner": c.Owner})
@@ -213,16 +353,17 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 			return msg, nil
 		}
 
-		id, e := strconv.ParseInt(query, 10, 64)
-		if e != nil || id <= 0 {
-			return nil, invalidID()
+		card, _, err := s.FindCharacter(ctx, guild, query)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, userError(locale.Text("gacha.discord.character_not_found_try_another_name_with.formatted", locale.Data{"Query": query}))
+			}
+			return nil, err
 		}
-		c, e = scanCard(s.DB.QueryRowContext(ctx, cardSelect+` WHERE c.id=$1`, id))
-		if e != nil {
-			return nil, e
-		}
+		c = card
+		id := c.ID
 		if action == "gallery" {
-			e = s.DB.QueryRowContext(ctx, `SELECT path,source_url,attribution FROM gacha_assets WHERE character_id=$1 AND status='approved' ORDER BY id OFFSET $2 LIMIT 1`, id, page-1).Scan(&c.Image, &c.Source, &c.Attribution)
+			e := s.DB.QueryRowContext(ctx, `SELECT path,source_url,attribution FROM gacha_assets WHERE character_id=$1 AND status='approved' ORDER BY id OFFSET $2 LIMIT 1`, id, page-1).Scan(&c.Image, &c.Source, &c.Attribution)
 			if e == sql.ErrNoRows {
 				msg.Content = locale.Text("gacha.discord.there_is_no_approved_image_on_this")
 				return msg, nil
@@ -231,7 +372,7 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 				return nil, e
 			}
 		}
-		if e = priceCards(ctx, s.DB, guild, &c); e != nil {
+		if e := priceCards(ctx, s.DB, guild, &c); e != nil {
 			return nil, e
 		}
 		embed := s.cardEmbed(c)
@@ -240,7 +381,7 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 		}
 		if action == "gallery" {
 			var total int
-			if e = s.DB.QueryRowContext(ctx, `SELECT count(*) FROM gacha_assets WHERE character_id=$1 AND status='approved'`, id).Scan(&total); e != nil {
+			if e := s.DB.QueryRowContext(ctx, `SELECT count(*) FROM gacha_assets WHERE character_id=$1 AND status='approved'`, id).Scan(&total); e != nil {
 				return nil, e
 			}
 			embed.Footer.Text = locale.Text("gacha.discord.image_of_character.formatted", locale.Data{"Page": page, "Total": total, "Id": id})
@@ -359,7 +500,7 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 		msg.Embeds = []*discordgo.MessageEmbed{embed}
 		return msg, nil
 	case "divorce", "trade", "gift":
-		recipient, offered, requested, e := parseOffer(action, query)
+		recipient, offered, requested, e := s.ResolveOffer(ctx, guild, user, action, query)
 		if e != nil {
 			return nil, e
 		}
@@ -406,18 +547,21 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 		msg.Components = navigation("top", "0", page, len(ranks) == 10)
 		msg.Embeds = []*discordgo.MessageEmbed{{Title: locale.Text("gacha.discord.harem_leaderboard_page.formatted", locale.Data{"Page": page}), Description: b.String(), Color: 0xc5a66b}}
 	case "wish", "unwish":
-		id, err := strconv.ParseInt(query, 10, 64)
-		if err != nil || id <= 0 {
-			return nil, invalidID()
+		targetCard, _, err := s.FindCharacter(ctx, guild, query)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, userError(locale.Text("gacha.discord.character_not_found_try_another_name_with.formatted", locale.Data{"Query": query}))
+			}
+			return nil, err
 		}
 		remove := action == "unwish"
-		if err := s.Wish(ctx, guild, user, id, remove); err != nil {
+		if err := s.Wish(ctx, guild, user, targetCard.ID, remove); err != nil {
 			return nil, err
 		}
 		if remove {
-			msg.Content = locale.Text("gacha.discord.character_removed_from_your_wishlist.formatted", locale.Data{"Id": id})
+			msg.Content = locale.Text("gacha.discord.character_removed_from_your_wishlist.formatted", locale.Data{"Id": targetCard.ID, "Name": targetCard.Name})
 		} else {
-			msg.Content = locale.Text("gacha.discord.character_added_to_your_wishlist_its_rolls.formatted", locale.Data{"Id": id})
+			msg.Content = locale.Text("gacha.discord.character_added_to_your_wishlist_its_rolls.formatted", locale.Data{"Id": targetCard.ID, "Name": targetCard.Name})
 		}
 	case "wishes":
 		rows, err := s.DB.QueryContext(ctx, `SELECT c.id, c.name, COALESCE(cw.title, '') FROM gacha_wishes w JOIN gacha_characters c ON c.id=w.character_id LEFT JOIN LATERAL (SELECT title FROM gacha_character_works rel JOIN gacha_works gw ON gw.id=rel.work_id WHERE rel.character_id=c.id ORDER BY gw.id LIMIT 1) cw ON true WHERE w.guild_id=$1 AND w.user_id=$2 ORDER BY c.id`, guild, user)
@@ -524,6 +668,7 @@ func Slash(s *discordgo.Session, i *discordgo.InteractionCreate) {
 func parseSlash(data discordgo.ApplicationCommandInteractionData) (string, string, int) {
 	action, query, page := data.Name, "", 1
 	member := ""
+	var offerStr, receiveStr, aliasStr string
 	var offered, requested int64
 	var visual bool
 	var claimFilter, genderFilter string
@@ -533,7 +678,7 @@ func parseSlash(data discordgo.ApplicationCommandInteractionData) (string, strin
 			action = o.StringValue()
 		case "action":
 			action = o.StringValue()
-		case "character", "query", "id":
+		case "character", "query", "id", "name":
 			if o.Type == discordgo.ApplicationCommandOptionInteger {
 				query = strconv.FormatInt(o.IntValue(), 10)
 				offered = o.IntValue()
@@ -545,9 +690,21 @@ func parseSlash(data discordgo.ApplicationCommandInteractionData) (string, strin
 		case "member":
 			member = o.Value.(string)
 		case "offer":
-			offered = o.IntValue()
+			if o.Type == discordgo.ApplicationCommandOptionInteger {
+				offered = o.IntValue()
+				offerStr = strconv.FormatInt(o.IntValue(), 10)
+			} else {
+				offerStr = o.StringValue()
+			}
 		case "receive":
-			requested = o.IntValue()
+			if o.Type == discordgo.ApplicationCommandOptionInteger {
+				requested = o.IntValue()
+				receiveStr = strconv.FormatInt(o.IntValue(), 10)
+			} else {
+				receiveStr = o.StringValue()
+			}
+		case "alias":
+			aliasStr = o.StringValue()
 		case "mode":
 			if o.StringValue() == "visual" {
 				visual = true
@@ -572,19 +729,45 @@ func parseSlash(data discordgo.ApplicationCommandInteractionData) (string, strin
 		query = strings.TrimSpace(fmt.Sprintf("%s %s", claimFilter, genderFilter))
 	}
 	if action == "trade" {
-		query = fmt.Sprintf("%s %d %d", member, offered, requested)
+		if offerStr == "" && offered > 0 {
+			offerStr = strconv.FormatInt(offered, 10)
+		}
+		if receiveStr == "" && requested > 0 {
+			receiveStr = strconv.FormatInt(requested, 10)
+		}
+		if strings.Contains(offerStr, " ") || strings.Contains(receiveStr, " ") {
+			query = fmt.Sprintf("%s | %s | %s", member, offerStr, receiveStr)
+		} else {
+			query = fmt.Sprintf("%s %s %s", member, offerStr, receiveStr)
+		}
 	}
 	if action == "gift" {
-		query = fmt.Sprintf("%s %d", member, offered)
+		charStr := query
+		if charStr == "" && offered > 0 {
+			charStr = strconv.FormatInt(offered, 10)
+		}
+		if strings.Contains(charStr, " ") {
+			query = fmt.Sprintf("%s | %s", member, charStr)
+		} else {
+			query = fmt.Sprintf("%s %s", member, charStr)
+		}
 	}
-	if action == "divorce" && offered > 0 {
+	if action == "divorce" && query == "" && offered > 0 {
 		query = strconv.FormatInt(offered, 10)
 	}
-	if action == "gallery" && offered > 0 {
+	if action == "gallery" && query == "" && offered > 0 {
 		query = strconv.FormatInt(offered, 10)
 	}
-	if (action == "wish" || action == "unwish") && offered > 0 {
+	if (action == "wish" || action == "unwish") && query == "" && offered > 0 {
 		query = strconv.FormatInt(offered, 10)
+	}
+	if action == "alias" {
+		if query == "" && offered > 0 {
+			query = strconv.FormatInt(offered, 10)
+		}
+		if aliasStr != "" {
+			query = fmt.Sprintf("%s | %s", query, aliasStr)
+		}
 	}
 
 	return action, query, page

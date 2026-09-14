@@ -4,8 +4,9 @@ import (
 	"bot/internal/locale"
 	"context"
 	"database/sql"
-
+	"encoding/json"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -306,3 +307,120 @@ func (s *Store) Rankings(ctx context.Context, guild string, page int) ([]Ranking
 	}
 	return out, rows.Err()
 }
+
+type AliasResult struct {
+	CanonicalName string
+	ActiveAlias   string
+	Available     []string
+	Reset         bool
+}
+
+// SetCharacterAlias changes or lists the display alias of a character the user is married to in the guild.
+func (s *Store) SetCharacterAlias(ctx context.Context, guild, user string, charID int64, newAlias string) (AliasResult, error) {
+	if guild == "" || user == "" {
+		return AliasResult{}, userError(locale.Text("gacha.social.use_this_command_in_a_server_channel"))
+	}
+	if charID <= 0 {
+		return AliasResult{}, invalidID()
+	}
+
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return AliasResult{}, err
+	}
+	defer tx.Rollback()
+
+	// 1. Verify caller is currently married to the character in this guild
+	_, _, err = ownership(ctx, tx, guild, user, charID)
+	if err != nil {
+		return AliasResult{}, userError(locale.Text("gacha.social.must_be_married_to_set_alias"))
+	}
+
+	// 2. Fetch canonical name and character's registered alternative aliases
+	var name, aliasesJSON string
+	err = tx.QueryRowContext(ctx, `SELECT name, COALESCE(aliases::text, '[]') FROM gacha_characters WHERE id=$1`, charID).Scan(&name, &aliasesJSON)
+	if err != nil {
+		return AliasResult{}, err
+	}
+	var aliases []string
+	_ = json.Unmarshal([]byte(aliasesJSON), &aliases)
+
+	// Filter out empty aliases or duplicates of canonical name
+	var validAliases []string
+	for _, a := range aliases {
+		trimmed := strings.TrimSpace(a)
+		if trimmed != "" && !strings.EqualFold(trimmed, name) {
+			validAliases = append(validAliases, trimmed)
+		}
+	}
+
+	// If character has no alternative aliases registered
+	if len(validAliases) == 0 {
+		return AliasResult{CanonicalName: name}, userError(locale.Text("gacha.social.character_has_no_aliases.formatted", locale.Data{"Name": name}))
+	}
+
+	// 3. Query current active guild alias (if any)
+	var currentAlias string
+	_ = tx.QueryRowContext(ctx, `SELECT alias FROM gacha_guild_character_aliases WHERE guild_id=$1 AND character_id=$2`, guild, charID).Scan(&currentAlias)
+
+	// 4. If newAlias is empty, caller just wants to list available aliases
+	trimmed := strings.TrimSpace(newAlias)
+	if trimmed == "" {
+		return AliasResult{
+			CanonicalName: name,
+			ActiveAlias:   currentAlias,
+			Available:     validAliases,
+		}, nil
+	}
+
+	// 5. If reset requested
+	if strings.EqualFold(trimmed, "default") || strings.EqualFold(trimmed, "reset") || strings.EqualFold(trimmed, name) {
+		if _, err = tx.ExecContext(ctx, `DELETE FROM gacha_guild_character_aliases WHERE guild_id=$1 AND character_id=$2`, guild, charID); err != nil {
+			return AliasResult{}, err
+		}
+		if err = tx.Commit(); err != nil {
+			return AliasResult{}, err
+		}
+		return AliasResult{
+			CanonicalName: name,
+			ActiveAlias:   "",
+			Available:     validAliases,
+			Reset:         true,
+		}, nil
+	}
+
+	// 6. Match against registered aliases (case-insensitive)
+	var matched string
+	for _, a := range validAliases {
+		if strings.EqualFold(a, trimmed) {
+			matched = a
+			break
+		}
+	}
+	if matched == "" {
+		return AliasResult{}, userError(locale.Text("gacha.social.invalid_character_alias.formatted", locale.Data{
+			"Alias":     trimmed,
+			"Name":      name,
+			"Available": strings.Join(validAliases, ", "),
+		}))
+	}
+
+	// 7. Upsert guild alias
+	_, err = tx.ExecContext(ctx, `INSERT INTO gacha_guild_character_aliases(guild_id, character_id, alias, set_by, updated_at)
+		VALUES($1, $2, $3, $4, now())
+		ON CONFLICT (guild_id, character_id)
+		DO UPDATE SET alias=EXCLUDED.alias, set_by=EXCLUDED.set_by, updated_at=now()`, guild, charID, matched, user)
+	if err != nil {
+		return AliasResult{}, err
+	}
+	if err = tx.Commit(); err != nil {
+		return AliasResult{}, err
+	}
+
+	return AliasResult{
+		CanonicalName: name,
+		ActiveAlias:   matched,
+		Available:     validAliases,
+	}, nil
+}
+

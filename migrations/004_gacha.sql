@@ -57,6 +57,16 @@ CREATE TABLE IF NOT EXISTS gacha_wishes (
  guild_id TEXT NOT NULL, user_id TEXT NOT NULL REFERENCES users(id), character_id BIGINT NOT NULL REFERENCES gacha_characters(id),
  PRIMARY KEY(guild_id,user_id,character_id)
 );
+CREATE INDEX IF NOT EXISTS gacha_wishes_guild_char ON gacha_wishes(guild_id,character_id);
+CREATE TABLE IF NOT EXISTS gacha_guild_character_aliases (
+ guild_id TEXT NOT NULL,
+ character_id BIGINT NOT NULL REFERENCES gacha_characters(id) ON DELETE CASCADE,
+ alias TEXT NOT NULL,
+ set_by TEXT NOT NULL REFERENCES users(id),
+ updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+ PRIMARY KEY(guild_id, character_id)
+);
+CREATE INDEX IF NOT EXISTS gacha_guild_character_aliases_lookup ON gacha_guild_character_aliases(guild_id, lower(alias));
 -- No browser/client access. Bot connects as owner or a BYPASSRLS service role.
 ALTER TABLE gacha_characters ENABLE ROW LEVEL SECURITY;
 ALTER TABLE gacha_character_sources ENABLE ROW LEVEL SECURITY;
@@ -68,3 +78,5 @@ ALTER TABLE gacha_players ENABLE ROW LEVEL SECURITY;
 ALTER TABLE gacha_rolls ENABLE ROW LEVEL SECURITY;
 ALTER TABLE gacha_collection ENABLE ROW LEVEL SECURITY;
 ALTER TABLE gacha_wishes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE gacha_guild_character_aliases ENABLE ROW LEVEL SECURITY;
+

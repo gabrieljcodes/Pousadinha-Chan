@@ -32,6 +32,8 @@ func TestSlashRequestMapping(t *testing.T) {
 		{"search", []*discordgo.ApplicationCommandInteractionDataOption{str("query", "Rem")}, "search", "Rem", 1},
 		{"harem-ranking", nil, "ranking", "", 1}, {"keys", []*discordgo.ApplicationCommandInteractionDataOption{num("character", 17)}, "keys", "17", 1},
 		{"offers", []*discordgo.ApplicationCommandInteractionDataOption{str("action", "accept"), str("id", "offer-uuid")}, "accept", "offer-uuid", 1},
+		{"alias", []*discordgo.ApplicationCommandInteractionDataOption{str("character", "Artoria"), str("alias", "Saber")}, "alias", "Artoria | Saber", 1},
+		{"alias", []*discordgo.ApplicationCommandInteractionDataOption{str("character", "Artoria")}, "alias", "Artoria", 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			a, q, p := parseSlash(discordgo.ApplicationCommandInteractionData{Name: tc.name, Options: tc.options})

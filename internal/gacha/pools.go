@@ -32,7 +32,7 @@ func poolFor(code string) (Pool, error) {
 }
 func normalizeAction(action string) string {
 	action = strings.ToLower(action)
-	aliases := map[string]string{"info": "character", "profile": "status", "wishlist": "wishes", "top": "topchar", "harem-ranking": "ranking"}
+	aliases := map[string]string{"info": "character", "profile": "status", "wishlist": "wishes", "top": "topchar", "harem-ranking": "ranking", "pesquisar": "search", "apelido": "alias"}
 	if a, ok := aliases[action]; ok {
 		return a
 	}

@@ -371,11 +371,17 @@ func testSocial(t *testing.T, s *Store) {
 		t.Fatal("expected components in harem_visual navigation")
 	}
 
-	// Test wishlist Execution
+	// Test wishlist Execution with numeric ID and name
 	wishMsg, e := s.Execute(ctx, "social", "channel", "social-alice", "wish-test", "wish", fmt.Sprintf("%d", ids[1]), 1)
 	must(e)
-	if !strings.Contains(wishMsg.Content, "added to your wishlist") {
+	if !strings.Contains(wishMsg.Content, "added to your wishlist") || !strings.Contains(wishMsg.Content, "Social 1") {
 		t.Fatalf("unexpected wishMsg: %q", wishMsg.Content)
+	}
+
+	wishByNameMsg, e := s.Execute(ctx, "social", "channel", "social-alice", "wish-name-test", "wish", "Social 2", 1)
+	must(e)
+	if !strings.Contains(wishByNameMsg.Content, "added to your wishlist") || !strings.Contains(wishByNameMsg.Content, "Social 2") {
+		t.Fatalf("unexpected wishByNameMsg: %q", wishByNameMsg.Content)
 	}
 
 	wishesListMsg, e := s.Execute(ctx, "social", "channel", "social-alice", "wishes-test", "wishes", "", 1)
@@ -383,10 +389,181 @@ func testSocial(t *testing.T, s *Store) {
 	if len(wishesListMsg.Embeds) == 0 || !strings.Contains(wishesListMsg.Embeds[0].Title, "Wishlist") {
 		t.Fatalf("unexpected wishes embed title: %v", wishesListMsg.Embeds)
 	}
+	if !strings.Contains(wishesListMsg.Embeds[0].Description, "Social 2") {
+		t.Fatalf("wishlist missing character added by name: %s", wishesListMsg.Embeds[0].Description)
+	}
+
+	// Test Wish Drop mechanics (gold embed, mentions, and wish bonus drop)
+	s.Config.WishBonusPercent = 100.0
+	must(s.Wish(ctx, "social", "social-bob", ids[0], false))
+	must(s.Wish(ctx, "social", "social-alice", ids[0], false))
+
+	rollWishMsg, e := s.Execute(ctx, "social", "channel", "social-alice", "wish-roll-test", "wa", "", 1)
+	must(e)
+	if len(rollWishMsg.Embeds) == 0 {
+		t.Fatal("expected roll embed")
+	}
+	if rollWishMsg.Embeds[0].Color != 0xffd700 {
+		t.Fatalf("expected gold embed color 0xffd700 for wish roll, got 0x%x", rollWishMsg.Embeds[0].Color)
+	}
+	if !strings.Contains(rollWishMsg.Content, "<@social-alice>") || !strings.Contains(rollWishMsg.Content, "<@social-bob>") {
+		t.Fatalf("expected wish mentions in content, got %q", rollWishMsg.Content)
+	}
+	if rollWishMsg.AllowedMentions == nil || len(rollWishMsg.AllowedMentions.Users) < 2 {
+		t.Fatalf("expected AllowedMentions with wish users, got %+v", rollWishMsg.AllowedMentions)
+	}
+	if !strings.Contains(rollWishMsg.Embeds[0].Description, "Wished!") {
+		t.Fatalf("expected Wished banner in embed description, got %q", rollWishMsg.Embeds[0].Description)
+	}
+
+	// Test unwish by name and numeric ID
+	unwishByNameMsg, e := s.Execute(ctx, "social", "channel", "social-alice", "unwish-name-test", "unwish", "Social 2", 1)
+	must(e)
+	if !strings.Contains(unwishByNameMsg.Content, "removed from your wishlist") || !strings.Contains(unwishByNameMsg.Content, "Social 2") {
+		t.Fatalf("unexpected unwishByNameMsg: %q", unwishByNameMsg.Content)
+	}
 
 	unwishMsg, e := s.Execute(ctx, "social", "channel", "social-alice", "unwish-test", "unwish", fmt.Sprintf("%d", ids[1]), 1)
 	must(e)
 	if !strings.Contains(unwishMsg.Content, "removed from your wishlist") {
 		t.Fatalf("unexpected unwishMsg: %q", unwishMsg.Content)
 	}
+
+	// Test SearchCharacters ordering by favourites and including work
+	_, e = db.Exec(`UPDATE gacha_characters SET aliases='["SocialAlias"]'::jsonb, favourites=500 WHERE id=$1`, ids[1])
+	must(e)
+	_, e = db.Exec(`UPDATE gacha_characters SET favourites=1000 WHERE id=$1`, ids[0])
+	must(e)
+
+	searchResults, totalSearch, e := s.SearchCharacters(ctx, "social", "Social", 1, 10)
+	must(e)
+	if totalSearch == 0 || len(searchResults) == 0 {
+		t.Fatalf("expected search results, got total %d", totalSearch)
+	}
+	for idx := 1; idx < len(searchResults); idx++ {
+		if searchResults[idx].Favourites > searchResults[idx-1].Favourites {
+			t.Fatalf("search results not ordered by favourites descending: %d > %d", searchResults[idx].Favourites, searchResults[idx-1].Favourites)
+		}
+	}
+
+	// Test Execute search command
+	searchMsg, e := s.Execute(ctx, "social", "channel", "social-alice", "search-test", "search", "Social", 1)
+	must(e)
+	if len(searchMsg.Embeds) == 0 || !strings.Contains(searchMsg.Embeds[0].Description, "Social 0") {
+		t.Fatalf("expected search embed with character name and work, got: %v", searchMsg)
+	}
+	if len(searchMsg.Components) == 0 {
+		t.Fatal("expected navigation components in search result")
+	}
+
+	// Test search by alias
+	searchAliasMsg, e := s.Execute(ctx, "social", "channel", "social-alice", "search-alias-test", "search", "SocialAlias", 1)
+	must(e)
+	if len(searchAliasMsg.Embeds) == 0 || !strings.Contains(searchAliasMsg.Embeds[0].Description, "Social 1") {
+		t.Fatalf("expected search by alias to find character, got: %v", searchAliasMsg)
+	}
+
+	// Test divorce using character alias
+	divorceAliasMsg, e := s.Execute(ctx, "social", "channel", "social-alice", "divorce-alias-test", "divorce", "SocialAlias", 1)
+	must(e)
+	if len(divorceAliasMsg.Embeds) == 0 || !strings.Contains(strings.ToLower(divorceAliasMsg.Embeds[0].Title), "divorce") {
+		t.Fatalf("expected divorce offer embed, got: %v", divorceAliasMsg)
+	}
+
+	// Test gift using character alias
+	giftAliasMsg, e := s.Execute(ctx, "social", "channel", "social-alice", "gift-alias-test", "gift", "<@123456789012345678> | SocialAlias", 1)
+	must(e)
+	if len(giftAliasMsg.Embeds) == 0 || !strings.Contains(strings.ToLower(giftAliasMsg.Embeds[0].Title), "gift") {
+		t.Fatalf("expected gift offer embed, got: %v", giftAliasMsg)
+	}
+
+	// Test gallery and keys using alias
+	galleryMsg, e := s.Execute(ctx, "social", "channel", "social-alice", "gallery-alias-test", "gallery", "SocialAlias", 1)
+	must(e)
+	if len(galleryMsg.Embeds) == 0 || !strings.Contains(galleryMsg.Embeds[0].Title, "Social 1") {
+		t.Fatalf("expected gallery embed for alias, got: %v", galleryMsg)
+	}
+
+	keysMsg, e := s.Execute(ctx, "social", "channel", "social-alice", "keys-alias-test", "keys", "SocialAlias", 1)
+	must(e)
+	if len(keysMsg.Embeds) == 0 || !strings.Contains(keysMsg.Embeds[0].Title, "Social 1") {
+		t.Fatalf("expected keys embed for alias, got: %v", keysMsg)
+	}
+
+	// --- Character Alias Tests ---
+	// 1. Trying to manage alias when not married
+	_, e = s.Execute(ctx, "social", "channel", "social-bob", "alias-not-owner", "alias", fmt.Sprintf("%d | SocialAlias", ids[1]), 1)
+	if e == nil {
+		t.Fatal("expected error when setting alias on unowned character")
+	}
+
+	// 2. Trying to manage alias on character with no aliases (Social 0 has empty aliases)
+	_, e = s.Execute(ctx, "social", "channel", "social-alice", "alias-no-aliases", "alias", fmt.Sprintf("%d | SomeName", ids[0]), 1)
+	if e == nil {
+		t.Fatal("expected error when setting alias on character without aliases")
+	}
+
+	// 3. Trying to set an alias that is not in the character's alias list
+	_, e = s.Execute(ctx, "social", "channel", "social-alice", "alias-invalid-choice", "alias", fmt.Sprintf("%d | NonExistentAlias", ids[1]), 1)
+	if e == nil {
+		t.Fatal("expected error when setting an alias that is not registered")
+	}
+
+	// 4. Listing available aliases
+	listAliasMsg, e := s.Execute(ctx, "social", "channel", "social-alice", "alias-list", "alias", fmt.Sprintf("%d", ids[1]), 1)
+	must(e)
+	if len(listAliasMsg.Embeds) == 0 || !strings.Contains(listAliasMsg.Embeds[0].Description, "SocialAlias") {
+		t.Fatalf("expected alias listing embed, got: %v", listAliasMsg)
+	}
+
+	// 5. Successfully setting valid alias
+	setAliasMsg, e := s.Execute(ctx, "social", "channel", "social-alice", "alias-set", "alias", fmt.Sprintf("%d | SocialAlias", ids[1]), 1)
+	must(e)
+	if len(setAliasMsg.Embeds) == 0 || !strings.Contains(setAliasMsg.Embeds[0].Description, "SocialAlias") {
+		t.Fatalf("expected success embed when setting alias, got: %v", setAliasMsg)
+	}
+
+	// 6. Verify priceCards replaces Name with alias
+	cardCheck, _, e := s.FindCharacter(ctx, "social", fmt.Sprintf("%d", ids[1]))
+	must(e)
+	if cardCheck.Name != "SocialAlias" {
+		t.Fatalf("expected Card.Name to be SocialAlias, got: %q", cardCheck.Name)
+	}
+	if cardCheck.OriginalName != "Social 1" {
+		t.Fatalf("expected Card.OriginalName to be Social 1, got: %q", cardCheck.OriginalName)
+	}
+
+	// 7. Verify harem visual displays alias
+	haremCard, _, e = s.HaremCardAt(ctx, "social", "social-alice", 0)
+	must(e)
+	if haremCard.Name != "SocialAlias" && haremCard.ID == ids[1] {
+		t.Fatalf("expected HaremCardAt to display SocialAlias, got: %q", haremCard.Name)
+	}
+
+	// 8. Divorce and verify alias persists in server
+	divAction, e := s.CreateAction(ctx, "social", "channel", "social-alice", "", "divorce-persist-test", "divorce", ids[1], 0)
+	must(e)
+	_, e = s.ResolveAction(ctx, "social", "channel", "social-alice", divAction.ID, "accept")
+	must(e)
+	cardPostDivorce, _, e := s.FindCharacter(ctx, "social", fmt.Sprintf("%d", ids[1]))
+	must(e)
+	if cardPostDivorce.Name != "SocialAlias" {
+		t.Fatalf("expected Card.Name to persist as SocialAlias after divorce, got: %q", cardPostDivorce.Name)
+	}
+
+	// 9. Re-claim and test reset to default
+	_, e = db.Exec(`INSERT INTO gacha_collection(guild_id,user_id,character_id) VALUES('social','social-alice',$1)`, ids[1])
+	must(e)
+	resetMsg, e := s.Execute(ctx, "social", "channel", "social-alice", "alias-reset", "alias", fmt.Sprintf("%d | default", ids[1]), 1)
+	must(e)
+	if len(resetMsg.Embeds) == 0 || !strings.Contains(resetMsg.Embeds[0].Description, "Social 1") {
+		t.Fatalf("expected reset embed, got: %v", resetMsg)
+	}
+
+	cardReset, _, e := s.FindCharacter(ctx, "social", fmt.Sprintf("%d", ids[1]))
+	must(e)
+	if cardReset.Name != "Social 1" {
+		t.Fatalf("expected Card.Name to be restored to Social 1, got: %q", cardReset.Name)
+	}
 }
+

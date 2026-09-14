@@ -699,7 +699,10 @@
     "other": "View a betting event"
   },
   "commands.gacha.add_a_character": {
-    "other": "➕ Add a character"
+    "other": "⭐ Add a character"
+  },
+  "commands.gacha.add_a_character_to_your_wishlist": {
+    "other": "Add a character to your wishlist"
   },
   "commands.gacha.all_anime_characters": {
     "other": "🌟 All anime characters"
@@ -803,6 +806,9 @@
   "commands.gacha.remove_a_character": {
     "other": "➖ Remove a character"
   },
+  "commands.gacha.remove_a_character_from_your_wishlist": {
+    "other": "Remove a character from your wishlist"
+  },
   "commands.gacha.roll_an_anime_or_game_character_to": {
     "other": "Roll an anime or game character to collect"
   },
@@ -829,6 +835,15 @@
   },
   "commands.gacha.wishlist_action": {
     "other": "Wishlist action"
+  },
+  "commands.gacha.change_alias_of_married_character": {
+    "other": "Change the display alias of a character you are married to"
+  },
+  "commands.gacha.id_or_name_of_the_character": {
+    "other": "Character name, alias, or ID"
+  },
+  "commands.gacha.alias_to_set_or_list": {
+    "other": "New alias from character's profile to set (leave empty to view aliases, or 'default' to reset)"
   },
   "commands.general.animal_lottery": {
     "other": "Animal Lottery"
@@ -885,7 +900,7 @@
     "other": "⬅️ Previous"
   },
   "commands.general.roll_pool_roll_anime_or_game_characters": {
-    "other": "`/roll [pool]` — Roll anime or game characters.\n`/top` — Browse popular characters with filters.\n`/info character:<name or ID>` — Character details.\n`/harem` — Browse your collection.\n`/profile` — Rolls, claim cooldown and collection stats.\n`/gallery` — Approved character images.\n`/wishlist` — Manage wishes.\n`/trade` · `/gift` · `/divorce` — Manage character ownership.\n`/search` · `/keys` — Catalog search and key milestones.\n`/harem-ranking` — Server collection ranking.\n`/offers` — View and respond to pending offers."
+    "other": "`/roll [pool]` — Roll anime or game characters.\n`/top` — Browse popular characters with filters.\n`/info character:<name or ID>` — Character details.\n`/harem` — Browse your collection.\n`/profile` — Rolls, claim cooldown and collection stats.\n`/gallery` — Approved character images.\n`/wishlist` — Manage wishes.\n`/trade` · `/gift` · `/divorce` — Manage character ownership.\n`/search` · `/keys` — Catalog search and key milestones.\n`/harem-ranking` — Server collection ranking.\n`/offers` — View and respond to pending offers.\n`/alias` — Customize display alias of married characters."
   },
   "commands.general.shop": {
     "other": "Shop"

@@ -3,6 +3,8 @@ package gacha
 import (
 	"bot/internal/locale"
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"github.com/bwmarrin/discordgo"
 	"github.com/google/uuid"
@@ -61,11 +63,30 @@ func parseOffer(kind, query string) (string, int64, int64, error) {
 	return recipient, offered, requested, nil
 }
 
+func parseRecipient(kind, query string) (string, error) {
+	if kind == "divorce" {
+		return "", nil
+	}
+	query = strings.TrimSpace(query)
+	var first string
+	if strings.Contains(query, " | ") {
+		parts := strings.Split(query, " | ")
+		first = strings.TrimSpace(parts[0])
+	} else {
+		fields := strings.Fields(query)
+		if len(fields) == 0 {
+			return "", userError(locale.Text("gacha.social_discord.usage_divorce_id_gift_member_id_trade"))
+		}
+		first = fields[0]
+	}
+	return parseMember(first)
+}
+
 func validateTarget(s *discordgo.Session, guild, user, action, query string) error {
 	if action != "trade" && action != "gift" {
 		return nil
 	}
-	target, _, _, e := parseOffer(action, query)
+	target, e := parseRecipient(action, query)
 	if e != nil {
 		return e
 	}
@@ -82,6 +103,136 @@ func validateTarget(s *discordgo.Session, guild, user, action, query string) err
 		return userError(locale.Text("gacha.social_discord.you_cannot_trade_with_or_gift_to"))
 	}
 	return nil
+}
+
+// ResolveCharacterID resolves a character query (numeric ID, exact name, alias, or substring) to an int64 ID.
+// If prioritizeOwnerHarem is true and owner is non-empty, it first searches characters owned by that user in that guild.
+func (s *Store) ResolveCharacterID(ctx context.Context, guild, owner, query string, prioritizeOwnerHarem bool) (int64, error) {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return 0, userError(locale.Text("gacha.game.enter_a_character_name_or_id"))
+	}
+
+	// 1. Numeric ID
+	if id, err := strconv.ParseInt(query, 10, 64); err == nil && id > 0 {
+		return id, nil
+	}
+
+	// 2. Prioritize owner's harem if requested
+	if prioritizeOwnerHarem && owner != "" {
+		const haremSearchSQL = `
+SELECT c.id
+FROM gacha_collection col
+JOIN gacha_characters c ON c.id = col.character_id
+LEFT JOIN gacha_guild_character_aliases ga ON ga.character_id = c.id AND ga.guild_id = $1
+WHERE col.guild_id = $1 AND col.user_id = $2
+  AND (
+    lower(COALESCE(ga.alias, c.name)) = lower($3)
+    OR ga.alias ILIKE '%' || $3 || '%'
+    OR lower(c.name) = lower($3)
+    OR EXISTS(SELECT 1 FROM jsonb_array_elements_text(c.aliases) al WHERE lower(al) = lower($3))
+    OR lower(c.name) LIKE lower($3) || '%'
+    OR c.name ILIKE '%' || $3 || '%'
+    OR c.native_name ILIKE '%' || $3 || '%'
+    OR EXISTS(SELECT 1 FROM jsonb_array_elements_text(c.aliases) al WHERE al ILIKE '%' || $3 || '%')
+  )
+ORDER BY
+  CASE WHEN lower(COALESCE(ga.alias, c.name)) = lower($3) THEN 0
+       WHEN lower(c.name) = lower($3) THEN 1
+       WHEN EXISTS(SELECT 1 FROM jsonb_array_elements_text(c.aliases) al WHERE lower(al) = lower($3)) THEN 2
+       WHEN lower(c.name) LIKE lower($3) || '%' THEN 3
+       ELSE 4 END,
+  c.favourites DESC, c.id ASC
+LIMIT 1`
+
+		var haremID int64
+		if err := s.DB.QueryRowContext(ctx, haremSearchSQL, guild, owner, query).Scan(&haremID); err == nil {
+			return haremID, nil
+		}
+	}
+
+
+	// 3. Fall back to catalog search via FindCharacter
+	card, _, err := s.FindCharacter(ctx, guild, query)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, userError(locale.Text("gacha.discord.character_not_found_try_another_name_with.formatted", locale.Data{"Query": query}))
+		}
+		return 0, err
+	}
+	return card.ID, nil
+}
+
+// ResolveOffer resolves the character names/aliases or numeric IDs for divorce, gift, or trade.
+func (s *Store) ResolveOffer(ctx context.Context, guild, user, kind, query string) (string, int64, int64, error) {
+	if kind == "divorce" {
+		offered, err := s.ResolveCharacterID(ctx, guild, user, query, true)
+		if err != nil {
+			return "", 0, 0, err
+		}
+		return "", offered, 0, nil
+	}
+
+	if kind == "gift" {
+		var recipient, charQuery string
+		if strings.Contains(query, " | ") {
+			parts := strings.SplitN(query, " | ", 2)
+			recipient = strings.TrimSpace(parts[0])
+			charQuery = strings.TrimSpace(parts[1])
+		} else {
+			fields := strings.Fields(query)
+			if len(fields) < 2 {
+				return "", 0, 0, userError(locale.Text("gacha.social_discord.usage_divorce_id_gift_member_id_trade"))
+			}
+			recipient = fields[0]
+			charQuery = strings.TrimSpace(query[len(fields[0]):])
+		}
+		recID, err := parseMember(recipient)
+		if err != nil {
+			return "", 0, 0, err
+		}
+		offered, err := s.ResolveCharacterID(ctx, guild, user, charQuery, true)
+		if err != nil {
+			return "", 0, 0, err
+		}
+		return recID, offered, 0, nil
+	}
+
+	if kind == "trade" {
+		var recipient, offerQuery, receiveQuery string
+		if strings.Contains(query, " | ") {
+			parts := strings.Split(query, " | ")
+			if len(parts) < 3 {
+				return "", 0, 0, userError(locale.Text("gacha.social_discord.usage_divorce_id_gift_member_id_trade"))
+			}
+			recipient = strings.TrimSpace(parts[0])
+			offerQuery = strings.TrimSpace(parts[1])
+			receiveQuery = strings.TrimSpace(parts[2])
+		} else {
+			fields := strings.Fields(query)
+			if len(fields) < 3 {
+				return "", 0, 0, userError(locale.Text("gacha.social_discord.usage_divorce_id_gift_member_id_trade"))
+			}
+			recipient = fields[0]
+			offerQuery = fields[1]
+			receiveQuery = strings.Join(fields[2:], " ")
+		}
+		recID, err := parseMember(recipient)
+		if err != nil {
+			return "", 0, 0, err
+		}
+		offered, err := s.ResolveCharacterID(ctx, guild, user, offerQuery, true)
+		if err != nil {
+			return "", 0, 0, err
+		}
+		requested, err := s.ResolveCharacterID(ctx, guild, recID, receiveQuery, true)
+		if err != nil {
+			return "", 0, 0, err
+		}
+		return recID, offered, requested, nil
+	}
+
+	return "", 0, 0, userError(locale.Text("gacha.social_discord.usage_divorce_id_gift_member_id_trade"))
 }
 func (s *Store) actionMessage(ctx context.Context, a Action) (*discordgo.MessageSend, error) {
 	offered, e := scanCard(s.DB.QueryRowContext(ctx, cardSelect+` WHERE c.id=$1`, a.Offered))
@@ -258,7 +409,18 @@ func HandlePage(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 
-	if len(parts) == 4 && parts[0] == "topchar" {
+	if len(parts) >= 3 && parts[0] == "search" {
+		pageStr := parts[len(parts)-1]
+		searchQuery := strings.Join(parts[1:len(parts)-1], "_")
+		if page, e := strconv.Atoi(pageStr); e == nil && page > 0 && page <= 100000 {
+			msg, e := Default.Execute(ctx, i.GuildID, i.ChannelID, i.Member.User.ID, i.ID, "search", searchQuery, page)
+			if e == nil {
+				_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &msg.Content, Embeds: &msg.Embeds, Components: &msg.Components, AllowedMentions: msg.AllowedMentions})
+				return
+			}
+			content = friendly(e)
+		}
+	} else if len(parts) == 4 && parts[0] == "topchar" {
 		if page, e := strconv.Atoi(parts[3]); e == nil && page > 0 && page <= 100000 {
 			msg, e := Default.Execute(ctx, i.GuildID, i.ChannelID, i.Member.User.ID, i.ID, "topchar", parts[1]+" "+parts[2], page)
 			if e == nil {

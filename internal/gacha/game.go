@@ -3,9 +3,11 @@ package gacha
 import (
 	"bot/internal/locale"
 	"context"
+	"crypto/rand"
 	"database/sql"
 	"errors"
 	"github.com/google/uuid"
+	"math/big"
 	"strconv"
 	"strings"
 	"time"
@@ -19,10 +21,12 @@ type Card struct {
 	Value, Keys, Claimed                          int64
 	ID                                            int64
 	Name, Work, Image, Source, Attribution, Owner string
+	OriginalName                                  string
 	Favourites                                    int
 }
 type Roll struct {
 	KeyEarned bool
+	WishSpawn bool
 	ID        string
 	Card      Card
 	Expires   time.Time
@@ -37,6 +41,7 @@ func scanCard(row scanner) (Card, error) {
 	e := row.Scan(&c.ID, &c.Name, &c.Favourites, &c.Work, &c.Image, &c.Source, &c.Attribution)
 	return c, e
 }
+
 func ensurePlayer(ctx context.Context, tx *sql.Tx, guild, user string) error {
 	if guild == "" || user == "" {
 		return userError(locale.Text("gacha.discord.use_this_command_in_a_server"))
@@ -114,29 +119,78 @@ func (s *Store) rollPoolSnapshot(ctx context.Context, guild, channel, user, requ
 		return r, cacheErr
 	}
 	const eligible = `c.id=$3 AND c.enabled AND EXISTS(SELECT 1 FROM gacha_assets a WHERE a.character_id=c.id AND a.status='approved') AND ($1='' OR lower(trim(c.gender))=$1) AND ($2='' OR EXISTS(SELECT 1 FROM gacha_character_works cw JOIN gacha_works w ON w.id=cw.work_id WHERE cw.character_id=c.id AND w.kind=$2))`
+	found := false
+
+	// Wish bonus: if enabled, roller has a bonus percent chance to drop one of their eligible wished characters.
+	if s.Config.WishBonusPercent > 0 {
+		n, randErr := rand.Int(rand.Reader, big.NewInt(10000))
+		if randErr == nil && float64(n.Int64())/100.0 < s.Config.WishBonusPercent {
+			const wishEligibleSQL = `
+SELECT w.character_id
+FROM gacha_wishes w
+JOIN gacha_characters c ON c.id = w.character_id
+WHERE w.guild_id = $1 AND w.user_id = $2
+  AND c.enabled
+  AND EXISTS(SELECT 1 FROM gacha_assets a WHERE a.character_id=c.id AND a.status='approved')
+  AND ($3 = '' OR lower(trim(c.gender)) = $3)
+  AND ($4 = '' OR EXISTS(SELECT 1 FROM gacha_character_works cw JOIN gacha_works gw ON gw.id=cw.work_id WHERE cw.character_id=c.id AND gw.kind=$4))`
+			rows, qErr := tx.QueryContext(ctx, wishEligibleSQL, guild, user, pool.Gender, pool.Kind)
+			if qErr == nil {
+				var wishIDs []int64
+				for rows.Next() {
+					var wid int64
+					if scanErr := rows.Scan(&wid); scanErr == nil {
+						wishIDs = append(wishIDs, wid)
+					}
+				}
+				rows.Close()
+				if len(wishIDs) > 0 {
+					pIdx, idxErr := rand.Int(rand.Reader, big.NewInt(int64(len(wishIDs))))
+					if idxErr == nil {
+						chosenID := wishIDs[pIdx.Int64()]
+						wCard, cErr := scanCard(tx.QueryRowContext(ctx, cardSelect+` WHERE c.id=$1`, chosenID))
+						if cErr == nil {
+							r.Card = wCard
+							r.WishSpawn = true
+							found = true
+						}
+					}
+				}
+			}
+		}
+	}
+
 	// Rejection sampling handles a snapshot racing an editorial change. Each
 	// attempt validates current eligibility using a primary-key lookup.
-	found := false
-	for attempt := 0; attempt < 8; attempt++ {
-		id, sampleErr := sampleID(snapshot.IDs[pool.Code])
-		if sampleErr == ErrEmpty {
-			return r, errStalePool
+	if !found {
+		for attempt := 0; attempt < 8; attempt++ {
+			id, sampleErr := sampleID(snapshot.IDs[pool.Code])
+			if sampleErr == ErrEmpty {
+				return r, errStalePool
+			}
+			if sampleErr != nil {
+				return r, sampleErr
+			}
+			r.Card, e = scanCard(tx.QueryRowContext(ctx, cardSelect+` WHERE `+eligible, pool.Gender, pool.Kind, id))
+			if e == sql.ErrNoRows {
+				continue
+			}
+			if e != nil {
+				return r, e
+			}
+			found = true
+			break
 		}
-		if sampleErr != nil {
-			return r, sampleErr
-		}
-		r.Card, e = scanCard(tx.QueryRowContext(ctx, cardSelect+` WHERE `+eligible, pool.Gender, pool.Kind, id))
-		if e == sql.ErrNoRows {
-			continue
-		}
-		if e != nil {
-			return r, e
-		}
-		found = true
-		break
 	}
 	if !found {
 		return r, errStalePool
+	}
+	if !r.WishSpawn {
+		var isWished bool
+		_ = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM gacha_wishes WHERE guild_id=$1 AND user_id=$2 AND character_id=$3)`, guild, user, r.Card.ID).Scan(&isWished)
+		if isWished {
+			r.WishSpawn = true
+		}
 	}
 	r.ID = uuid.NewString()
 	e = tx.QueryRowContext(ctx, `INSERT INTO gacha_rolls(id,guild_id,channel_id,user_id,character_id,expires_at,request_id) VALUES($1,$2,$3,$4,$5,now()+interval '45 seconds',$6) RETURNING expires_at`, r.ID, guild, channel, user, r.Card.ID, request).Scan(&r.Expires)
@@ -193,11 +247,103 @@ func (s *Store) Claim(ctx context.Context, guild, channel, user, roll string) er
 	}
 	return tx.Commit()
 }
+
+// SearchEntry represents a character search result item with name, work, and favorites.
+type SearchEntry struct {
+	ID         int64
+	Name       string
+	Work       string
+	Favourites int
+	Owner      string
+	Rank       int
+}
+
+// SearchCharacters searches all enabled characters with approved assets matching query
+// in their name, native_name, or aliases, ordered by favourites descending.
+func (s *Store) SearchCharacters(ctx context.Context, guild, query string, page, limit int) ([]SearchEntry, int64, error) {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return nil, 0, userError(locale.Text("gacha.game.enter_a_character_name_or_id"))
+	}
+	if page < 1 || page > 100000 {
+		return nil, 0, userError(locale.Text("gacha.discord.invalid_page"))
+	}
+	if limit <= 0 || limit > 100 {
+		limit = 10
+	}
+
+	var numericID int64
+	if id, err := strconv.ParseInt(query, 10, 64); err == nil && id > 0 {
+		numericID = id
+	}
+
+	const countSQL = `
+SELECT count(*)
+FROM gacha_characters c
+LEFT JOIN gacha_guild_character_aliases ga ON ga.character_id=c.id AND ga.guild_id=$1
+WHERE c.enabled 
+  AND EXISTS(SELECT 1 FROM gacha_assets a WHERE a.character_id=c.id AND a.status='approved')
+  AND (
+    c.name ILIKE '%'||$2||'%' 
+    OR c.native_name ILIKE '%'||$2||'%' 
+    OR EXISTS(SELECT 1 FROM jsonb_array_elements_text(c.aliases) al WHERE al ILIKE '%'||$2||'%')
+    OR ga.alias ILIKE '%'||$2||'%'
+    OR ($3 > 0 AND c.id = $3)
+  )`
+
+	var total int64
+	if err := s.DB.QueryRowContext(ctx, countSQL, guild, query, numericID).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	if total == 0 {
+		return nil, 0, nil
+	}
+
+	const searchSQL = `
+SELECT c.id, COALESCE(ga.alias, c.name) AS name, c.favourites,
+       COALESCE((SELECT w.title FROM gacha_character_works cw JOIN gacha_works w ON w.id=cw.work_id WHERE cw.character_id=c.id ORDER BY CASE cw.role WHEN 'MAIN' THEN 0 ELSE 1 END,w.id LIMIT 1), 'Original') AS work,
+       COALESCE(col.user_id, '') AS owner
+FROM gacha_characters c
+LEFT JOIN gacha_collection col ON col.character_id=c.id AND col.guild_id=$1
+LEFT JOIN gacha_guild_character_aliases ga ON ga.character_id=c.id AND ga.guild_id=$1
+WHERE c.enabled 
+  AND EXISTS(SELECT 1 FROM gacha_assets a WHERE a.character_id=c.id AND a.status='approved')
+  AND (
+    c.name ILIKE '%'||$2||'%' 
+    OR c.native_name ILIKE '%'||$2||'%' 
+    OR EXISTS(SELECT 1 FROM jsonb_array_elements_text(c.aliases) al WHERE al ILIKE '%'||$2||'%')
+    OR ga.alias ILIKE '%'||$2||'%'
+    OR ($3 > 0 AND c.id = $3)
+  )
+ORDER BY
+  c.favourites DESC, c.id ASC
+LIMIT $4 OFFSET $5`
+
+	rows, err := s.DB.QueryContext(ctx, searchSQL, guild, query, numericID, limit, (page-1)*limit)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var entries []SearchEntry
+	startRank := (page-1)*limit + 1
+	for rows.Next() {
+		var e SearchEntry
+		if err := rows.Scan(&e.ID, &e.Name, &e.Favourites, &e.Work, &e.Owner); err != nil {
+			return nil, 0, err
+		}
+		e.Rank = startRank + len(entries)
+		entries = append(entries, e)
+	}
+	return entries, total, rows.Err()
+}
+
 func (s *Store) Cards(ctx context.Context, guild, user, search string, page int) ([]Card, error) {
 	if page < 1 || page > 100000 {
 		return nil, userError(locale.Text("gacha.discord.invalid_page"))
 	}
-	rows, e := s.DB.QueryContext(ctx, cardSelect+` LEFT JOIN gacha_collection valued ON valued.character_id=c.id AND valued.guild_id=$2 CROSS JOIN (SELECT gacha_claimed_count($2) AS claimed) population WHERE ($1='' OR EXISTS(SELECT 1 FROM gacha_collection col WHERE col.character_id=c.id AND col.guild_id=$2 AND col.user_id=$1)) AND ($3='' OR c.name ILIKE '%'||$3||'%' OR c.id::text=$3 OR c.native_name ILIKE '%'||$3||'%' OR EXISTS(SELECT 1 FROM jsonb_array_elements_text(c.aliases) alias WHERE alias ILIKE '%'||$3||'%')) ORDER BY gacha_character_value(c.favourites,population.claimed,COALESCE(valued.keys,0)) DESC,c.id LIMIT 10 OFFSET $4`, user, guild, search, (page-1)*10)
+	rows, e := s.DB.QueryContext(ctx, cardSelect+` LEFT JOIN gacha_collection valued ON valued.character_id=c.id AND valued.guild_id=$2 LEFT JOIN gacha_guild_character_aliases ga ON ga.character_id=c.id AND ga.guild_id=$2 CROSS JOIN (SELECT gacha_claimed_count($2) AS claimed) population WHERE ($1='' OR EXISTS(SELECT 1 FROM gacha_collection col WHERE col.character_id=c.id AND col.guild_id=$2 AND col.user_id=$1)) AND ($3='' OR c.name ILIKE '%'||$3||'%' OR c.id::text=$3 OR c.native_name ILIKE '%'||$3||'%' OR EXISTS(SELECT 1 FROM jsonb_array_elements_text(c.aliases) alias WHERE alias ILIKE '%'||$3||'%') OR ga.alias ILIKE '%'||$3||'%') ORDER BY gacha_character_value(c.favourites,population.claimed,COALESCE(valued.keys,0)) DESC,c.id LIMIT 10 OFFSET $4`, user, guild, search, (page-1)*10)
+
 	if e != nil {
 		return nil, e
 	}
@@ -330,18 +476,22 @@ func (s *Store) FindCharacter(ctx context.Context, guild string, query string) (
 		return c, nil, nil
 	}
 
-	// Text search: matches name, native_name, or aliases.
+	// Text search: matches name, native_name, aliases, or guild custom alias.
 	const searchSQL = cardSelect + `
+LEFT JOIN gacha_guild_character_aliases ga ON ga.character_id=c.id AND ga.guild_id=$2
 WHERE c.enabled AND EXISTS(SELECT 1 FROM gacha_assets a WHERE a.character_id=c.id AND a.status='approved')
-  AND (c.name ILIKE '%'||$1||'%' OR c.native_name ILIKE '%'||$1||'%' OR EXISTS(SELECT 1 FROM jsonb_array_elements_text(c.aliases) al WHERE al ILIKE '%'||$1||'%'))
+  AND (c.name ILIKE '%'||$1||'%' OR c.native_name ILIKE '%'||$1||'%' OR EXISTS(SELECT 1 FROM jsonb_array_elements_text(c.aliases) al WHERE al ILIKE '%'||$1||'%') OR ga.alias ILIKE '%'||$1||'%')
 ORDER BY
-  CASE WHEN lower(c.name) = lower($1) THEN 0
-       WHEN lower(c.name) LIKE lower($1)||'%' THEN 1
-       ELSE 2 END,
+  CASE WHEN lower(COALESCE(ga.alias, c.name)) = lower($1) THEN 0
+       WHEN lower(COALESCE(ga.alias, c.name)) LIKE lower($1)||'%' THEN 1
+       WHEN lower(c.name) = lower($1) THEN 2
+       WHEN lower(c.name) LIKE lower($1)||'%' THEN 3
+       ELSE 4 END,
   c.favourites DESC, c.id ASC
 LIMIT 5`
 
-	rows, err := s.DB.QueryContext(ctx, searchSQL, query)
+	rows, err := s.DB.QueryContext(ctx, searchSQL, query, guild)
+
 	if err != nil {
 		return Card{}, nil, err
 	}

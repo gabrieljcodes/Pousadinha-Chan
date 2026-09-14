@@ -45,8 +45,12 @@ func priceCards(ctx context.Context, q rowQuerier, guild string, cards ...*Card)
 	}
 	rows, e := q.QueryContext(ctx, `WITH population AS (SELECT gacha_claimed_count($1) AS claimed)
  SELECT c.id,COALESCE(col.user_id,''),COALESCE(col.keys,0),population.claimed,
- gacha_character_value(c.favourites,population.claimed,COALESCE(col.keys,0))::bigint
- FROM gacha_characters c CROSS JOIN population LEFT JOIN gacha_collection col ON col.character_id=c.id AND col.guild_id=$1
+ gacha_character_value(c.favourites,population.claimed,COALESCE(col.keys,0))::bigint,
+ COALESCE(ga.alias, '')
+ FROM gacha_characters c
+ CROSS JOIN population
+ LEFT JOIN gacha_collection col ON col.character_id=c.id AND col.guild_id=$1
+ LEFT JOIN gacha_guild_character_aliases ga ON ga.character_id=c.id AND ga.guild_id=$1
  WHERE c.id=ANY($2::bigint[])`, guild, ids)
 	if e != nil {
 		return e
@@ -54,8 +58,8 @@ func priceCards(ctx context.Context, q rowQuerier, guild string, cards ...*Card)
 	defer rows.Close()
 	for rows.Next() {
 		var id, keys, claimed, value int64
-		var owner string
-		if e = rows.Scan(&id, &owner, &keys, &claimed, &value); e != nil {
+		var owner, alias string
+		if e = rows.Scan(&id, &owner, &keys, &claimed, &value, &alias); e != nil {
 			return e
 		}
 		for _, c := range byID[id] {
@@ -63,10 +67,15 @@ func priceCards(ctx context.Context, q rowQuerier, guild string, cards ...*Card)
 			c.Keys = keys
 			c.Claimed = claimed
 			c.Value = value
+			if alias != "" {
+				c.OriginalName = c.Name
+				c.Name = alias
+			}
 		}
 	}
 	return rows.Err()
 }
+
 
 func awardKey(ctx context.Context, tx *sql.Tx, guild, user string, r *Roll) error {
 	var epoch string

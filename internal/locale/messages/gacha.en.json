@@ -21,7 +21,7 @@
     "other": "Catalog • page {{printf \"%d\" .Page}}"
   },
   "gacha.discord.character_added_to_your_wishlist_its_rolls.formatted": {
-    "other": "Character #{{printf \"%d\" .Id}} added to your wishlist. Its rolls will be marked as wished."
+    "other": "Character **{{printf \"%s\" .Name}}** (#{{printf \"%d\" .Id}}) added to your wishlist. Its rolls will be marked as wished."
   },
   "gacha.discord.character_claimed_check_your_harem": {
     "other": "Character claimed! Check your harem."
@@ -39,7 +39,7 @@
     "other": "Character {{printf \"%d\" .Index}} of {{printf \"%d\" .Total}} • @{{printf \"%s\" .Owner}}’s Harem"
   },
   "gacha.discord.character_removed_from_your_wishlist.formatted": {
-    "other": "Character #{{printf \"%d\" .Id}} removed from your wishlist."
+    "other": "Character **{{printf \"%s\" .Name}}** (#{{printf \"%d\" .Id}}) removed from your wishlist."
   },
   "gacha.discord.character_value": {
     "other": "Character value"
@@ -188,8 +188,8 @@
   "gacha.discord.waifus": {
     "other": " • Waifus"
   },
-  "gacha.discord.wished_in_this_server": {
-    "other": "\n✦ Wished in this server"
+  "gacha.discord.wished_by.formatted": {
+    "other": "\n⭐ **Wished!** Wished by {{printf \"%s\" .Users}}"
   },
   "gacha.discord.work_genres": {
     "other": "Work genres"
@@ -386,5 +386,47 @@
   "gacha.wishlist.count": {
     "one": "{{printf \"%d\" .Count}}/20 wished character",
     "other": "{{printf \"%d\" .Count}}/20 wished characters"
+  },
+  "gacha.social.must_be_married_to_set_alias": {
+    "other": "You must be married to this character in this server to change their alias."
+  },
+  "gacha.social.character_has_no_aliases.formatted": {
+    "other": "The character **{{printf \"%s\" .Name}}** has no alternative aliases registered."
+  },
+  "gacha.social.invalid_character_alias.formatted": {
+    "other": "Alias **{{printf \"%s\" .Alias}}** is not valid for **{{printf \"%s\" .Name}}**.\nAvailable aliases: {{printf \"%s\" .Available}} (or `default` to reset)."
+  },
+  "gacha.discord.enter_character_to_manage_alias": {
+    "other": "Please specify a character to manage their alias."
+  },
+  "gacha.discord.available_aliases_for.formatted": {
+    "other": "Available aliases for **{{printf \"%s\" .Name}}**:"
+  },
+  "gacha.discord.current_alias_server.formatted": {
+    "other": "**Current server alias:** `{{printf \"%s\" .Alias}}`"
+  },
+  "gacha.discord.no_alias_active": {
+    "other": "**Current server alias:** None (using original name)"
+  },
+  "gacha.discord.alias_instructions.formatted": {
+    "other": "Use `/alias character:{{printf \"%s\" .Name}} alias:<name>` to change, or `default` to reset."
+  },
+  "gacha.discord.alias_reset_title": {
+    "other": "🏷️ Alias Reset"
+  },
+  "gacha.discord.alias_reset_success.formatted": {
+    "other": "The alias for **{{printf \"%s\" .Name}}** has been reset to their original name!"
+  },
+  "gacha.discord.alias_changed_title": {
+    "other": "🏷️ Alias Changed!"
+  },
+  "gacha.discord.alias_set_success.formatted": {
+    "other": "The display alias for **{{printf \"%s\" .Name}}** was set to **{{printf \"%s\" .Alias}}**!\nIt will now appear when rolled (including key awards) and in the harem."
+  },
+  "gacha.discord.alias_persist_note": {
+    "other": "Even if divorced, this alias remains active until changed by a future spouse."
+  },
+  "gacha.discord.original_name": {
+    "other": "Original Name"
   }
 }
