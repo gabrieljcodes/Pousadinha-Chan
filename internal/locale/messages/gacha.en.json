@@ -480,6 +480,12 @@
   "gacha.channels.not_configured": {
     "other": "❌ Gacha channels are not configured on this server. An administrator must set up the roll and command channels using `/gachaconfig channels`."
   },
+  "gacha.channels.roll_channel_not_configured": {
+    "other": "❌ Gacha roll channel is not configured on this server. An administrator must set it up using `/gachaconfig channels roll_channel:#channel`."
+  },
+  "gacha.channels.cmd_channel_not_configured": {
+    "other": "❌ Gacha commands channel is not configured on this server. An administrator must set it up using `/gachaconfig channels command_channel:#channel`."
+  },
   "gacha.channels.rolls_only_in.formatted": {
     "other": "🎰 Rolls are only allowed in <#{{printf \"%s\" .Channel}}>."
   },

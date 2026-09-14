@@ -841,16 +841,22 @@ func (s *Store) validateChannel(ctx context.Context, guildID, channelID, action 
 		return nil
 	}
 	sch := s.GuildSchedule(ctx, guildID)
-	// If channels are not yet configured on this server
-	if sch.RollChannelID == "" || sch.CmdChannelID == "" {
+
+	if sch.RollChannelID == "" && sch.CmdChannelID == "" {
 		return userError(locale.Text("gacha.channels.not_configured"))
 	}
 
 	if isRollAction(action) {
+		if sch.RollChannelID == "" {
+			return userError(locale.Text("gacha.channels.roll_channel_not_configured"))
+		}
 		if channelID != sch.RollChannelID {
 			return userError(locale.Text("gacha.channels.rolls_only_in.formatted", locale.Data{"Channel": sch.RollChannelID}))
 		}
 	} else {
+		if sch.CmdChannelID == "" {
+			return userError(locale.Text("gacha.channels.cmd_channel_not_configured"))
+		}
 		if channelID != sch.CmdChannelID {
 			return userError(locale.Text("gacha.channels.commands_only_in.formatted", locale.Data{"Channel": sch.CmdChannelID}))
 		}

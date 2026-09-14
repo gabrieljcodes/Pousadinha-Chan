@@ -4,6 +4,7 @@ import (
 	"bot/internal/locale"
 	"context"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -12,6 +13,19 @@ import (
 
 // HandleConfigSlash handles the /gachaconfig admin slash command.
 func HandleConfigSlash(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[Gacha Config Panic] %v", r)
+			_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Content: fmt.Sprintf("❌ An internal error occurred: %v", r),
+					Flags:   discordgo.MessageFlagsEphemeral,
+				},
+			})
+		}
+	}()
+
 	if Default == nil || i.Member == nil || i.GuildID == "" {
 		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -44,15 +58,19 @@ func HandleConfigSlash(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	if len(data.Options) > 0 {
 		subcmd = data.Options[0].Name
-		for _, o := range data.Options[0].Options {
-			v := int(o.IntValue())
-			switch o.Name {
-			case "reset_minute":
-				resetMinuteOpt = &v
-			case "rolls":
-				rollsOpt = &v
-			case "claim_interval":
-				claimOpt = &v
+		if subcmd == "set" {
+			for _, o := range data.Options[0].Options {
+				if o.Type == discordgo.ApplicationCommandOptionInteger {
+					v := int(o.IntValue())
+					switch o.Name {
+					case "reset_minute":
+						resetMinuteOpt = &v
+					case "rolls":
+						rollsOpt = &v
+					case "claim_interval":
+						claimOpt = &v
+					}
+				}
 			}
 		}
 	}
@@ -107,12 +125,11 @@ func HandleConfigSlash(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		var rollChannelOpt, cmdChannelOpt string
 		if len(data.Options) > 0 {
 			for _, o := range data.Options[0].Options {
-				ch := o.ChannelValue(s)
 				var chID string
-				if ch != nil {
+				if ch := o.ChannelValue(s); ch != nil {
 					chID = ch.ID
-				} else {
-					chID = o.StringValue()
+				} else if str, ok := o.Value.(string); ok {
+					chID = str
 				}
 				switch o.Name {
 				case "roll_channel":
