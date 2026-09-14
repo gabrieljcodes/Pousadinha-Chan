@@ -336,7 +336,7 @@ func navigationTopChar(claim, gender string, page int, next bool) []discordgo.Me
 	allBtn := discordgo.Button{
 		Label:    locale.Text("gacha.social_discord.all"),
 		Style:    discordgo.SecondaryButton,
-		CustomID: fmt.Sprintf("gacha_page_topchar_%s_all_1", claim),
+		CustomID: fmt.Sprintf("gacha_page_topfilter_%s_all_1", claim),
 	}
 	if gender == "all" {
 		allBtn.Style = discordgo.PrimaryButton
@@ -345,7 +345,7 @@ func navigationTopChar(claim, gender string, page int, next bool) []discordgo.Me
 	waifuBtn := discordgo.Button{
 		Label:    locale.Text("gacha.social_discord.waifus"),
 		Style:    discordgo.SecondaryButton,
-		CustomID: fmt.Sprintf("gacha_page_topchar_%s_female_1", claim),
+		CustomID: fmt.Sprintf("gacha_page_topfilter_%s_female_1", claim),
 	}
 	if gender == "female" {
 		waifuBtn.Style = discordgo.PrimaryButton
@@ -354,7 +354,7 @@ func navigationTopChar(claim, gender string, page int, next bool) []discordgo.Me
 	husbandoBtn := discordgo.Button{
 		Label:    locale.Text("gacha.social_discord.husbandos"),
 		Style:    discordgo.SecondaryButton,
-		CustomID: fmt.Sprintf("gacha_page_topchar_%s_male_1", claim),
+		CustomID: fmt.Sprintf("gacha_page_topfilter_%s_male_1", claim),
 	}
 	if gender == "male" {
 		husbandoBtn.Style = discordgo.PrimaryButton
@@ -371,15 +371,15 @@ func navigationTopChar(claim, gender string, page int, next bool) []discordgo.Me
 	claimBtn := discordgo.Button{
 		Label:    claimLabel,
 		Style:    claimStyle,
-		CustomID: fmt.Sprintf("gacha_page_topchar_%s_%s_1", nextClaim, gender),
+		CustomID: fmt.Sprintf("gacha_page_topfilter_%s_%s_1", nextClaim, gender),
 	}
 
 	filterRow := discordgo.ActionsRow{
 		Components: []discordgo.MessageComponent{allBtn, waifuBtn, husbandoBtn, claimBtn},
 	}
 
-	prev := discordgo.Button{Label: locale.Text("gacha.discord.previous"), Style: discordgo.SecondaryButton, CustomID: fmt.Sprintf("gacha_page_topchar_%s_%s_%d", claim, gender, max(1, page-1)), Disabled: page <= 1}
-	nextBtn := discordgo.Button{Label: locale.Text("gacha.discord.next"), Style: discordgo.SecondaryButton, CustomID: fmt.Sprintf("gacha_page_topchar_%s_%s_%d", claim, gender, page+1), Disabled: !next || page >= 100000}
+	prev := discordgo.Button{Label: locale.Text("gacha.discord.previous"), Style: discordgo.SecondaryButton, CustomID: fmt.Sprintf("gacha_page_topnav_%s_%s_%d", claim, gender, max(1, page-1)), Disabled: page <= 1}
+	nextBtn := discordgo.Button{Label: locale.Text("gacha.discord.next"), Style: discordgo.SecondaryButton, CustomID: fmt.Sprintf("gacha_page_topnav_%s_%s_%d", claim, gender, page+1), Disabled: !next || page >= 100000}
 	navRow := discordgo.ActionsRow{
 		Components: []discordgo.MessageComponent{prev, nextBtn},
 	}
@@ -420,7 +420,7 @@ func HandlePage(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			}
 			content = friendly(e)
 		}
-	} else if len(parts) == 4 && parts[0] == "topchar" {
+	} else if len(parts) == 4 && (parts[0] == "topchar" || parts[0] == "topfilter" || parts[0] == "topnav") {
 		if page, e := strconv.Atoi(parts[3]); e == nil && page > 0 && page <= 100000 {
 			msg, e := Default.Execute(ctx, i.GuildID, i.ChannelID, i.Member.User.ID, i.ID, "topchar", parts[1]+" "+parts[2], page)
 			if e == nil {

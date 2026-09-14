@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/bwmarrin/discordgo"
 )
 
 func TestCharacterValue(t *testing.T) {
@@ -359,10 +361,33 @@ func testSocial(t *testing.T, s *Store) {
 		t.Fatalf("expected Waifus • Page 2 in title, got %q", topwPage2Msg.Embeds[0].Title)
 	}
 
-	// Test navigationTopChar interactive components
-	topComponents := navigationTopChar("unclaimed", "female", 1, true)
-	if len(topComponents) != 2 {
-		t.Fatalf("expected 2 component rows in topchar navigation, got %d", len(topComponents))
+	// Test navigationTopChar interactive components and verify NO duplicate CustomIDs exist
+	for _, claim := range []string{"all", "unclaimed"} {
+		for _, gender := range []string{"all", "female", "male"} {
+			for _, page := range []int{1, 2, 5} {
+				topComponents := navigationTopChar(claim, gender, page, true)
+				if len(topComponents) != 2 {
+					t.Fatalf("expected 2 component rows in topchar navigation, got %d", len(topComponents))
+				}
+				seenIDs := make(map[string]bool)
+				for rowIdx, row := range topComponents {
+					actionsRow, ok := row.(discordgo.ActionsRow)
+					if !ok {
+						t.Fatalf("expected ActionsRow at row %d", rowIdx)
+					}
+					for compIdx, comp := range actionsRow.Components {
+						btn, ok := comp.(discordgo.Button)
+						if !ok {
+							t.Fatalf("expected Button at row %d comp %d", rowIdx, compIdx)
+						}
+						if seenIDs[btn.CustomID] {
+							t.Fatalf("duplicate CustomID %q found in navigationTopChar(claim=%q, gender=%q, page=%d)", btn.CustomID, claim, gender, page)
+						}
+						seenIDs[btn.CustomID] = true
+					}
+				}
+			}
+		}
 	}
 
 	// Test navigation harem list toggle
