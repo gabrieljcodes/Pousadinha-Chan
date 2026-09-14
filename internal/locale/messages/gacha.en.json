@@ -110,6 +110,9 @@
   "gacha.discord.next": {
     "other": "Next ▶"
   },
+  "gacha.discord.no_characters_found_for_work.formatted": {
+    "other": "No characters found in the catalog for **{{printf \"%s\" .Work}}**."
+  },
   "gacha.discord.no_characters_found_on_this_page": {
     "other": "No characters found on this page."
   },
@@ -121,6 +124,9 @@
   },
   "gacha.discord.no_pending_offers": {
     "other": "No pending offers."
+  },
+  "gacha.discord.no_works_found.formatted": {
+    "other": "No anime or work found matching **{{printf \"%s\" .Query}}**. Try searching with another name."
   },
   "gacha.discord.others": {
     "other": " • Others: "
@@ -208,6 +214,9 @@
   },
   "gacha.game.enter_a_character_name_or_id": {
     "other": "Enter a character name or ID."
+  },
+  "gacha.game.enter_a_series_name_or_id": {
+    "other": "Enter an anime or series name or ID."
   },
   "gacha.game.no_enabled_characters_with_approved_images_match": {
     "other": "No enabled characters with approved images match this pool. No roll was spent."
@@ -386,6 +395,12 @@
   "gacha.wishlist.count": {
     "one": "{{printf \"%d\" .Count}}/{{if .Limit}}{{printf \"%d\" .Limit}}{{else}}5{{end}} wished character",
     "other": "{{printf \"%d\" .Count}}/{{if .Limit}}{{printf \"%d\" .Limit}}{{else}}5{{end}} wished characters"
+  },
+  "gacha.discord.work_catalog_page.formatted": {
+    "other": "📺 {{printf \"%s\" .Work}} • Page {{printf \"%d\" .Page}}/{{printf \"%d\" .TotalPages}} ({{printf \"%d\" .Total}})"
+  },
+  "gacha.discord.work_catalog_single.formatted": {
+    "other": "📺 {{printf \"%s\" .Work}} • {{printf \"%d\" .Total}} character(s)"
   },
   "gacha.social.must_be_married_to_set_alias": {
     "other": "You must be married to this character in this server to change their alias."

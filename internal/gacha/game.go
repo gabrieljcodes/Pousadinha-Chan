@@ -338,6 +338,129 @@ LIMIT $4 OFFSET $5`
 	return entries, total, rows.Err()
 }
 
+// SearchCharactersByWork searches characters belonging to works matching query, ordered by favourites descending.
+// It returns the list of entries, total distinct characters, primary matched work title, and any error.
+func (s *Store) SearchCharactersByWork(ctx context.Context, guild, query string, page, limit int) ([]SearchEntry, int64, string, error) {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return nil, 0, "", userError(locale.Text("gacha.game.enter_a_series_name_or_id"))
+	}
+	if page < 1 || page > 100000 {
+		return nil, 0, "", userError(locale.Text("gacha.discord.invalid_page"))
+	}
+	if limit <= 0 || limit > 100 {
+		limit = 10
+	}
+
+	var numericID int64
+	if id, err := strconv.ParseInt(query, 10, 64); err == nil && id > 0 {
+		numericID = id
+	}
+
+	const findWorkSQL = `
+SELECT id, title,
+       CASE 
+         WHEN lower(title) = lower($2) THEN 0
+         WHEN title ILIKE $2||'%' THEN 1
+         ELSE 2
+       END AS match_prio
+FROM gacha_works
+WHERE ($1 > 0 AND id = $1)
+   OR title ILIKE '%'||$2||'%' 
+   OR native_title ILIKE '%'||$2||'%'
+ORDER BY match_prio ASC, id ASC
+LIMIT 1`
+
+	var workID int64
+	var primaryTitle string
+	var prio int
+	err := s.DB.QueryRowContext(ctx, findWorkSQL, numericID, query).Scan(&workID, &primaryTitle, &prio)
+	if err == sql.ErrNoRows {
+		return nil, 0, "", nil
+	}
+	if err != nil {
+		return nil, 0, "", err
+	}
+
+	const countSQL = `
+WITH matched_works AS (
+  SELECT id
+  FROM gacha_works
+  WHERE ($1 > 0 AND id = $1)
+     OR title ILIKE '%'||$2||'%'
+     OR native_title ILIKE '%'||$2||'%'
+)
+SELECT count(DISTINCT c.id)
+FROM gacha_characters c
+JOIN gacha_character_works cw ON cw.character_id = c.id
+JOIN matched_works mw ON mw.id = cw.work_id
+WHERE c.enabled
+  AND EXISTS(SELECT 1 FROM gacha_assets a WHERE a.character_id = c.id AND a.status = 'approved')`
+
+	var total int64
+	if err := s.DB.QueryRowContext(ctx, countSQL, numericID, query).Scan(&total); err != nil {
+		return nil, 0, primaryTitle, err
+	}
+	if total == 0 {
+		return nil, 0, primaryTitle, nil
+	}
+
+	const searchSQL = `
+WITH matched_works AS (
+  SELECT id, title,
+         CASE 
+           WHEN lower(title) = lower($2) THEN 0
+           WHEN title ILIKE $2||'%' THEN 1
+           ELSE 2
+         END AS match_prio
+  FROM gacha_works
+  WHERE ($1 > 0 AND id = $1)
+     OR title ILIKE '%'||$2||'%'
+     OR native_title ILIKE '%'||$2||'%'
+),
+chars AS (
+  SELECT DISTINCT c.id, c.name, c.favourites
+  FROM gacha_characters c
+  JOIN gacha_character_works cw ON cw.character_id = c.id
+  JOIN matched_works mw ON mw.id = cw.work_id
+  WHERE c.enabled 
+    AND EXISTS(SELECT 1 FROM gacha_assets a WHERE a.character_id = c.id AND a.status = 'approved')
+)
+SELECT c.id, 
+       COALESCE(ga.alias, c.name) AS name, 
+       c.favourites,
+       COALESCE((SELECT mw.title 
+                 FROM gacha_character_works cw 
+                 JOIN matched_works mw ON mw.id = cw.work_id 
+                 WHERE cw.character_id = c.id 
+                 ORDER BY mw.match_prio ASC, mw.id ASC LIMIT 1),
+                (SELECT w.title FROM gacha_character_works cw JOIN gacha_works w ON w.id=cw.work_id WHERE cw.character_id=c.id LIMIT 1)) AS work,
+       COALESCE(col.user_id, '') AS owner
+FROM chars c
+LEFT JOIN gacha_collection col ON col.character_id = c.id AND col.guild_id = $3
+LEFT JOIN gacha_guild_character_aliases ga ON ga.character_id = c.id AND ga.guild_id = $3
+ORDER BY c.favourites DESC, c.id ASC
+LIMIT $4 OFFSET $5`
+
+	rows, err := s.DB.QueryContext(ctx, searchSQL, numericID, query, guild, limit, (page-1)*limit)
+	if err != nil {
+		return nil, 0, primaryTitle, err
+	}
+	defer rows.Close()
+
+	var entries []SearchEntry
+	startRank := (page-1)*limit + 1
+	for rows.Next() {
+		var e SearchEntry
+		if err := rows.Scan(&e.ID, &e.Name, &e.Favourites, &e.Work, &e.Owner); err != nil {
+			return nil, 0, primaryTitle, err
+		}
+		e.Rank = startRank + len(entries)
+		entries = append(entries, e)
+	}
+	return entries, total, primaryTitle, rows.Err()
+}
+
 func (s *Store) Cards(ctx context.Context, guild, user, search string, page int) ([]Card, error) {
 	if page < 1 || page > 100000 {
 		return nil, userError(locale.Text("gacha.discord.invalid_page"))

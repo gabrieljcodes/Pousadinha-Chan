@@ -30,7 +30,8 @@ rolls; rolling your own character earns a key.
 | --- | --- |
 | `/harem [member] [mode] [page]` | Collection with list/photo modes, counts and values |
 | `/info character:<name or ID>` | Character details, owner, works and value |
-| `/search query:<name or ID> [page]` | Search names, native names and aliases |
+| `/search query:<name or ID> [type] [page]` | Search names, aliases, or anime/game works |
+| `/series series:<name or ID> [page]` | Browse characters from an anime, manga, or game |
 | `/profile` | Remaining rolls, claim cooldown and collection stats |
 | `/top [gender] [claim] [page]` | Popularity ranking with interactive filters |
 | `/harem-ranking [page]` | Server collections ranked by total value |

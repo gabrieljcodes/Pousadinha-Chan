@@ -72,7 +72,7 @@ func SlashHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	}
 
 	switch i.ApplicationCommandData().Name {
-	case "roll", "top", "info", "harem", "profile", "gallery", "wishlist", "wish", "unwish", "trade", "gift", "divorce", "keys", "offers", "search", "harem-ranking", "alias":
+	case "roll", "top", "info", "harem", "profile", "gallery", "wishlist", "wish", "unwish", "trade", "gift", "divorce", "keys", "offers", "search", "harem-ranking", "alias", "series":
 		gacha.Slash(s, i)
 	case "event":
 		games.HandleEventCommand(s, i)

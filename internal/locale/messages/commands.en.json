@@ -581,6 +581,21 @@
   "commands.discovery.search": {
     "other": "Search the character catalog by name or ID"
   },
+  "commands.discovery.search_type": {
+    "other": "Search for characters or browse by series/anime"
+  },
+  "commands.discovery.search_type_characters": {
+    "other": "Characters"
+  },
+  "commands.discovery.search_type_series": {
+    "other": "Series / Anime"
+  },
+  "commands.discovery.series": {
+    "other": "Browse characters from an anime, manga, or game series"
+  },
+  "commands.discovery.series_query": {
+    "other": "Name or ID of the anime, manga, or game series"
+  },
   "commands.economy.could_not_retrieve_leaderboard": {
     "other": "Could not retrieve leaderboard."
   },

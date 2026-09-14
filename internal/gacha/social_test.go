@@ -508,6 +508,31 @@ func testSocial(t *testing.T, s *Store) {
 		t.Fatalf("expected search by alias to find character, got: %v", searchAliasMsg)
 	}
 
+	// Test SearchCharactersByWork and Execute series command
+	workChars, totalWork, primaryWork, e := s.SearchCharactersByWork(ctx, "social", "anime", 1, 10)
+	must(e)
+	if totalWork == 0 || len(workChars) == 0 {
+		t.Fatalf("expected work characters for 'anime', got total %d", totalWork)
+	}
+	if primaryWork != "anime" {
+		t.Fatalf("expected primaryWork 'anime', got %q", primaryWork)
+	}
+
+	seriesMsg, e := s.Execute(ctx, "social", "channel", "social-alice", "series-test", "series", "anime", 1)
+	must(e)
+	if len(seriesMsg.Embeds) == 0 || !strings.Contains(seriesMsg.Embeds[0].Title, "anime") {
+		t.Fatalf("expected series embed with title anime, got: %v", seriesMsg)
+	}
+	if len(seriesMsg.Components) == 0 {
+		t.Fatal("expected navigation components in series result")
+	}
+
+	nonExistentMsg, e := s.Execute(ctx, "social", "channel", "social-alice", "series-non-existent", "series", "NonExistentSeries123", 1)
+	must(e)
+	if !strings.Contains(nonExistentMsg.Content, "No anime or work found") {
+		t.Fatalf("expected no works found message, got %q", nonExistentMsg.Content)
+	}
+
 	// Test divorce using character alias
 	divorceAliasMsg, e := s.Execute(ctx, "social", "channel", "social-alice", "divorce-alias-test", "divorce", "SocialAlias", 1)
 	must(e)

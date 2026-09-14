@@ -214,6 +214,45 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 		}
 		msg.Embeds = []*discordgo.MessageEmbed{embed}
 		msg.Components = navigation("search", clip(query, 40), page, page < totalPages)
+	case "series":
+		entries, total, workTitle, err := s.SearchCharactersByWork(ctx, guild, query, page, 10)
+		if err != nil {
+			return nil, err
+		}
+		if workTitle == "" {
+			msg.Content = locale.Text("gacha.discord.no_works_found.formatted", locale.Data{"Query": query})
+			return msg, nil
+		}
+		if total == 0 {
+			msg.Content = locale.Text("gacha.discord.no_characters_found_for_work.formatted", locale.Data{"Work": workTitle})
+			return msg, nil
+		}
+
+		totalPages := int((total + 9) / 10)
+		title := locale.Text("gacha.discord.work_catalog_single.formatted", locale.Data{"Work": clip(workTitle, 35), "Total": total})
+		if totalPages > 1 {
+			title = locale.Text("gacha.discord.work_catalog_page.formatted", locale.Data{"Work": clip(workTitle, 35), "Page": page, "TotalPages": totalPages, "Total": total})
+		}
+
+		var b strings.Builder
+		for _, item := range entries {
+			ownerInfo := ""
+			if item.Owner != "" {
+				ownerInfo = fmt.Sprintf(" · 💍 <@%s>", item.Owner)
+			}
+			fmt.Fprintf(&b, "**#%d** `#%d` **%s** — *%s*\n♥ %d%s\n\n", item.Rank, item.ID, clip(safe(item.Name), 40), clip(safe(item.Work), 40), item.Favourites, ownerInfo)
+		}
+
+		embed := &discordgo.MessageEmbed{
+			Title:       title,
+			Description: b.String(),
+			Color:       0x8e44ad,
+			Footer: &discordgo.MessageEmbedFooter{
+				Text: locale.Text("gacha.discord.per_page_use_character_id_for_details"),
+			},
+		}
+		msg.Embeds = []*discordgo.MessageEmbed{embed}
+		msg.Components = navigation("series", clip(query, 40), page, page < totalPages)
 	case "alias":
 		var charQuery, aliasChoice string
 		if strings.Contains(query, " | ") {
@@ -668,7 +707,7 @@ func Slash(s *discordgo.Session, i *discordgo.InteractionCreate) {
 func parseSlash(data discordgo.ApplicationCommandInteractionData) (string, string, int) {
 	action, query, page := data.Name, "", 1
 	member := ""
-	var offerStr, receiveStr, aliasStr string
+	var offerStr, receiveStr, aliasStr, searchType string
 	var offered, requested int64
 	var visual bool
 	var claimFilter, genderFilter string
@@ -678,13 +717,15 @@ func parseSlash(data discordgo.ApplicationCommandInteractionData) (string, strin
 			action = o.StringValue()
 		case "action":
 			action = o.StringValue()
-		case "character", "query", "id", "name":
+		case "character", "query", "id", "name", "series", "work":
 			if o.Type == discordgo.ApplicationCommandOptionInteger {
 				query = strconv.FormatInt(o.IntValue(), 10)
 				offered = o.IntValue()
 			} else {
 				query = o.StringValue()
 			}
+		case "type":
+			searchType = o.StringValue()
 		case "page":
 			page = int(o.IntValue())
 		case "member":
@@ -716,6 +757,9 @@ func parseSlash(data discordgo.ApplicationCommandInteractionData) (string, strin
 		}
 	}
 	action = normalizeAction(action)
+	if action == "search" && searchType == "series" {
+		action = "series"
+	}
 	if offered > 0 && query == "" {
 		query = strconv.FormatInt(offered, 10)
 	}

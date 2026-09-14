@@ -9,7 +9,7 @@ Gacha com catálogo global e coleções exclusivas por servidor. Integração em
 - `/roll`: sorteios com pools por gênero e tipo de obra.
 - **Claim character**: botão para reservar o personagem durante 45 segundos.
 - `/harem`: coleção pessoal ou de outro membro, em lista ou fotos.
-- `/search` e `/info`: pesquisa e detalhes de personagens.
+- `/search`, `/series` e `/info`: pesquisa de personagens, busca por obras/animes e detalhes de personagens.
 - `/gallery`: imagens aprovadas.
 - `/wishlist`: 5 slots iniciais e +2% de chance de spawn para personagens desejados.
 - `/profile`: cotas e disponibilidade de claim.

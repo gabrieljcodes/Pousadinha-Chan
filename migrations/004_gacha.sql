@@ -36,6 +36,7 @@ CREATE INDEX IF NOT EXISTS gacha_assets_available ON gacha_assets(character_id,i
 CREATE INDEX IF NOT EXISTS gacha_character_names ON gacha_characters(lower(name));
 CREATE INDEX IF NOT EXISTS gacha_work_characters ON gacha_character_works(work_id,character_id);
 CREATE INDEX IF NOT EXISTS gacha_source_character ON gacha_character_sources(character_id);
+CREATE INDEX IF NOT EXISTS gacha_works_title ON gacha_works(lower(title));
 CREATE TABLE IF NOT EXISTS gacha_players (
  guild_id TEXT NOT NULL, user_id TEXT NOT NULL REFERENCES users(id),
  window_start TIMESTAMPTZ NOT NULL DEFAULT now(), rolls_used INT NOT NULL DEFAULT 0 CHECK(rolls_used >= 0),

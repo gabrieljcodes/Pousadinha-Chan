@@ -409,11 +409,11 @@ func HandlePage(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 
-	if len(parts) >= 3 && parts[0] == "search" {
+	if len(parts) >= 3 && (parts[0] == "search" || parts[0] == "series") {
 		pageStr := parts[len(parts)-1]
 		searchQuery := strings.Join(parts[1:len(parts)-1], "_")
 		if page, e := strconv.Atoi(pageStr); e == nil && page > 0 && page <= 100000 {
-			msg, e := Default.Execute(ctx, i.GuildID, i.ChannelID, i.Member.User.ID, i.ID, "search", searchQuery, page)
+			msg, e := Default.Execute(ctx, i.GuildID, i.ChannelID, i.Member.User.ID, i.ID, parts[0], searchQuery, page)
 			if e == nil {
 				_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &msg.Content, Embeds: &msg.Embeds, Components: &msg.Components, AllowedMentions: msg.AllowedMentions})
 				return
