@@ -34,9 +34,8 @@ func normalizeAction(action string) string {
 	action = strings.ToLower(action)
 	aliases := map[string]string{
 		"info": "character", "profile": "status", "wishlist": "wishes",
-		"top": "topchar", "harem-ranking": "ranking", "pesquisar": "search",
-		"apelido": "alias", "series": "series", "work": "series",
-		"anime": "series", "obra": "series", "obras": "series",
+		"top": "topchar", "harem-ranking": "ranking",
+		"work": "series", "clear": "wishclear",
 	}
 	if a, ok := aliases[action]; ok {
 		return a

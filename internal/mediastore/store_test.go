@@ -374,3 +374,22 @@ func TestOpenDALCancelledReader(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestVerifyObjectsDoesNotTrustETagAsChecksum(t *testing.T) {
+	makeObject := func(data, etag string) *Object {
+		file, err := os.Open(sourceFile(t, data))
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { file.Close() })
+		return &Object{ReadSeekCloser: file, Size: int64(len(data)), ETag: etag}
+	}
+	// A 32-digit ETag can be opaque (for example with server-side encryption).
+	if err := verifyObjects(makeObject("same", ""), makeObject("same", "00000000000000000000000000000000")); err != nil {
+		t.Fatalf("identical bytes rejected because of opaque ETag: %v", err)
+	}
+	// Matching metadata never proves equal content.
+	if err := verifyObjects(makeObject("aaaa", "etag"), makeObject("bbbb", "etag")); err == nil {
+		t.Fatal("different bytes accepted")
+	}
+}

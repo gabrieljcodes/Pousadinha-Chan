@@ -278,9 +278,6 @@
   "gacha.social.choose_another_server_member": {
     "other": "Choose another server member."
   },
-  "gacha.social.desc_col_user_id_limit_offset": {
-    "other": ") DESC,col.user_id LIMIT 10 OFFSET $2"
-  },
   "gacha.social.divorce_accepts_one_character": {
     "other": "Divorce accepts one character."
   },
@@ -476,6 +473,59 @@
   },
   "gacha.config.footer": {
     "other": "Pousadinha Gacha • Synchronized fixed-clock reset schedule"
+  },
+  "gacha.wishlist.input_limit": {
+    "other": "Provide between 1 and 50 characters, using at most 2,000 characters of text."
+  },
+  "gacha.wishlist.confirmation_expired": {
+    "other": "This confirmation has expired or was already used. Run /wishclear again."
+  },
+  "gacha.wishlist.added": {
+    "other": "Added"
+  },
+  "gacha.wishlist.removed": {
+    "other": "Removed"
+  },
+  "gacha.wishlist.unchanged": {
+    "other": "Already on your wishlist"
+  },
+  "gacha.wishlist.not_in_list": {
+    "other": "Not found on your wishlist"
+  },
+  "gacha.wishlist.not_found": {
+    "other": "Character not found"
+  },
+  "gacha.wishlist.ambiguous": {
+    "other": "Multiple matches — use the character ID"
+  },
+  "gacha.wishlist.overflow": {
+    "other": "Skipped: wishlist limit reached"
+  },
+  "gacha.wishlist.updated": {
+    "other": "Wishlist updated"
+  },
+  "gacha.wishlist.empty": {
+    "other": "Your wishlist is already empty."
+  },
+  "gacha.wishlist.confirm_clear": {
+    "other": "Clear all characters from your wishlist? It currently contains {{.Count}} entries. This confirmation expires in 5 minutes."
+  },
+  "gacha.wishlist.confirm_button": {
+    "other": "Clear wishlist"
+  },
+  "gacha.wishlist.cancel_button": {
+    "other": "Cancel"
+  },
+  "gacha.wishlist.confirmation_owner": {
+    "other": "Only the person who requested this confirmation can use it."
+  },
+  "gacha.wishlist.cancelled": {
+    "other": "Wishlist clearing cancelled."
+  },
+  "gacha.wishlist.cleared": {
+    "other": "Removed {{.Count}} characters from your wishlist."
+  },
+  "gacha.wishlist.already": {
+    "other": "`{{.Id}}` {{.Name}} is already on your wishlist."
   }
 }
-

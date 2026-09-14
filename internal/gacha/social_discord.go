@@ -130,16 +130,16 @@ WHERE col.guild_id = $1 AND col.user_id = $2
     lower(COALESCE(ga.alias, c.name)) = lower($3)
     OR ga.alias ILIKE '%' || $3 || '%'
     OR lower(c.name) = lower($3)
-    OR EXISTS(SELECT 1 FROM jsonb_array_elements_text(c.aliases) al WHERE lower(al) = lower($3))
+    OR EXISTS(SELECT 1 FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(c.aliases)='array' THEN c.aliases ELSE '[]'::jsonb END) al WHERE lower(al) = lower($3))
     OR lower(c.name) LIKE lower($3) || '%'
     OR c.name ILIKE '%' || $3 || '%'
     OR c.native_name ILIKE '%' || $3 || '%'
-    OR EXISTS(SELECT 1 FROM jsonb_array_elements_text(c.aliases) al WHERE al ILIKE '%' || $3 || '%')
+    OR EXISTS(SELECT 1 FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(c.aliases)='array' THEN c.aliases ELSE '[]'::jsonb END) al WHERE al ILIKE '%' || $3 || '%')
   )
 ORDER BY
   CASE WHEN lower(COALESCE(ga.alias, c.name)) = lower($3) THEN 0
        WHEN lower(c.name) = lower($3) THEN 1
-       WHEN EXISTS(SELECT 1 FROM jsonb_array_elements_text(c.aliases) al WHERE lower(al) = lower($3)) THEN 2
+       WHEN EXISTS(SELECT 1 FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(c.aliases)='array' THEN c.aliases ELSE '[]'::jsonb END) al WHERE lower(al) = lower($3)) THEN 2
        WHEN lower(c.name) LIKE lower($3) || '%' THEN 3
        ELSE 4 END,
   c.favourites DESC, c.id ASC
@@ -150,7 +150,6 @@ LIMIT 1`
 			return haremID, nil
 		}
 	}
-
 
 	// 3. Fall back to catalog search via FindCharacter
 	card, _, err := s.FindCharacter(ctx, guild, query)

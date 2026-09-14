@@ -222,6 +222,13 @@ func TestPostgresGame(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
+	// An empty game-only pool must not silently return an anime character.
+	if _, err := store.RollPool(ctx, "guild", "channel", "alice", "empty-game", "wg"); err != ErrEmpty {
+		t.Fatalf("empty game pool returned %v, want ErrEmpty", err)
+	}
+	if err := db.QueryRow(`SELECT count(*) FROM gacha_rolls`).Scan(&count); err != nil || count != 0 {
+		t.Fatal("empty game pool persisted a roll", err)
+	}
 	roll, e := store.Roll(ctx, "guild", "channel", "alice", "r1")
 	if e != nil {
 		t.Fatal(e)
@@ -346,6 +353,7 @@ func TestPostgresGame(t *testing.T) {
 		t.Fatal("rejected asset served")
 	}
 	t.Run("social", func(t *testing.T) { testSocial(t, store) })
+	t.Run("wishlist_regression", func(t *testing.T) { testWishlistRegression(t, store) })
 	t.Run("progression", func(t *testing.T) { testProgression(t, store) })
 	t.Run("batch", func(t *testing.T) { testBatch(t, store); testBatchCache(t, store) })
 	t.Run("runtime", func(t *testing.T) { testRuntime(t, store) })

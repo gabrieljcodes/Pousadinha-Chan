@@ -37,7 +37,7 @@ rolls; rolling your own character earns a key.
 | `/harem-ranking [page]` | Server collections ranked by total value |
 | `/gallery character:<ID> [page]` | Approved images |
 | `/keys character:<ID>` | Keys and the next value milestone |
-| `/wishlist action:<action> [character]` | View, add or remove wishes |
+| `/wishlist action:<action> [character]` | View, add, remove or clear wishes with confirmation |
 | `/alias character:<name or ID> [alias]` | Change or list the display alias of a married character |
 | `/offers [action] [id]` | List or respond to pending offers |
 | `/help` | Bot command reference |
@@ -133,3 +133,5 @@ GACHA_TEST_DATABASE_URL='postgres://postgres:gacha-test@127.0.0.1:55441/gacha_te
 ```
 
 Integration tests use a unique disposable schema and cover all roll pools, shared quotas, empty-filter rollback, duplicate confirmations, cross-guild/channel rejection, exact wallet credit, frozen quotes, stale ownership, trade-versus-divorce concurrency, rejected/expired offers, current-value totals and atomic rollback. Progression tests also cover exact SQL/Go valuation, guild bonus isolation, key milestones, duplicate/concurrent rewards, gift lineage, delivery refunds, divorce reset, uncapped quotes and migration replay. They do not alter the live character catalog or real Discord collections. Discord delivery still requires a live bot smoke test after deployment.
+
+Wishlist commands accept multiple character IDs or names separated by commas, semicolons or newlines (up to 50 inputs per command). `/wish character:123, 456` adds entries in order and ignores entries beyond the available slots. `/unwish character:123, 456` removes matching wishes, including hidden characters. Ambiguous names are skipped; use IDs to disambiguate. `/wishclear` asks for confirmation valid for five minutes, restricted to the requesting user, server and channel. Cancelled or completed confirmations cannot be reused. All replies are localized through the English message catalog.

@@ -292,7 +292,7 @@ func (s *Store) Rankings(ctx context.Context, guild string, page int) ([]Ranking
 	if page < 1 || page > 100000 {
 		return nil, userError(locale.Text("gacha.discord.invalid_page"))
 	}
-	rows, e := s.DB.QueryContext(ctx, populationSQL+`SELECT col.user_id,count(*),sum(`+characterValueSQL+`)::bigint FROM gacha_collection col JOIN gacha_characters c ON c.id=col.character_id CROSS JOIN pop WHERE col.guild_id=$1 GROUP BY col.user_id ORDER BY sum(`+characterValueSQL+locale.Text("gacha.social.desc_col_user_id_limit_offset"), guild, (page-1)*10)
+	rows, e := s.DB.QueryContext(ctx, populationSQL+`SELECT col.user_id,count(*),sum(`+characterValueSQL+`)::bigint FROM gacha_collection col JOIN gacha_characters c ON c.id=col.character_id CROSS JOIN pop WHERE col.guild_id=$1 GROUP BY col.user_id ORDER BY sum(`+characterValueSQL+`) DESC,col.user_id LIMIT 10 OFFSET $2`, guild, (page-1)*10)
 	if e != nil {
 		return nil, e
 	}
@@ -354,11 +354,6 @@ func (s *Store) SetCharacterAlias(ctx context.Context, guild, user string, charI
 		}
 	}
 
-	// If character has no alternative aliases registered
-	if len(validAliases) == 0 {
-		return AliasResult{CanonicalName: name}, userError(locale.Text("gacha.social.character_has_no_aliases.formatted", locale.Data{"Name": name}))
-	}
-
 	// 3. Query current active guild alias (if any)
 	var currentAlias string
 	_ = tx.QueryRowContext(ctx, `SELECT alias FROM gacha_guild_character_aliases WHERE guild_id=$1 AND character_id=$2`, guild, charID).Scan(&currentAlias)
@@ -387,6 +382,10 @@ func (s *Store) SetCharacterAlias(ctx context.Context, guild, user string, charI
 			Available:     validAliases,
 			Reset:         true,
 		}, nil
+	}
+
+	if len(validAliases) == 0 {
+		return AliasResult{CanonicalName: name}, userError(locale.Text("gacha.social.character_has_no_aliases.formatted", locale.Data{"Name": name}))
 	}
 
 	// 6. Match against registered aliases (case-insensitive)
@@ -423,4 +422,3 @@ func (s *Store) SetCharacterAlias(ctx context.Context, guild, user string, charI
 		Available:     validAliases,
 	}, nil
 }
-

@@ -186,15 +186,10 @@ func (s *Store) CopyLocal(ctx context.Context, key, contentType string) error {
 	defer src.Close()
 	dst, err := s.primary.Open(ctx, key)
 	if errors.Is(err, fs.ErrNotExist) {
-		var etag string
-		if etag, err = s.remote.putIfAbsent(ctx, key, src, contentType); err != nil {
+		if _, err = s.remote.putIfAbsent(ctx, key, src, contentType); err != nil {
 			return err
 		}
-		if etag != "" {
-			dst = &Object{Size: src.Size, ETag: etag}
-		} else {
-			dst, err = s.primary.Open(ctx, key)
-		}
+		dst, err = s.primary.Open(ctx, key)
 	}
 	if err != nil {
 		return err

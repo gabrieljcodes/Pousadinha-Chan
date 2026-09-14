@@ -165,37 +165,17 @@ WHERE w.guild_id = $1 AND w.user_id = $2
 	// Rejection sampling handles a snapshot racing an editorial change. Each
 	// attempt validates current eligibility using a primary-key lookup.
 	if !found {
-		poolIDs := snapshot.IDs[pool.Code]
-		activeGender := pool.Gender
-		activeKind := pool.Kind
-		if len(poolIDs) == 0 {
-			// If a specific sub-pool has no characters (e.g. game characters in an anime-only catalog), gracefully fall back
-			if activeGender != "" && len(snapshot.IDs[activeGender]) > 0 {
-				poolIDs = snapshot.IDs[activeGender]
-				activeKind = ""
-			} else if len(snapshot.IDs["roll"]) > 0 {
-				poolIDs = snapshot.IDs["roll"]
-				activeGender = ""
-				activeKind = ""
-			}
-		}
-
-		for attempt := 0; attempt < 32; attempt++ {
-			id, sampleErr := sampleID(poolIDs)
+		for attempt := 0; attempt < 8; attempt++ {
+			id, sampleErr := sampleID(snapshot.IDs[pool.Code])
 			if sampleErr == ErrEmpty {
 				return r, errStalePool
 			}
 			if sampleErr != nil {
 				return r, sampleErr
 			}
-			r.Card, e = scanCard(tx.QueryRowContext(ctx, cardSelect+` WHERE `+eligible, activeGender, activeKind, id))
+			r.Card, e = scanCard(tx.QueryRowContext(ctx, cardSelect+` WHERE `+eligible, pool.Gender, pool.Kind, id))
 			if e == sql.ErrNoRows {
-				if activeKind != "" {
-					r.Card, e = scanCard(tx.QueryRowContext(ctx, cardSelect+` WHERE `+eligible, activeGender, "", id))
-				}
-				if e == sql.ErrNoRows {
-					continue
-				}
+				continue
 			}
 			if e != nil {
 				return r, e
@@ -310,7 +290,7 @@ WHERE c.enabled
   AND (
     c.name ILIKE '%'||$2||'%' 
     OR c.native_name ILIKE '%'||$2||'%' 
-    OR EXISTS(SELECT 1 FROM jsonb_array_elements_text(c.aliases) al WHERE al ILIKE '%'||$2||'%')
+    OR EXISTS(SELECT 1 FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(c.aliases)='array' THEN c.aliases ELSE '[]'::jsonb END) al WHERE al ILIKE '%'||$2||'%')
     OR ga.alias ILIKE '%'||$2||'%'
     OR ($3 > 0 AND c.id = $3)
   )`
@@ -335,7 +315,7 @@ WHERE c.enabled
   AND (
     c.name ILIKE '%'||$2||'%' 
     OR c.native_name ILIKE '%'||$2||'%' 
-    OR EXISTS(SELECT 1 FROM jsonb_array_elements_text(c.aliases) al WHERE al ILIKE '%'||$2||'%')
+    OR EXISTS(SELECT 1 FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(c.aliases)='array' THEN c.aliases ELSE '[]'::jsonb END) al WHERE al ILIKE '%'||$2||'%')
     OR ga.alias ILIKE '%'||$2||'%'
     OR ($3 > 0 AND c.id = $3)
   )
@@ -489,7 +469,7 @@ func (s *Store) Cards(ctx context.Context, guild, user, search string, page int)
 	if page < 1 || page > 100000 {
 		return nil, userError(locale.Text("gacha.discord.invalid_page"))
 	}
-	rows, e := s.DB.QueryContext(ctx, cardSelect+` LEFT JOIN gacha_collection valued ON valued.character_id=c.id AND valued.guild_id=$2 LEFT JOIN gacha_guild_character_aliases ga ON ga.character_id=c.id AND ga.guild_id=$2 CROSS JOIN (SELECT gacha_claimed_count($2) AS claimed) population WHERE ($1='' OR EXISTS(SELECT 1 FROM gacha_collection col WHERE col.character_id=c.id AND col.guild_id=$2 AND col.user_id=$1)) AND ($3='' OR c.name ILIKE '%'||$3||'%' OR c.id::text=$3 OR c.native_name ILIKE '%'||$3||'%' OR EXISTS(SELECT 1 FROM jsonb_array_elements_text(c.aliases) alias WHERE alias ILIKE '%'||$3||'%') OR ga.alias ILIKE '%'||$3||'%') ORDER BY gacha_character_value(c.favourites,population.claimed,COALESCE(valued.keys,0)) DESC,c.id LIMIT 10 OFFSET $4`, user, guild, search, (page-1)*10)
+	rows, e := s.DB.QueryContext(ctx, cardSelect+` LEFT JOIN gacha_collection valued ON valued.character_id=c.id AND valued.guild_id=$2 LEFT JOIN gacha_guild_character_aliases ga ON ga.character_id=c.id AND ga.guild_id=$2 CROSS JOIN (SELECT gacha_claimed_count($2) AS claimed) population WHERE ($1='' OR EXISTS(SELECT 1 FROM gacha_collection col WHERE col.character_id=c.id AND col.guild_id=$2 AND col.user_id=$1)) AND ($3='' OR c.name ILIKE '%'||$3||'%' OR c.id::text=$3 OR c.native_name ILIKE '%'||$3||'%' OR EXISTS(SELECT 1 FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(c.aliases)='array' THEN c.aliases ELSE '[]'::jsonb END) alias WHERE alias ILIKE '%'||$3||'%') OR ga.alias ILIKE '%'||$3||'%') ORDER BY gacha_character_value(c.favourites,population.claimed,COALESCE(valued.keys,0)) DESC,c.id LIMIT 10 OFFSET $4`, user, guild, search, (page-1)*10)
 
 	if e != nil {
 		return nil, e
@@ -635,7 +615,7 @@ func (s *Store) FindCharacter(ctx context.Context, guild string, query string) (
 	const searchSQL = cardSelect + `
 LEFT JOIN gacha_guild_character_aliases ga ON ga.character_id=c.id AND ga.guild_id=$2
 WHERE c.enabled AND EXISTS(SELECT 1 FROM gacha_assets a WHERE a.character_id=c.id AND a.status='approved')
-  AND (c.name ILIKE '%'||$1||'%' OR c.native_name ILIKE '%'||$1||'%' OR EXISTS(SELECT 1 FROM jsonb_array_elements_text(c.aliases) al WHERE al ILIKE '%'||$1||'%') OR ga.alias ILIKE '%'||$1||'%')
+  AND (c.name ILIKE '%'||$1||'%' OR c.native_name ILIKE '%'||$1||'%' OR EXISTS(SELECT 1 FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(c.aliases)='array' THEN c.aliases ELSE '[]'::jsonb END) al WHERE al ILIKE '%'||$1||'%') OR ga.alias ILIKE '%'||$1||'%')
 ORDER BY
   CASE WHEN lower(COALESCE(ga.alias, c.name)) = lower($1) THEN 0
        WHEN lower(COALESCE(ga.alias, c.name)) LIKE lower($1)||'%' THEN 1

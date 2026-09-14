@@ -746,9 +746,6 @@
   "commands.gacha.browse_your_character_collection_or_another_member": {
     "other": "Browse your character collection or another member’s"
   },
-  "commands.gacha.character_id_required_to_add_or_remove": {
-    "other": "Character ID (required to add or remove a wish)"
-  },
   "commands.gacha.character_name_or_id": {
     "other": "Character name or ID"
   },
@@ -1456,5 +1453,14 @@
   },
   "commands.components.this_bot_can_only_be_used_in": {
     "other": "This bot can only be used in designated channels."
+  },
+  "commands.gacha.wishlist_clear": {
+    "other": "Clear wishlist (confirmation required)"
+  },
+  "commands.gacha.wishlist_clear_description": {
+    "other": "Clear your wishlist after confirmation"
+  },
+  "commands.gacha.wishlist_characters": {
+    "other": "Character IDs or names; separate multiple entries with commas or semicolons"
   }
 }

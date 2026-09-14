@@ -57,6 +57,9 @@ func (s *Store) Migrate(ctx context.Context) error {
 	if _, e = tx.ExecContext(ctx, migrations.GachaSchedule); e != nil {
 		return e
 	}
+	if _, e = tx.ExecContext(ctx, migrations.WishlistConfirmations); e != nil {
+		return e
+	}
 	return tx.Commit()
 }
 

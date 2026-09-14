@@ -1,12 +1,10 @@
 package mediastore
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
-	"os"
 	"sync"
 	"time"
 
@@ -39,50 +37,6 @@ func nativeError(err error) error {
 	default:
 		return fmt.Errorf("OpenDAL operation failed (code %d)", native.Code())
 	}
-}
-
-// nativeReader owns both the OpenDAL reader and the pinned filesystem descriptor.
-// Serializing Close with Read/Seek prevents freeing native memory during an IO.
-type nativeReader struct {
-	mu     sync.Mutex
-	ctx    context.Context
-	reader *opendal.Reader
-	file   *os.File
-	closed bool
-}
-
-func (r *nativeReader) Read(p []byte) (int, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.closed {
-		return 0, fs.ErrClosed
-	}
-	if err := r.ctx.Err(); err != nil {
-		return 0, err
-	}
-	n, err := r.reader.Read(p)
-	return n, nativeError(err)
-}
-func (r *nativeReader) Seek(offset int64, whence int) (int64, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.closed {
-		return 0, fs.ErrClosed
-	}
-	if err := r.ctx.Err(); err != nil {
-		return 0, err
-	}
-	n, err := r.reader.Seek(offset, whence)
-	return n, nativeError(err)
-}
-func (r *nativeReader) Close() error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.closed {
-		return nil
-	}
-	r.closed = true
-	return errors.Join(nativeError(r.reader.Close()), r.file.Close())
 }
 
 type leasedReader struct {

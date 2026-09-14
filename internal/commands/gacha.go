@@ -65,6 +65,7 @@ func init() {
 		{Name: locale.Text("commands.gacha.view_wishlist"), Value: "wishes"},
 		{Name: locale.Text("commands.gacha.add_a_character"), Value: "wish"},
 		{Name: locale.Text("commands.gacha.remove_a_character"), Value: "unwish"},
+		{Name: locale.Text("commands.gacha.wishlist_clear"), Value: "wishclear"},
 	}
 
 	SlashCommands = append(SlashCommands,
@@ -142,7 +143,7 @@ func init() {
 			DMPermission: &dm,
 			Options: []*discordgo.ApplicationCommandOption{
 				{Type: discordgo.ApplicationCommandOptionString, Name: "action", Description: locale.Text("commands.gacha.wishlist_action"), Required: false, Choices: wishlistActionChoices},
-				{Type: discordgo.ApplicationCommandOptionString, Name: "character", Description: locale.Text("commands.gacha.character_id_required_to_add_or_remove"), Required: false},
+				{Type: discordgo.ApplicationCommandOptionString, Name: "character", Description: locale.Text("commands.gacha.wishlist_characters"), Required: false},
 			},
 		},
 
@@ -152,7 +153,7 @@ func init() {
 			Description:  locale.Text("commands.gacha.add_a_character_to_your_wishlist"),
 			DMPermission: &dm,
 			Options: []*discordgo.ApplicationCommandOption{
-				{Type: discordgo.ApplicationCommandOptionString, Name: "character", Description: locale.Text("commands.gacha.character_name_or_id"), Required: true},
+				{Type: discordgo.ApplicationCommandOptionString, Name: "character", Description: locale.Text("commands.gacha.wishlist_characters"), Required: true},
 			},
 		},
 
@@ -162,11 +163,13 @@ func init() {
 			Description:  locale.Text("commands.gacha.remove_a_character_from_your_wishlist"),
 			DMPermission: &dm,
 			Options: []*discordgo.ApplicationCommandOption{
-				{Type: discordgo.ApplicationCommandOptionString, Name: "character", Description: locale.Text("commands.gacha.character_name_or_id"), Required: true},
+				{Type: discordgo.ApplicationCommandOptionString, Name: "character", Description: locale.Text("commands.gacha.wishlist_characters"), Required: true},
 			},
 		},
 
-		// 8. /troca
+		&discordgo.ApplicationCommand{Name: "wishclear", Description: locale.Text("commands.gacha.wishlist_clear_description"), DMPermission: &dm},
+
+		// 8. /trade
 		&discordgo.ApplicationCommand{
 			Name:         "trade",
 			Description:  locale.Text("commands.gacha.offer_a_character_trade_to_another_member"),

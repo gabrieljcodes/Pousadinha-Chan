@@ -2,16 +2,13 @@ package mediastore
 
 import (
 	"context"
-	"crypto/md5"
 	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
 	"os"
 	"path"
-	"strings"
 
 	odfs "github.com/apache/opendal-go-services/fs"
 	opendal "github.com/apache/opendal/bindings/go"
@@ -210,22 +207,6 @@ func (r *contextReader) Read(p []byte) (int, error) {
 func verifyObjects(a, b *Object) error {
 	if a.Size != b.Size {
 		return fmt.Errorf("media size mismatch; local file retained")
-	}
-	if b.ETag != "" {
-		clean := strings.Trim(b.ETag, "\"")
-		if len(clean) == 32 && !strings.Contains(clean, "-") {
-			if _, err := a.Seek(0, io.SeekStart); err != nil {
-				return err
-			}
-			h := md5.New()
-			if _, err := io.Copy(h, a); err != nil {
-				return err
-			}
-			if hex.EncodeToString(h.Sum(nil)) == strings.ToLower(clean) {
-				return nil
-			}
-			return fmt.Errorf("media checksum mismatch; local file retained")
-		}
 	}
 	if _, err := a.Seek(0, io.SeekStart); err != nil {
 		return err

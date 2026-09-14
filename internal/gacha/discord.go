@@ -364,7 +364,6 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 				embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: locale.Text("gacha.discord.original_name"), Value: clip(safe(c.OriginalName), 100), Inline: true})
 			}
 
-
 			if c.Owner != "" {
 				embed.Description += locale.Text("gacha.discord.claimed_by.formatted", locale.Data{"Owner": c.Owner})
 			} else {
@@ -595,22 +594,17 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 		msg.Components = navigation("top", "0", page, len(ranks) == 10)
 		msg.Embeds = []*discordgo.MessageEmbed{{Title: locale.Text("gacha.discord.harem_leaderboard_page.formatted", locale.Data{"Page": page}), Description: b.String(), Color: 0xc5a66b}}
 	case "wish", "unwish":
-		targetCard, _, err := s.FindCharacter(ctx, guild, query)
+		inputs, err := SplitWishlistInput(query)
 		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return nil, userError(locale.Text("gacha.discord.character_not_found_try_another_name_with.formatted", locale.Data{"Query": query}))
-			}
 			return nil, err
 		}
-		remove := action == "unwish"
-		if err := s.Wish(ctx, guild, user, targetCard.ID, remove); err != nil {
+		result, err := s.UpdateWishlist(ctx, guild, user, inputs, action == "unwish")
+		if err != nil {
 			return nil, err
 		}
-		if remove {
-			msg.Content = locale.Text("gacha.discord.character_removed_from_your_wishlist.formatted", locale.Data{"Id": targetCard.ID, "Name": targetCard.Name})
-		} else {
-			msg.Content = locale.Text("gacha.discord.character_added_to_your_wishlist_its_rolls.formatted", locale.Data{"Id": targetCard.ID, "Name": targetCard.Name})
-		}
+		return wishlistResultMessage(result, action == "unwish"), nil
+	case "wishclear":
+		return s.wishlistClearMessage(ctx, guild, channel, user)
 	case "wishes":
 		rows, err := s.DB.QueryContext(ctx, `SELECT c.id, c.name, COALESCE(cw.title, '') FROM gacha_wishes w JOIN gacha_characters c ON c.id=w.character_id LEFT JOIN LATERAL (SELECT title FROM gacha_character_works rel JOIN gacha_works gw ON gw.id=rel.work_id WHERE rel.character_id=c.id ORDER BY gw.id LIMIT 1) cw ON true WHERE w.guild_id=$1 AND w.user_id=$2 ORDER BY c.id`, guild, user)
 		if err != nil {

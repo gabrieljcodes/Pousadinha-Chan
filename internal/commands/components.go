@@ -42,7 +42,9 @@ func ComponentsHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		return
 	}
 
-	if strings.HasPrefix(customID, "gacha_page_") {
+	if strings.HasPrefix(customID, "gacha_wishclear:") {
+		gacha.HandleWishlistClear(s, i)
+	} else if strings.HasPrefix(customID, "gacha_page_") {
 		gacha.HandlePage(s, i)
 	} else if strings.HasPrefix(customID, "gacha_action_") {
 		gacha.HandleAction(s, i)

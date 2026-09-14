@@ -399,7 +399,7 @@ func testSocial(t *testing.T, s *Store) {
 	// Test wishlist Execution with numeric ID and name
 	wishMsg, e := s.Execute(ctx, "social", "channel", "social-alice", "wish-test", "wish", fmt.Sprintf("%d", ids[1]), 1)
 	must(e)
-	if !strings.Contains(wishMsg.Content, "added to your wishlist") || !strings.Contains(wishMsg.Content, "Social 1") {
+	if !strings.Contains(wishMsg.Content, "already on your wishlist") || !strings.Contains(wishMsg.Content, "Social 1") {
 		t.Fatalf("unexpected wishMsg: %q", wishMsg.Content)
 	}
 
@@ -636,4 +636,3 @@ func testSocial(t *testing.T, s *Store) {
 		t.Fatalf("expected Card.Name to be restored to Social 1, got: %q", cardReset.Name)
 	}
 }
-
