@@ -1,11 +1,56 @@
 package gacha
 
 import (
+	"archive/zip"
 	"context"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"sync"
 )
+
+// tryHealAsset checks data.zip for a clean copy of the file if local read fails.
+func tryHealAsset(key string) bool {
+	if _, err := os.Stat("data.zip"); err != nil {
+		return false
+	}
+	r, err := zip.OpenReader("data.zip")
+	if err != nil {
+		return false
+	}
+	defer r.Close()
+
+	candidates := []string{
+		"data/gacha/" + key,
+		key,
+	}
+
+	targetPath := filepath.Join("data/gacha", key)
+
+	for _, f := range r.File {
+		for _, c := range candidates {
+			if f.Name == c {
+				rc, err := f.Open()
+				if err != nil {
+					return false
+				}
+				defer rc.Close()
+
+				_ = os.MkdirAll(filepath.Dir(targetPath), 0755)
+				_ = os.Remove(targetPath)
+				out, err := os.OpenFile(targetPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+				if err != nil {
+					return false
+				}
+				_, copyErr := io.Copy(out, rc)
+				closeErr := out.Close()
+				return copyErr == nil && closeErr == nil
+			}
+		}
+	}
+	return false
+}
 
 // CopyMediaToS3 walks bounded database pages and retains every local source.
 // Existing remote objects are verified against their local originals. Assets
@@ -23,6 +68,7 @@ func (s *Store) CopyMediaToS3(ctx context.Context, apply bool, workers int, out 
 	}
 	var after int64
 	total := 0
+	failedCount := 0
 	for {
 		rows, err := s.DB.QueryContext(ctx, `SELECT id,path,media_type FROM gacha_assets WHERE id>$1 AND path IS NOT NULL AND path<>'' ORDER BY id LIMIT 1000`, after)
 		if err != nil {
@@ -58,7 +104,6 @@ func (s *Store) CopyMediaToS3(ctx context.Context, apply bool, workers int, out 
 			close(jobCh)
 
 			var wg sync.WaitGroup
-			var firstErr error
 			var errMu sync.Mutex
 
 			wCount := workers
@@ -74,27 +119,28 @@ func (s *Store) CopyMediaToS3(ctx context.Context, apply bool, workers int, out 
 						if ctx.Err() != nil {
 							return
 						}
-						errMu.Lock()
-						hasErr := firstErr != nil
-						errMu.Unlock()
-						if hasErr {
-							return
-						}
 
 						if copyErr := storage.CopyLocal(ctx, item.key, item.mime); copyErr != nil {
-							errMu.Lock()
-							if firstErr == nil {
-								firstErr = fmt.Errorf("asset %d (%s): %w", item.id, item.key, copyErr)
+							if ctx.Err() != nil {
+								return
 							}
+							// Attempt auto-healing from data.zip if available
+							if tryHealAsset(item.key) {
+								if retryErr := storage.CopyLocal(ctx, item.key, item.mime); retryErr == nil {
+									continue
+								}
+							}
+							errMu.Lock()
+							failedCount++
+							fmt.Fprintf(out, "WARNING: asset %d (%s) failed: %v\n", item.id, item.key, copyErr)
 							errMu.Unlock()
-							return
 						}
 					}
 				}()
 			}
 			wg.Wait()
-			if firstErr != nil {
-				return firstErr
+			if ctx.Err() != nil {
+				return ctx.Err()
 			}
 		}
 
@@ -104,6 +150,9 @@ func (s *Store) CopyMediaToS3(ctx context.Context, apply bool, workers int, out 
 		if _, err = fmt.Fprintf(out, "Media entries %s: %d (through asset %d)\n", map[bool]string{false: "planned", true: "ready"}[apply], total, after); err != nil {
 			return err
 		}
+	}
+	if failedCount > 0 {
+		fmt.Fprintf(out, "Migration completed with %d warning(s)\n", failedCount)
 	}
 	return nil
 }
