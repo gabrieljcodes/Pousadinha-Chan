@@ -7,7 +7,9 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
+	"sync/atomic"
 )
 
 // tryHealAsset checks data.zip for a clean copy of the file if local read fails.
@@ -156,3 +158,130 @@ func (s *Store) CopyMediaToS3(ctx context.Context, apply bool, workers int, out 
 	}
 	return nil
 }
+
+// CopyDiskMediaToS3 walks the local data/gacha directory and uploads any media files
+// (png, jpg, jpeg, gif, webp) to S3 that are not yet uploaded.
+func (s *Store) CopyDiskMediaToS3(ctx context.Context, apply bool, skipMal bool, workers int, out io.Writer) error {
+	if s.Config.Storage.Backend != "s3" {
+		return fmt.Errorf("set GACHA_STORAGE_BACKEND=s3 before copying media")
+	}
+	storage, err := s.MediaStorage()
+	if err != nil {
+		return err
+	}
+	if workers <= 0 {
+		workers = 64
+	}
+
+	mediaDir := s.Config.Storage.Directory
+	if mediaDir == "" {
+		mediaDir = "data/gacha"
+	}
+
+	type diskEntry struct {
+		key, mime string
+	}
+
+	var entries []diskEntry
+	err = filepath.WalkDir(mediaDir, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if d.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(mediaDir, path)
+		if err != nil {
+			return err
+		}
+		key := filepath.ToSlash(rel)
+		if skipMal && strings.HasPrefix(key, "mal/") {
+			return nil
+		}
+		ext := strings.ToLower(filepath.Ext(key))
+		var mimeType string
+		switch ext {
+		case ".png":
+			mimeType = "image/png"
+		case ".jpg", ".jpeg":
+			mimeType = "image/jpeg"
+		case ".gif":
+			mimeType = "image/gif"
+		case ".webp":
+			mimeType = "image/webp"
+		default:
+			return nil // Skip non-image files like .log, .pid
+		}
+		entries = append(entries, diskEntry{key: key, mime: mimeType})
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintf(out, "Found %d media files on disk in %s (skipMal=%v)\n", len(entries), mediaDir, skipMal)
+
+	if !apply {
+		fmt.Fprintf(out, "Dry run completed. Pass --apply to upload.\n")
+		return nil
+	}
+
+	jobCh := make(chan diskEntry, len(entries))
+	for _, item := range entries {
+		jobCh <- item
+	}
+	close(jobCh)
+
+	var wg sync.WaitGroup
+	var errMu sync.Mutex
+	var processed int64
+	var failedCount int
+
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for item := range jobCh {
+				if ctx.Err() != nil {
+					return
+				}
+
+				if copyErr := storage.CopyLocal(ctx, item.key, item.mime); copyErr != nil {
+					if ctx.Err() != nil {
+						return
+					}
+					if tryHealAsset(item.key) {
+						if retryErr := storage.CopyLocal(ctx, item.key, item.mime); retryErr == nil {
+							curr := atomic.AddInt64(&processed, 1)
+							if curr%500 == 0 || curr == int64(len(entries)) {
+								fmt.Fprintf(out, "Disk media entries ready: %d / %d\n", curr, len(entries))
+							}
+							continue
+						}
+					}
+					errMu.Lock()
+					failedCount++
+					fmt.Fprintf(out, "WARNING: disk asset (%s) failed: %v\n", item.key, copyErr)
+					errMu.Unlock()
+				}
+
+				curr := atomic.AddInt64(&processed, 1)
+				if curr%500 == 0 || curr == int64(len(entries)) {
+					fmt.Fprintf(out, "Disk media entries ready: %d / %d\n", curr, len(entries))
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	if failedCount > 0 {
+		fmt.Fprintf(out, "Disk migration completed with %d warning(s)\n", failedCount)
+	} else {
+		fmt.Fprintf(out, "All %d disk media files verified/uploaded successfully!\n", len(entries))
+	}
+	return nil
+}
+

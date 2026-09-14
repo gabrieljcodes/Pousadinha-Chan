@@ -57,11 +57,16 @@ func run() error {
 		flags := flag.NewFlagSet("media-copy", flag.ContinueOnError)
 		apply := flags.Bool("apply", false, "Copy local media to S3 and verify contents; retain local originals")
 		workers := flags.Int("workers", 64, "Number of concurrent upload workers")
+		fromDisk := flags.Bool("from-disk", false, "Scan local directory directly instead of database")
+		skipMal := flags.Bool("skip-mal", false, "Skip mal/ prefix (already synced)")
 		if e = flags.Parse(args); e != nil {
 			return e
 		}
 		if flags.NArg() != 0 {
-			return fmt.Errorf("media-copy accepts only --apply and --workers")
+			return fmt.Errorf("media-copy accepts only --apply, --workers, --from-disk, and --skip-mal")
+		}
+		if *fromDisk {
+			return s.CopyDiskMediaToS3(ctx, *apply, *skipMal, *workers, os.Stdout)
 		}
 		return s.CopyMediaToS3(ctx, *apply, *workers, os.Stdout)
 	case "clear-lease":
