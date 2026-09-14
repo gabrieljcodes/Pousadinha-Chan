@@ -28,6 +28,15 @@ func respondEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, embed *d
 	})
 }
 
+func isGachaCommand(name string) bool {
+	switch name {
+	case "roll", "top", "info", "harem", "profile", "gallery", "wishlist", "wish", "unwish", "wishclear", "trade", "gift", "divorce", "keys", "offers", "search", "harem-ranking", "alias", "series":
+		return true
+	default:
+		return false
+	}
+}
+
 func SlashHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if i.Type != discordgo.InteractionApplicationCommand {
 		return
@@ -47,19 +56,23 @@ func SlashHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	// Check if channel is allowed
 	if !config.Bot.IsChannelAllowed(i.ChannelID) {
 		allowedInSpecial := false
-		if i.ApplicationCommandData().Name == "poly" && i.GuildID != "" {
+		cmdName := i.ApplicationCommandData().Name
+		if isGachaCommand(cmdName) {
+			allowedInSpecial = true
+		}
+		if cmdName == "poly" && i.GuildID != "" {
 			settings, _ := database.GetGuildPolymarketSettings(i.GuildID)
 			if settings != nil && settings.ChannelID == i.ChannelID {
 				allowedInSpecial = true
 			}
 		}
-		if i.ApplicationCommandData().Name == "bicho" && i.GuildID != "" {
+		if cmdName == "bicho" && i.GuildID != "" {
 			bichoSettings, _ := database.GetBichoSettings(i.GuildID)
 			if bichoSettings != nil && bichoSettings.ChannelID == i.ChannelID {
 				allowedInSpecial = true
 			}
 		}
-		if i.ApplicationCommandData().Name == "gachaconfig" && i.Member != nil && (i.Member.Permissions&(discordgo.PermissionAdministrator|discordgo.PermissionManageServer) != 0) {
+		if cmdName == "gachaconfig" && i.Member != nil && (i.Member.Permissions&(discordgo.PermissionAdministrator|discordgo.PermissionManageServer) != 0) {
 			allowedInSpecial = true
 		}
 		if !allowedInSpecial {

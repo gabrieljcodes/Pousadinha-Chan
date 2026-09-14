@@ -30,8 +30,8 @@ func ComponentsHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	loc := locale.FromInteraction(i)
 
-	// Polymarket and Bicho component interactions are always allowed on their respective embeds
-	if !strings.HasPrefix(customID, "poly_") && !strings.HasPrefix(customID, "bicho_") && !config.Bot.IsChannelAllowed(i.ChannelID) {
+	// Polymarket, Bicho and Gacha component interactions are always allowed on their respective embeds/channels
+	if !strings.HasPrefix(customID, "poly_") && !strings.HasPrefix(customID, "bicho_") && !strings.HasPrefix(customID, "gacha_") && !config.Bot.IsChannelAllowed(i.ChannelID) {
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
