@@ -219,7 +219,7 @@
     "other": "Enter an anime or series name or ID."
   },
   "gacha.game.no_enabled_characters_with_approved_images_match": {
-    "other": "No enabled characters with approved images match this pool. No roll was spent."
+    "other": "Nenhum personagem habilitado com imagens aprovadas corresponde a este pool. Nenhum roll foi gasto."
   },
   "gacha.game.no_rolls_left_in_this_hourly_window": {
     "other": "No rolls left in this hourly window. Check /profile for the reset."

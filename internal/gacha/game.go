@@ -165,17 +165,37 @@ WHERE w.guild_id = $1 AND w.user_id = $2
 	// Rejection sampling handles a snapshot racing an editorial change. Each
 	// attempt validates current eligibility using a primary-key lookup.
 	if !found {
-		for attempt := 0; attempt < 8; attempt++ {
-			id, sampleErr := sampleID(snapshot.IDs[pool.Code])
+		poolIDs := snapshot.IDs[pool.Code]
+		activeGender := pool.Gender
+		activeKind := pool.Kind
+		if len(poolIDs) == 0 {
+			// If a specific sub-pool has no characters (e.g. game characters in an anime-only catalog), gracefully fall back
+			if activeGender != "" && len(snapshot.IDs[activeGender]) > 0 {
+				poolIDs = snapshot.IDs[activeGender]
+				activeKind = ""
+			} else if len(snapshot.IDs["roll"]) > 0 {
+				poolIDs = snapshot.IDs["roll"]
+				activeGender = ""
+				activeKind = ""
+			}
+		}
+
+		for attempt := 0; attempt < 32; attempt++ {
+			id, sampleErr := sampleID(poolIDs)
 			if sampleErr == ErrEmpty {
 				return r, errStalePool
 			}
 			if sampleErr != nil {
 				return r, sampleErr
 			}
-			r.Card, e = scanCard(tx.QueryRowContext(ctx, cardSelect+` WHERE `+eligible, pool.Gender, pool.Kind, id))
+			r.Card, e = scanCard(tx.QueryRowContext(ctx, cardSelect+` WHERE `+eligible, activeGender, activeKind, id))
 			if e == sql.ErrNoRows {
-				continue
+				if activeKind != "" {
+					r.Card, e = scanCard(tx.QueryRowContext(ctx, cardSelect+` WHERE `+eligible, activeGender, "", id))
+				}
+				if e == sql.ErrNoRows {
+					continue
+				}
 			}
 			if e != nil {
 				return r, e

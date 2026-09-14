@@ -731,9 +731,6 @@
   "commands.gacha.all_female_characters": {
     "other": "💖 All female characters"
   },
-  "commands.gacha.all_game_characters": {
-    "other": "👾 All game characters"
-  },
   "commands.gacha.all_genders": {
     "other": "👑 All genders"
   },
@@ -781,9 +778,6 @@
   },
   "commands.gacha.husbandos_anime": {
     "other": "⚔️ Husbandos (Anime)"
-  },
-  "commands.gacha.husbandos_games": {
-    "other": "🕹️ Husbandos (Games)"
   },
   "commands.gacha.id_of_the_character_to_release": {
     "other": "ID of the character to release"
@@ -844,9 +838,6 @@
   },
   "commands.gacha.waifus_anime": {
     "other": "🌸 Waifus (Anime)"
-  },
-  "commands.gacha.waifus_games": {
-    "other": "🎮 Waifus (Games)"
   },
   "commands.gacha.wishlist_action": {
     "other": "Wishlist action"
