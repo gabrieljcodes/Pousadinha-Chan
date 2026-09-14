@@ -6,6 +6,7 @@ import (
 	"bot/internal/locale"
 	"bot/pkg/config"
 	"bot/pkg/utils"
+	"log"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -40,6 +41,14 @@ func ComponentsHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			},
 		})
 		return
+	}
+
+	if strings.HasPrefix(customID, "gacha_") {
+		username := "unknown"
+		if i.Member != nil && i.Member.User != nil {
+			username = i.Member.User.Username
+		}
+		log.Printf("[ComponentsHandler] Gacha interaction: customID=%s user=%s channel=%s", customID, username, i.ChannelID)
 	}
 
 	if strings.HasPrefix(customID, "gacha_wishclear:") {

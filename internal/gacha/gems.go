@@ -356,9 +356,9 @@ func (s *Store) ClaimGemAtomic(ctx context.Context, guildID, channelID, rollID, 
 	// 4. Update player's gem power and current window
 	_, err = tx.ExecContext(ctx, `
 		UPDATE gacha_players
-		SET window_start = $3, gem_power = $4, updated_at = $5
+		SET window_start = $3, gem_power = $4
 		WHERE guild_id = $1 AND user_id = $2
-	`, guildID, userID, rWin.CurrentStart, newPower, now)
+	`, guildID, userID, rWin.CurrentStart, newPower)
 	if err != nil {
 		return nil, err
 	}

@@ -702,8 +702,56 @@ func HandleClaim(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	}
 }
 
+// updateComponentsWithClaimedGem safely handles both pointer and value ActionsRow/Button components.
+func updateComponentsWithClaimedGem(components []discordgo.MessageComponent, rollID string, gem Gem, username string) []discordgo.MessageComponent {
+	newComponents := make([]discordgo.MessageComponent, 0, len(components))
+	for _, rowComp := range components {
+		var btns []discordgo.MessageComponent
+		switch row := rowComp.(type) {
+		case discordgo.ActionsRow:
+			btns = row.Components
+		case *discordgo.ActionsRow:
+			btns = row.Components
+		default:
+			newComponents = append(newComponents, rowComp)
+			continue
+		}
+
+		newBtns := make([]discordgo.MessageComponent, 0, len(btns))
+		for _, btnComp := range btns {
+			switch btn := btnComp.(type) {
+			case discordgo.Button:
+				if btn.CustomID == "gacha_gem_"+rollID {
+					btn.Disabled = true
+					btn.Style = discordgo.SecondaryButton
+					btn.Label = fmt.Sprintf("%s (%s)", gem.Name, username)
+				}
+				newBtns = append(newBtns, btn)
+			case *discordgo.Button:
+				copied := *btn
+				if copied.CustomID == "gacha_gem_"+rollID {
+					copied.Disabled = true
+					copied.Style = discordgo.SecondaryButton
+					copied.Label = fmt.Sprintf("%s (%s)", gem.Name, username)
+				}
+				newBtns = append(newBtns, copied)
+			default:
+				newBtns = append(newBtns, btnComp)
+			}
+		}
+		newComponents = append(newComponents, discordgo.ActionsRow{Components: newBtns})
+	}
+	return newComponents
+}
+
 // HandleClaimGem handles button interactions when a user clicks to absorb a gem.
 func HandleClaimGem(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[HandleClaimGem] PANIC recovered: %v", r)
+		}
+	}()
+
 	if Default == nil || i.Member == nil || i.Member.User == nil || i.GuildID == "" {
 		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -720,82 +768,70 @@ func HandleClaimGem(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		return
 	}
 
-	if e := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{Flags: discordgo.MessageFlagsEphemeral},
-	}); e != nil {
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	res, err := Default.ClaimGemAtomic(ctx, i.GuildID, i.ChannelID, rollID, i.Member.User.ID)
 	if err != nil {
+		log.Printf("[HandleClaimGem] ClaimGemAtomic error: %v", err)
 		errContent := fmt.Sprintf("❌ %s", err.Error())
-		_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &errContent})
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: errContent,
+				Flags:   discordgo.MessageFlagsEphemeral,
+			},
+		})
 		return
 	}
 
+	var responseContent string
 	if res.AlreadyClaimed {
-		claimedContent := locale.Text("gacha.gems.already_claimed.formatted", locale.Data{"User": res.ClaimedByOther})
-		_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &claimedContent})
-		return
-	}
-
-	if res.Expired {
-		expiredContent := locale.Text("gacha.gems.expired")
-		_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &expiredContent})
-		return
-	}
-
-	if res.InsufficientPower {
-		insufficientContent := locale.Text("gacha.gems.insufficient_power.formatted", locale.Data{
+		responseContent = locale.Text("gacha.gems.already_claimed.formatted", locale.Data{"User": res.ClaimedByOther})
+	} else if res.Expired {
+		responseContent = locale.Text("gacha.gems.expired")
+	} else if res.InsufficientPower {
+		responseContent = locale.Text("gacha.gems.insufficient_power.formatted", locale.Data{
 			"Current":  res.CurrentPower,
 			"Required": res.RequiredPower,
 			"Reset":    res.NextReset.Unix(),
 		})
-		_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &insufficientContent})
-		return
-	}
-
-	currencyName := config.Bot.CurrencyName
-	if currencyName == "" {
-		currencyName = "Coins"
-	}
-	successContent := locale.Text("gacha.gems.claim_success.formatted", locale.Data{
-		"Emoji":          res.Gem.DiscordString(),
-		"Gem":            res.Gem.Name,
-		"Value":          res.Gem.Value,
-		"Currency":       currencyName,
-		"RemainingPower": res.RemainingPower,
-		"Reset":          res.NextReset.Unix(),
-	})
-	_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &successContent})
-
-	if i.Message != nil {
-		newComponents := make([]discordgo.MessageComponent, len(i.Message.Components))
-		for cIdx, rowComp := range i.Message.Components {
-			row, ok := rowComp.(discordgo.ActionsRow)
-			if !ok {
-				newComponents[cIdx] = rowComp
-				continue
-			}
-			newRowBtns := make([]discordgo.MessageComponent, len(row.Components))
-			for bIdx, btnComp := range row.Components {
-				btn, isBtn := btnComp.(discordgo.Button)
-				if isBtn && btn.CustomID == "gacha_gem_"+rollID {
-					btn.Disabled = true
-					btn.Style = discordgo.SecondaryButton
-					btn.Label = fmt.Sprintf("%s (%s)", res.Gem.Name, i.Member.User.Username)
-				}
-				newRowBtns[bIdx] = btn
-			}
-			newComponents[cIdx] = discordgo.ActionsRow{Components: newRowBtns}
+	} else {
+		currencyName := config.Bot.CurrencyName
+		if currencyName == "" {
+			currencyName = "Coins"
 		}
+		responseContent = locale.Text("gacha.gems.claim_success.formatted", locale.Data{
+			"Emoji":          res.Gem.DiscordString(),
+			"Gem":            res.Gem.Name,
+			"Value":          res.Gem.Value,
+			"Currency":       currencyName,
+			"RemainingPower": res.RemainingPower,
+			"Reset":          res.NextReset.Unix(),
+		})
+	}
 
-		newEmbeds := make([]*discordgo.MessageEmbed, len(i.Message.Embeds))
-		for eIdx, origEmbed := range i.Message.Embeds {
+	respErr := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: responseContent,
+			Flags:   discordgo.MessageFlagsEphemeral,
+		},
+	})
+	if respErr != nil {
+		log.Printf("[HandleClaimGem] InteractionRespond error: %v", respErr)
+	}
+
+	// If successfully claimed and message exists, update the public message button and embed
+	if !res.AlreadyClaimed && !res.Expired && !res.InsufficientPower && i.Message != nil {
+		currencyName := config.Bot.CurrencyName
+		if currencyName == "" {
+			currencyName = "Coins"
+		}
+		newComponents := updateComponentsWithClaimedGem(i.Message.Components, rollID, res.Gem, i.Member.User.Username)
+
+		newEmbeds := make([]*discordgo.MessageEmbed, 0, len(i.Message.Embeds))
+		for _, origEmbed := range i.Message.Embeds {
 			cp := *origEmbed
 			claimedLine := "\n" + locale.Text("gacha.gems.absorbed_by.formatted", locale.Data{
 				"Emoji":    res.Gem.DiscordString(),
@@ -804,16 +840,19 @@ func HandleClaimGem(s *discordgo.Session, i *discordgo.InteractionCreate) {
 				"Currency": currencyName,
 			})
 			cp.Description += claimedLine
-			newEmbeds[eIdx] = &cp
+			newEmbeds = append(newEmbeds, &cp)
 		}
 
-		_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
+		_, editErr := s.ChannelMessageEditComplex(&discordgo.MessageEdit{
 			ID:              i.Message.ID,
 			Channel:         i.ChannelID,
 			Components:      &newComponents,
 			Embeds:          &newEmbeds,
 			AllowedMentions: &discordgo.MessageAllowedMentions{},
 		})
+		if editErr != nil {
+			log.Printf("[HandleClaimGem] ChannelMessageEditComplex error: %v", editErr)
+		}
 	}
 }
 
