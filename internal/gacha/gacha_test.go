@@ -64,8 +64,8 @@ func TestConfig(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if cfg.WishBonusPercent != 2.0 {
-		t.Fatalf("expected default WishBonusPercent=2.0, got %f", cfg.WishBonusPercent)
+	if cfg.WishBonusPercent != 0.5 {
+		t.Fatalf("expected default WishBonusPercent=0.5, got %f", cfg.WishBonusPercent)
 	}
 	if cfg.WishlistLimit != 5 {
 		t.Fatalf("expected default WishlistLimit=5, got %d", cfg.WishlistLimit)

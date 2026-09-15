@@ -214,7 +214,7 @@ WHERE w.guild_id = $1 AND w.user_id = $2
 		return r, e
 	}
 	if r.Card.Owner != "" {
-		if gem, spawned := RollGem(r.KeyEarned); spawned {
+		if gem, spawned := RollGem(true); spawned {
 			r.Gem = &gem
 			_, e = tx.ExecContext(ctx, `
 				UPDATE gacha_rolls 

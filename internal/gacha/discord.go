@@ -109,27 +109,30 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 				embed.Footer.Text += locale.Text("gacha.discord.no_rolls_left")
 			}
 		}
-		wishRows, qErr := s.DB.QueryContext(ctx, `SELECT user_id FROM gacha_wishes WHERE guild_id=$1 AND character_id=$2 ORDER BY (user_id=$3) DESC, user_id ASC`, guild, r.Card.ID, user)
-		if qErr != nil {
-			return nil, qErr
-		}
-		var wishUsers []string
-		for wishRows.Next() {
-			var wUID string
-			if scanErr := wishRows.Scan(&wUID); scanErr == nil {
-				wishUsers = append(wishUsers, wUID)
+		// Only notify wish users if the character is unclaimed
+		if r.Card.Owner == "" {
+			wishRows, qErr := s.DB.QueryContext(ctx, `SELECT user_id FROM gacha_wishes WHERE guild_id=$1 AND character_id=$2 ORDER BY (user_id=$3) DESC, user_id ASC`, guild, r.Card.ID, user)
+			if qErr != nil {
+				return nil, qErr
 			}
-		}
-		wishRows.Close()
-		if len(wishUsers) > 0 {
-			embed.Color = 0xffd700
-			var mentions []string
-			for _, uid := range wishUsers {
-				mentions = append(mentions, "<@"+uid+">")
+			var wishUsers []string
+			for wishRows.Next() {
+				var wUID string
+				if scanErr := wishRows.Scan(&wUID); scanErr == nil {
+					wishUsers = append(wishUsers, wUID)
+				}
 			}
-			msg.Content = strings.Join(mentions, " ")
-			msg.AllowedMentions = &discordgo.MessageAllowedMentions{Users: wishUsers}
-			embed.Description += "\n" + locale.Text("gacha.discord.wished_by.formatted", locale.Data{"Users": strings.Join(mentions, ", ")})
+			wishRows.Close()
+			if len(wishUsers) > 0 {
+				embed.Color = 0xffd700
+				var mentions []string
+				for _, uid := range wishUsers {
+					mentions = append(mentions, "<@"+uid+">")
+				}
+				msg.Content = strings.Join(mentions, " ")
+				msg.AllowedMentions = &discordgo.MessageAllowedMentions{Users: wishUsers}
+				embed.Description += "\n" + locale.Text("gacha.discord.wished_by.formatted", locale.Data{"Users": strings.Join(mentions, ", ")})
+			}
 		}
 		msg.Embeds = []*discordgo.MessageEmbed{embed}
 		var buttons []discordgo.MessageComponent
@@ -149,12 +152,13 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 			if r.Gem.Description != "" {
 				embed.Description += fmt.Sprintf(" • *%s*", r.Gem.Description)
 			}
-		} else {
+		} else if r.Card.Owner == "" {
+			// Only show claim button for unclaimed characters
 			buttons = append(buttons, discordgo.Button{
 				Label:    locale.Text("gacha.discord.claim_character"),
 				Style:    discordgo.SuccessButton,
 				CustomID: "gacha_claim_" + r.ID,
-				Disabled: r.Card.Owner != "" || !r.Expires.After(time.Now()),
+				Disabled: !r.Expires.After(time.Now()),
 			})
 		}
 		msg.Components = []discordgo.MessageComponent{discordgo.ActionsRow{Components: buttons}}

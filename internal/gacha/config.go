@@ -20,7 +20,7 @@ type Config struct {
 }
 
 func LoadConfig() (Config, error) {
-	c := Config{Enabled: os.Getenv("GACHA_ENABLED") == "true", MediaDir: os.Getenv("GACHA_MEDIA_DIR"), PublicURL: strings.TrimRight(os.Getenv("GACHA_PUBLIC_URL"), "/"), RollsPerHour: 10, ClaimHours: 3, ResetMinute: 0, WishBonusPercent: 2.0, WishlistLimit: 5}
+	c := Config{Enabled: os.Getenv("GACHA_ENABLED") == "true", MediaDir: os.Getenv("GACHA_MEDIA_DIR"), PublicURL: strings.TrimRight(os.Getenv("GACHA_PUBLIC_URL"), "/"), RollsPerHour: 10, ClaimHours: 3, ResetMinute: 0, WishBonusPercent: 0.5, WishlistLimit: 5}
 	if c.MediaDir == "" {
 		c.MediaDir = "data/gacha"
 	}
