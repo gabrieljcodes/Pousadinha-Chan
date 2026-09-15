@@ -248,9 +248,9 @@ func ExecuteLeaderboard(s *discordgo.Session, guildID, callerID, category string
 		for i, u := range users {
 			name := resolveUsername(s, guildID, u.ID)
 			medal := getMedal(i + 1)
-			description.WriteString(fmt.Sprintf("%s %s • **%s %s**\n┗ 🪙 %s | 📈 %s | 💎 %s\n\n",
+			description.WriteString(fmt.Sprintf("%s %s • **%s %s**\n┗ 🪙 %s | 📈 %s | 💎 %s | 💍 %s\n\n",
 				medal, name, formatNumber(u.TotalNetWorth), sym,
-				formatNumber(u.Balance), formatNumber(u.StockValue), formatNumber(u.CryptoValue)))
+				formatNumber(u.Balance), formatNumber(u.StockValue), formatNumber(u.CryptoValue), formatNumber(u.HaremValue)))
 		}
 
 		description.WriteString(locale.Text("commands.economy.wallet_stocks_crypto"))

@@ -100,6 +100,15 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 		if r.KeyEarned {
 			embed.Description += locale.Text("gacha.discord.key_total.formatted", locale.Data{"Keys": r.Card.Keys})
 		}
+		if embed.Footer != nil {
+			if r.RollsLeft == 2 {
+				embed.Footer.Text += locale.Text("gacha.discord.two_rolls_left")
+			} else if r.RollsLeft == 1 {
+				embed.Footer.Text += locale.Text("gacha.discord.one_roll_left")
+			} else if r.RollsLeft <= 0 {
+				embed.Footer.Text += locale.Text("gacha.discord.no_rolls_left")
+			}
+		}
 		wishRows, qErr := s.DB.QueryContext(ctx, `SELECT user_id FROM gacha_wishes WHERE guild_id=$1 AND character_id=$2 ORDER BY (user_id=$3) DESC, user_id ASC`, guild, r.Card.ID, user)
 		if qErr != nil {
 			return nil, qErr
@@ -553,9 +562,27 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 			return nil, e
 		}
 
-		claimStatus := locale.Text("gacha.discord.available_now")
+		canClaim := true
+		resetsLeft := 0
 		if e == nil && claimActive {
-			claimStatus = locale.Text("gacha.discord.available_t_r.formatted", locale.Data{"Claim": claimReset.Unix()})
+			canClaim = false
+			t := rollWin.NextReset
+			for !t.After(claimReset) {
+				resetsLeft++
+				t = t.Add(1 * time.Hour)
+			}
+			if resetsLeft == 0 {
+				resetsLeft = 1
+			}
+		}
+
+		var claimStatus string
+		if canClaim {
+			claimStatus = locale.Text("gacha.discord.available_now")
+		} else if resetsLeft == 1 {
+			claimStatus = locale.Text("gacha.discord.claim_reset_single.formatted", locale.Data{"Claim": claimReset.Unix()})
+		} else {
+			claimStatus = locale.Text("gacha.discord.claim_reset_plural.formatted", locale.Data{"Claim": claimReset.Unix(), "Resets": resetsLeft})
 		}
 
 		count, value, _ := s.HaremSummary(ctx, guild, user)
@@ -565,7 +592,11 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 		var desc strings.Builder
 		desc.WriteString(locale.Text("gacha.discord.rolls_resets_t_r.formatted", locale.Data{"RollsLeft": rollsLeft, "RollsPerHour": schedule.RollsPerHour, "Reset": rollWin.NextReset.Unix()}))
 		desc.WriteString(locale.Text("gacha.discord.marry_claim.formatted", locale.Data{"ClaimStatus": claimStatus}))
-		desc.WriteString(locale.Text("gacha.discord.gem_power_status.formatted", locale.Data{"Power": effectiveGemPower, "Max": MaxGemPower, "Reset": rollWin.NextReset.Unix()}))
+		if effectiveGemPower >= MaxGemPower {
+			desc.WriteString(locale.Text("gacha.discord.gem_power_full.formatted", locale.Data{"Power": effectiveGemPower, "Max": MaxGemPower}))
+		} else {
+			desc.WriteString(locale.Text("gacha.discord.gem_power_status.formatted", locale.Data{"Power": effectiveGemPower, "Max": MaxGemPower, "Reset": rollWin.NextReset.Unix()}))
+		}
 		desc.WriteString(locale.Text("gacha.discord.your_harem_characters_total_value.formatted", locale.Data{"Count": count, "Value": value}))
 		desc.WriteString(locale.Text("gacha.discord.server_bonus_claimed_characters.formatted", locale.Data{"Value1": float64(claimedTotal) / 100, "ClaimedTotal": claimedTotal}))
 

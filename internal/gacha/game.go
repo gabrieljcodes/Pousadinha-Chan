@@ -32,6 +32,7 @@ type Roll struct {
 	Card      Card
 	Expires   time.Time
 	Gem       *Gem
+	RollsLeft int
 }
 
 const cardSelect = `SELECT c.id,c.name,c.favourites,COALESCE((SELECT w.title FROM gacha_character_works cw JOIN gacha_works w ON w.id=cw.work_id WHERE cw.character_id=c.id ORDER BY CASE cw.role WHEN 'MAIN' THEN 0 ELSE 1 END,w.id LIMIT 1), 'Original'),COALESCE(a.path,''),COALESCE(a.source_url,''),COALESCE(a.attribution,'') FROM gacha_characters c LEFT JOIN LATERAL (SELECT path,source_url,attribution FROM gacha_assets WHERE character_id=c.id AND status='approved' ORDER BY is_primary DESC,id LIMIT 1) a ON true `
@@ -101,6 +102,10 @@ func (s *Store) rollPoolSnapshot(ctx context.Context, guild, channel, user, requ
 			return r, e
 		}
 		e = priceCards(ctx, tx, guild, &r.Card)
+		schedule := s.GuildSchedule(ctx, guild)
+		var usedReplay int
+		_ = tx.QueryRowContext(ctx, `SELECT rolls_used FROM gacha_players WHERE guild_id=$1 AND user_id=$2`, guild, user).Scan(&usedReplay)
+		r.RollsLeft = max(0, schedule.RollsPerHour-usedReplay)
 		return r, e
 	}
 	if e != sql.ErrNoRows {
@@ -119,6 +124,7 @@ func (s *Store) rollPoolSnapshot(ctx context.Context, guild, channel, user, requ
 	if e != nil {
 		return r, e
 	}
+	r.RollsLeft = max(0, schedule.RollsPerHour-used)
 	if cacheErr != nil {
 		return r, cacheErr
 	}

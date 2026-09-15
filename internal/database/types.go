@@ -28,11 +28,12 @@ type Database interface {
 
 // UserBalance represents a user's balance
 type UserBalance struct {
-	ID              string
-	Balance         int
-	StockValue      int
-	CryptoValue     int
-	TotalNetWorth   int
+	ID            string
+	Balance       int
+	StockValue    int
+	CryptoValue   int
+	HaremValue    int
+	TotalNetWorth int
 }
 
 // UserStreakRank represents a user's daily streak ranking

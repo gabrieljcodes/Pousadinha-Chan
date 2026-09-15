@@ -1,9 +1,12 @@
 {
   "gacha.discord.available_now": {
-    "other": "**Available now!**"
+    "other": "✅ **Available now!**"
   },
-  "gacha.discord.available_t_r.formatted": {
-    "other": "Available <t:{{printf \"%d\" .Claim}}:R>"
+  "gacha.discord.claim_reset_single.formatted": {
+    "other": "❌ Unavailable • Restores <t:{{printf \"%d\" .Claim}}:R> (1 reset left)"
+  },
+  "gacha.discord.claim_reset_plural.formatted": {
+    "other": "❌ Unavailable • Restores <t:{{printf \"%d\" .Claim}}:R> ({{printf \"%d\" .Resets}} resets left)"
   },
   "gacha.discord.belongs_to.formatted": {
     "other": "\nBelongs to <@{{printf \"%s\" .Owner}}>"
@@ -555,8 +558,20 @@
   "gacha.wishlist.already": {
     "other": "`{{.Id}}` {{.Name}} is already on your wishlist."
   },
+  "gacha.discord.gem_power_full.formatted": {
+    "other": "💎 **Poder Astral:** **{{printf \"%d\" .Power}}%** / {{printf \"%d\" .Max}}% (Full)\n"
+  },
   "gacha.discord.gem_power_status.formatted": {
     "other": "💎 **Poder Astral:** **{{printf \"%d\" .Power}}%** / {{printf \"%d\" .Max}}% • Reset <t:{{printf \"%d\" .Reset}}:R>\n"
+  },
+  "gacha.discord.two_rolls_left": {
+    "other": " • 2 rolls left"
+  },
+  "gacha.discord.one_roll_left": {
+    "other": " • 1 roll left"
+  },
+  "gacha.discord.no_rolls_left": {
+    "other": " • No rolls left!"
   },
   "gacha.gems.already_claimed.formatted": {
     "other": "⚠️ Esta Gem já foi absorvida por <@{{printf \"%s\" .User}}>!"

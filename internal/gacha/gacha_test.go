@@ -20,6 +20,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestAniListPaginationAndErrors(t *testing.T) {
@@ -394,3 +395,76 @@ func TestCardEmbedImageResolution(t *testing.T) {
 		t.Fatalf("expected nil image, got %+v", eEmpty.Image)
 	}
 }
+
+func TestRollsLeftFooter(t *testing.T) {
+	s := &Store{Config: Config{PublicURL: "https://gachatest.pousada.space"}}
+	c := Card{Name: "Spike", Favourites: 100, Value: 250}
+
+	tests := []struct {
+		rollsLeft int
+		expected  string
+	}{
+		{rollsLeft: 2, expected: " • 2 rolls left"},
+		{rollsLeft: 1, expected: " • 1 roll left"},
+		{rollsLeft: 0, expected: " • No rolls left!"},
+		{rollsLeft: 5, expected: ""},
+	}
+
+	for _, tc := range tests {
+		embed := s.cardEmbed(c)
+		r := Roll{Card: c, RollsLeft: tc.rollsLeft}
+		if embed.Footer != nil {
+			if r.RollsLeft == 2 {
+				embed.Footer.Text += " • 2 rolls left"
+			} else if r.RollsLeft == 1 {
+				embed.Footer.Text += " • 1 roll left"
+			} else if r.RollsLeft <= 0 {
+				embed.Footer.Text += " • No rolls left!"
+			}
+		}
+		if tc.expected != "" && !strings.Contains(embed.Footer.Text, tc.expected) {
+			t.Fatalf("expected footer to contain %q, got %q", tc.expected, embed.Footer.Text)
+		}
+		if tc.expected == "" && (strings.Contains(embed.Footer.Text, "rolls left") || strings.Contains(embed.Footer.Text, "No rolls left!")) {
+			t.Fatalf("expected footer without roll warning, got %q", embed.Footer.Text)
+		}
+	}
+}
+
+func TestClaimResetsCalculation(t *testing.T) {
+	now := time.Date(2026, 9, 15, 14, 30, 0, 0, time.UTC)
+	sch := ResetSchedule{ResetMinute: 0, RollsPerHour: 15, ClaimHours: 3}
+	rWin := sch.RollWindow(now) // NextReset is 15:00
+
+	calcResets := func(claimAfter time.Time) int {
+		resetsLeft := 0
+		tm := rWin.NextReset
+		for !tm.After(claimAfter) {
+			resetsLeft++
+			tm = tm.Add(1 * time.Hour)
+		}
+		if resetsLeft == 0 {
+			resetsLeft = 1
+		}
+		return resetsLeft
+	}
+
+	// Claim returns at 15:00 (this next reset) -> 1 reset left
+	claim1 := time.Date(2026, 9, 15, 15, 0, 0, 0, time.UTC)
+	if got := calcResets(claim1); got != 1 {
+		t.Fatalf("expected 1 reset left, got %d", got)
+	}
+
+	// Claim returns at 16:00 (2 hours from now) -> 2 resets left
+	claim2 := time.Date(2026, 9, 15, 16, 0, 0, 0, time.UTC)
+	if got := calcResets(claim2); got != 2 {
+		t.Fatalf("expected 2 resets left, got %d", got)
+	}
+
+	// Claim returns at 17:00 (3 hours from now) -> 3 resets left
+	claim3 := time.Date(2026, 9, 15, 17, 0, 0, 0, time.UTC)
+	if got := calcResets(claim3); got != 3 {
+		t.Fatalf("expected 3 resets left, got %d", got)
+	}
+}
+

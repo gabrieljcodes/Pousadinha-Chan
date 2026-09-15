@@ -654,7 +654,7 @@
     "other": "Wallet Balance Leaderboard"
   },
   "commands.economy.wallet_stocks_crypto": {
-    "other": "🪙 = Wallet | 📈 = Stocks | 💎 = Crypto"
+    "other": "🪙 = Wallet | 📈 = Stocks | 💎 = Crypto | 💍 = Harem"
   },
   "commands.economy.you_already_collected_your_daily_reward_come.formatted": {
     "other": "You already collected your daily reward! Come back {{printf \"%s\" .DiscordTime}}."

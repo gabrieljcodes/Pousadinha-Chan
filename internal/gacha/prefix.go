@@ -153,17 +153,39 @@ func PrefixHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 func handlePrefixStatus(ctx context.Context, s *discordgo.Session, m *discordgo.MessageCreate, sch ResetSchedule) {
 	now := time.Now()
 	rWin := sch.RollWindow(now)
-	cWin := sch.ClaimWindow(now)
 
 	var count int
 	_ = Default.DB.QueryRowContext(ctx, `SELECT count(*) FROM gacha_rolls WHERE guild_id=$1 AND user_id=$2 AND created_at >= $3`, m.GuildID, m.Author.ID, rWin.CurrentStart).Scan(&count)
 	remaining := max(0, sch.RollsPerHour-count)
 	gemPower, _ := Default.GetEffectiveGemPower(ctx, m.GuildID, m.Author.ID, now)
 
+	var claimAfter time.Time
+	_ = Default.DB.QueryRowContext(ctx, `SELECT claim_after FROM gacha_players WHERE guild_id=$1 AND user_id=$2`, m.GuildID, m.Author.ID).Scan(&claimAfter)
+
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("🎲 **Rolls:** **%d** / %d left • Next reset <t:%d:R>\n", remaining, sch.RollsPerHour, rWin.NextReset.Unix()))
-	b.WriteString(fmt.Sprintf("💍 **Claim:** Next reset <t:%d:R>\n", cWin.NextReset.Unix()))
-	b.WriteString(fmt.Sprintf("💎 **Poder Astral:** **%d%%** / %d%% • Next reset <t:%d:R>", gemPower, MaxGemPower, rWin.NextReset.Unix()))
+
+	if claimAfter.IsZero() || !claimAfter.After(now) {
+		b.WriteString("💍 **Claim:** ✅ Available now!\n")
+	} else {
+		resetsLeft := 0
+		t := rWin.NextReset
+		for !t.After(claimAfter) {
+			resetsLeft++
+			t = t.Add(1 * time.Hour)
+		}
+		if resetsLeft <= 1 {
+			b.WriteString(fmt.Sprintf("💍 **Claim:** ❌ Unavailable • Restores <t:%d:R> (1 reset left)\n", claimAfter.Unix()))
+		} else {
+			b.WriteString(fmt.Sprintf("💍 **Claim:** ❌ Unavailable • Restores <t:%d:R> (%d resets left)\n", claimAfter.Unix(), resetsLeft))
+		}
+	}
+
+	if gemPower >= MaxGemPower {
+		b.WriteString(fmt.Sprintf("💎 **Poder Astral:** **%d%%** / %d%% (Full)", gemPower, MaxGemPower))
+	} else {
+		b.WriteString(fmt.Sprintf("💎 **Poder Astral:** **%d%%** / %d%% • Next reset <t:%d:R>", gemPower, MaxGemPower, rWin.NextReset.Unix()))
+	}
 
 	_, _ = s.ChannelMessageSendReply(m.ChannelID, b.String(), m.Reference())
 }

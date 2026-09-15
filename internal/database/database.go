@@ -98,12 +98,16 @@ func GetLeaderboard(guildID string, limit int) ([]UserBalance, error) {
 	}
 
 	query := `
+		WITH pop AS (
+			SELECT gacha_claimed_count($1) AS claimed
+		)
 		SELECT 
 			gm.user_id, 
 			COALESCE(gm.balance, 0) AS balance,
 			COALESCE(s.stock_val, 0) AS stock_value,
 			COALESCE(c.crypto_val, 0) AS crypto_value,
-			(COALESCE(gm.balance, 0) + COALESCE(s.stock_val, 0) + COALESCE(c.crypto_val, 0)) AS total_net_worth
+			COALESCE(h.harem_val, 0) AS harem_value,
+			(COALESCE(gm.balance, 0) + COALESCE(s.stock_val, 0) + COALESCE(c.crypto_val, 0) + COALESCE(h.harem_val, 0)) AS total_net_worth
 		FROM guild_members gm
 		LEFT JOIN (
 			SELECT si.user_id, FLOOR(SUM(si.shares * COALESCE(sp.last_price, 0)))::BIGINT AS stock_val
@@ -120,9 +124,17 @@ func GetLeaderboard(guildID string, limit int) ([]UserBalance, error) {
 			WHERE ci.guild_id = $1 AND ci.coins > 0
 			GROUP BY ci.user_id
 		) c ON c.user_id = gm.user_id
+		LEFT JOIN (
+			SELECT col.user_id, COALESCE(SUM(gacha_character_value(ch.favourites, pop.claimed, col.keys)), 0)::BIGINT AS harem_val
+			FROM gacha_collection col
+			JOIN gacha_characters ch ON ch.id = col.character_id
+			CROSS JOIN pop
+			WHERE col.guild_id = $1
+			GROUP BY col.user_id
+		) h ON h.user_id = gm.user_id
 		WHERE gm.guild_id = $1
 		  AND ($2 = '' OR gm.user_id != $2)
-		  AND (COALESCE(gm.balance, 0) + COALESCE(s.stock_val, 0) + COALESCE(c.crypto_val, 0)) > 0
+		  AND (COALESCE(gm.balance, 0) + COALESCE(s.stock_val, 0) + COALESCE(c.crypto_val, 0) + COALESCE(h.harem_val, 0)) > 0
 		ORDER BY total_net_worth DESC
 		LIMIT $3;`
 
@@ -136,7 +148,7 @@ func GetLeaderboard(guildID string, limit int) ([]UserBalance, error) {
 	var users []UserBalance
 	for rows.Next() {
 		var u UserBalance
-		if err := rows.Scan(&u.ID, &u.Balance, &u.StockValue, &u.CryptoValue, &u.TotalNetWorth); err != nil {
+		if err := rows.Scan(&u.ID, &u.Balance, &u.StockValue, &u.CryptoValue, &u.HaremValue, &u.TotalNetWorth); err != nil {
 			log.Printf("[LEADERBOARD ERROR] Scan row failed: %v", err)
 			continue
 		}
@@ -248,10 +260,13 @@ func GetStreakLeaderboard(guildID string, limit int) ([]UserStreakRank, error) {
 // GetUserNetWorthAndRank returns the rank and total net worth for a specific user in a guild
 func GetUserNetWorthAndRank(guildID, userID string) (rank int, netWorth int, err error) {
 	query := `
-		WITH user_nw AS (
+		WITH pop AS (
+			SELECT gacha_claimed_count($1) AS claimed
+		),
+		user_nw AS (
 			SELECT 
 				gm.user_id,
-				(COALESCE(gm.balance, 0) + COALESCE(s.stock_val, 0) + COALESCE(c.crypto_val, 0)) AS net_worth
+				(COALESCE(gm.balance, 0) + COALESCE(s.stock_val, 0) + COALESCE(c.crypto_val, 0) + COALESCE(h.harem_val, 0)) AS net_worth
 			FROM guild_members gm
 			LEFT JOIN (
 				SELECT si.user_id, FLOOR(SUM(si.shares * COALESCE(sp.last_price, 0)))::BIGINT AS stock_val
@@ -268,6 +283,14 @@ func GetUserNetWorthAndRank(guildID, userID string) (rank int, netWorth int, err
 				WHERE ci.guild_id = $1 AND ci.coins > 0
 				GROUP BY ci.user_id
 			) c ON c.user_id = gm.user_id
+			LEFT JOIN (
+				SELECT col.user_id, COALESCE(SUM(gacha_character_value(ch.favourites, pop.claimed, col.keys)), 0)::BIGINT AS harem_val
+				FROM gacha_collection col
+				JOIN gacha_characters ch ON ch.id = col.character_id
+				CROSS JOIN pop
+				WHERE col.guild_id = $1
+				GROUP BY col.user_id
+			) h ON h.user_id = gm.user_id
 			WHERE gm.guild_id = $1 AND ($2 = '' OR gm.user_id != $2)
 		)
 		SELECT 
