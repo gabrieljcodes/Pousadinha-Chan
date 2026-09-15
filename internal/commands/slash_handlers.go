@@ -11,6 +11,7 @@ import (
 	"bot/pkg/config"
 	"bot/pkg/utils"
 	"fmt"
+	"log"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -26,6 +27,24 @@ func respondEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, embed *d
 			Embeds: []*discordgo.MessageEmbed{embed},
 		},
 	})
+}
+
+// respondDeferredEmbed acknowledges the interaction before starting database
+// work. A failed acknowledgement must not trigger a monetary operation.
+func respondDeferredEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, build func() *discordgo.MessageEmbed) {
+	if s == nil || i == nil || i.Interaction == nil {
+		return
+	}
+	if err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+	}); err != nil {
+		log.Printf("[commands] interaction %s acknowledgement failed: %v", i.ID, err)
+		return
+	}
+	embeds := []*discordgo.MessageEmbed{build()}
+	if _, err := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Embeds: &embeds, AllowedMentions: &discordgo.MessageAllowedMentions{}}); err != nil {
+		log.Printf("[commands] interaction %s response delivery failed: %v", i.ID, err)
+	}
 }
 
 func isGachaCommand(name string) bool {
@@ -318,7 +337,9 @@ func handleSlashDaily(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	} else if i.User != nil {
 		userID = i.User.ID
 	}
-	respondEmbed(s, i, ExecuteDaily(i.GuildID, userID))
+	respondDeferredEmbed(s, i, func() *discordgo.MessageEmbed {
+		return ExecuteDaily(i.GuildID, userID)
+	})
 }
 
 func handleSlashBalance(s *discordgo.Session, i *discordgo.InteractionCreate) {
