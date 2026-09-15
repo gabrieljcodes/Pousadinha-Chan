@@ -66,7 +66,7 @@ var (
 	allGems = []Gem{
 		{
 			Type:          GemPeridot,
-			Name:          "Peridoto",
+			Name:          "Peridot",
 			EmojiID:       "1549191525001461912",
 			EmojiName:     "gem_peridot",
 			FallbackEmoji: "🟢",
@@ -74,11 +74,11 @@ var (
 			PowerCost:     0, // Free energy power
 			Weight:        30,
 			Color:         0x88d436,
-			Description:   "Zero Custo de Poder Astral",
+			Description:   "Zero Astral Power Cost",
 		},
 		{
 			Type:          GemTopaz,
-			Name:          "Topázio",
+			Name:          "Topaz",
 			EmojiID:       "1549191529296560261",
 			EmojiName:     "gem_topaz",
 			FallbackEmoji: "🟠",
@@ -86,11 +86,11 @@ var (
 			PowerCost:     DefaultPowerCost,
 			Weight:        25,
 			Color:         0xf39c12,
-			Description:   "Cristal solar energizado",
+			Description:   "Energized solar crystal",
 		},
 		{
 			Type:          GemEmerald,
-			Name:          "Esmeralda",
+			Name:          "Emerald",
 			EmojiID:       "1549191523315490857",
 			EmojiName:     "gem_emerald",
 			FallbackEmoji: "🟩",
@@ -98,11 +98,11 @@ var (
 			PowerCost:     DefaultPowerCost,
 			Weight:        18,
 			Color:         0x2ecc71,
-			Description:   "Poliedro místico da harmonia",
+			Description:   "Mystic polyhedron of harmony",
 		},
 		{
 			Type:          GemAmethyst,
-			Name:          "Ametista",
+			Name:          "Amethyst",
 			EmojiID:       "1549191519498674216",
 			EmojiName:     "gem_amethyst",
 			FallbackEmoji: "🟣",
@@ -110,11 +110,11 @@ var (
 			PowerCost:     DefaultPowerCost,
 			Weight:        13,
 			Color:         0x9b59b6,
-			Description:   "Cristal arcano profundo",
+			Description:   "Deep arcane crystal",
 		},
 		{
 			Type:          GemRuby,
-			Name:          "Rubi",
+			Name:          "Ruby",
 			EmojiID:       "1549191463575887933",
 			EmojiName:     "gem_ruby",
 			FallbackEmoji: "🔴",
@@ -122,11 +122,11 @@ var (
 			PowerCost:     DefaultPowerCost,
 			Weight:        8,
 			Color:         0xe74c3c,
-			Description:   "Jóia carmesim radiante",
+			Description:   "Radiant crimson jewel",
 		},
 		{
 			Type:          GemDiamond,
-			Name:          "Diamante",
+			Name:          "Diamond",
 			EmojiID:       "1549191520756830258",
 			EmojiName:     "gem_diamond",
 			FallbackEmoji: "💎",
@@ -134,11 +134,11 @@ var (
 			PowerCost:     DefaultPowerCost,
 			Weight:        4,
 			Color:         0x3498db,
-			Description:   "Pureza celeste lapidada",
+			Description:   "Cut celestial purity",
 		},
 		{
 			Type:          GemPrismatic,
-			Name:          "Prisma Astral",
+			Name:          "Astral Prism",
 			EmojiID:       "1549191522031763476",
 			EmojiName:     "gem_prismatic",
 			FallbackEmoji: "✨",
@@ -146,7 +146,7 @@ var (
 			PowerCost:     -25, // Restores 25% power!
 			Weight:        2,
 			Color:         0xffffff,
-			Description:   "Sobrecarga: Restaura +25% de Poder Astral",
+			Description:   "Overcharge: Restores +25% Astral Power",
 		},
 	}
 

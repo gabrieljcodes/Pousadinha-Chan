@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/bwmarrin/discordgo"
 	"github.com/google/uuid"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"image"
@@ -467,4 +468,47 @@ func TestClaimResetsCalculation(t *testing.T) {
 		t.Fatalf("expected 3 resets left, got %d", got)
 	}
 }
+
+func TestRollButtonExclusivity(t *testing.T) {
+	gem, _ := FindGem(GemPeridot)
+	rWithGem := Roll{ID: "roll-1", Gem: &gem}
+	rWithoutGem := Roll{ID: "roll-2", Gem: nil}
+
+	buildButtons := func(r Roll) []discordgo.MessageComponent {
+		var buttons []discordgo.MessageComponent
+		if r.Gem != nil {
+			buttons = append(buttons, discordgo.Button{
+				Label:    fmt.Sprintf("%s (+%d)", r.Gem.Name, r.Gem.Value),
+				Style:    discordgo.SecondaryButton,
+				CustomID: "gacha_gem_" + r.ID,
+			})
+		} else {
+			buttons = append(buttons, discordgo.Button{
+				Label:    "Claim character",
+				Style:    discordgo.SuccessButton,
+				CustomID: "gacha_claim_" + r.ID,
+			})
+		}
+		return buttons
+	}
+
+	btnsWithGem := buildButtons(rWithGem)
+	if len(btnsWithGem) != 1 {
+		t.Fatalf("expected 1 button with gem, got %d", len(btnsWithGem))
+	}
+	b := btnsWithGem[0].(discordgo.Button)
+	if b.CustomID != "gacha_gem_roll-1" {
+		t.Fatalf("expected gem button, got %s", b.CustomID)
+	}
+
+	btnsWithoutGem := buildButtons(rWithoutGem)
+	if len(btnsWithoutGem) != 1 {
+		t.Fatalf("expected 1 button without gem, got %d", len(btnsWithoutGem))
+	}
+	bNoGem := btnsWithoutGem[0].(discordgo.Button)
+	if bNoGem.CustomID != "gacha_claim_roll-2" {
+		t.Fatalf("expected claim button, got %s", bNoGem.CustomID)
+	}
+}
+
 

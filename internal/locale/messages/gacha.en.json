@@ -559,10 +559,10 @@
     "other": "`{{.Id}}` {{.Name}} is already on your wishlist."
   },
   "gacha.discord.gem_power_full.formatted": {
-    "other": "💎 **Poder Astral:** **{{printf \"%d\" .Power}}%** / {{printf \"%d\" .Max}}% (Full)\n"
+    "other": "💎 **Astral Power:** **{{printf \"%d\" .Power}}%** / {{printf \"%d\" .Max}}% (Full)\n"
   },
   "gacha.discord.gem_power_status.formatted": {
-    "other": "💎 **Poder Astral:** **{{printf \"%d\" .Power}}%** / {{printf \"%d\" .Max}}% • Reset <t:{{printf \"%d\" .Reset}}:R>\n"
+    "other": "💎 **Astral Power:** **{{printf \"%d\" .Power}}%** / {{printf \"%d\" .Max}}% • Reset <t:{{printf \"%d\" .Reset}}:R>\n"
   },
   "gacha.discord.two_rolls_left": {
     "other": " • 2 rolls left"
@@ -574,18 +574,18 @@
     "other": " • No rolls left!"
   },
   "gacha.gems.already_claimed.formatted": {
-    "other": "⚠️ Esta Gem já foi absorvida por <@{{printf \"%s\" .User}}>!"
+    "other": "⚠️ This Gem was already claimed by <@{{printf \"%s\" .User}}>!"
   },
   "gacha.gems.expired": {
-    "other": "⏳ Esta Gem já expirou!"
+    "other": "⏳ This Gem has expired!"
   },
   "gacha.gems.insufficient_power.formatted": {
-    "other": "❌ Você não tem Poder Astral suficiente! Você tem **{{printf \"%d\" .Current}}%**, mas esta Gem requer **{{printf \"%d\" .Required}}%**.\nSeu Poder Astral resetará para 100% <t:{{printf \"%d\" .Reset}}:R>."
+    "other": "❌ You don't have enough Astral Power! You have **{{printf \"%d\" .Current}}%**, but this Gem requires **{{printf \"%d\" .Required}}%**.\nYour Astral Power resets <t:{{printf \"%d\" .Reset}}:R>."
   },
   "gacha.gems.claim_success.formatted": {
-    "other": "✨ Você absorveu a Gem {{printf \"%s\" .Emoji}} **{{printf \"%s\" .Gem}}**!\nRecebeu **+{{printf \"%d\" .Value}} {{printf \"%s\" .Currency}}**.\nPoder Astral restante: **{{printf \"%d\" .RemainingPower}}%** (reset <t:{{printf \"%d\" .Reset}}:R>)."
+    "other": "✨ You absorbed the {{printf \"%s\" .Emoji}} **{{printf \"%s\" .Gem}}** Gem!\nReceived **+{{printf \"%d\" .Value}} {{printf \"%s\" .Currency}}**.\nRemaining Astral Power: **{{printf \"%d\" .RemainingPower}}%** (reset <t:{{printf \"%d\" .Reset}}:R>)."
   },
   "gacha.gems.absorbed_by.formatted": {
-    "other": "Gem {{printf \"%s\" .Emoji}} absorvida por <@{{printf \"%s\" .User}}> (+{{printf \"%d\" .Value}} {{printf \"%s\" .Currency}})"
+    "other": "{{printf \"%s\" .Emoji}} Gem absorbed by <@{{printf \"%s\" .User}}> (+{{printf \"%d\" .Value}} {{printf \"%s\" .Currency}})"
   }
 }

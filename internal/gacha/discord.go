@@ -132,14 +132,7 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 			embed.Description += "\n" + locale.Text("gacha.discord.wished_by.formatted", locale.Data{"Users": strings.Join(mentions, ", ")})
 		}
 		msg.Embeds = []*discordgo.MessageEmbed{embed}
-		buttons := []discordgo.MessageComponent{
-			discordgo.Button{
-				Label:    locale.Text("gacha.discord.claim_character"),
-				Style:    discordgo.SuccessButton,
-				CustomID: "gacha_claim_" + r.ID,
-				Disabled: r.Card.Owner != "" || !r.Expires.After(time.Now()),
-			},
-		}
+		var buttons []discordgo.MessageComponent
 		if r.Gem != nil {
 			currencyName := config.Bot.CurrencyName
 			if currencyName == "" {
@@ -156,6 +149,13 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 			if r.Gem.Description != "" {
 				embed.Description += fmt.Sprintf(" • *%s*", r.Gem.Description)
 			}
+		} else {
+			buttons = append(buttons, discordgo.Button{
+				Label:    locale.Text("gacha.discord.claim_character"),
+				Style:    discordgo.SuccessButton,
+				CustomID: "gacha_claim_" + r.ID,
+				Disabled: r.Card.Owner != "" || !r.Expires.After(time.Now()),
+			})
 		}
 		msg.Components = []discordgo.MessageComponent{discordgo.ActionsRow{Components: buttons}}
 	case "harem", "harem_visual":

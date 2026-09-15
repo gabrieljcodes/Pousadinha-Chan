@@ -182,9 +182,9 @@ func handlePrefixStatus(ctx context.Context, s *discordgo.Session, m *discordgo.
 	}
 
 	if gemPower >= MaxGemPower {
-		b.WriteString(fmt.Sprintf("💎 **Poder Astral:** **%d%%** / %d%% (Full)", gemPower, MaxGemPower))
+		b.WriteString(fmt.Sprintf("💎 **Astral Power:** **%d%%** / %d%% (Full)", gemPower, MaxGemPower))
 	} else {
-		b.WriteString(fmt.Sprintf("💎 **Poder Astral:** **%d%%** / %d%% • Next reset <t:%d:R>", gemPower, MaxGemPower, rWin.NextReset.Unix()))
+		b.WriteString(fmt.Sprintf("💎 **Astral Power:** **%d%%** / %d%% • Next reset <t:%d:R>", gemPower, MaxGemPower, rWin.NextReset.Unix()))
 	}
 
 	_, _ = s.ChannelMessageSendReply(m.ChannelID, b.String(), m.Reference())
