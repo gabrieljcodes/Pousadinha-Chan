@@ -118,11 +118,17 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 			var wishUsers []string
 			for wishRows.Next() {
 				var wUID string
-				if scanErr := wishRows.Scan(&wUID); scanErr == nil {
-					wishUsers = append(wishUsers, wUID)
+				if scanErr := wishRows.Scan(&wUID); scanErr != nil {
+					wishRows.Close()
+					return nil, scanErr
 				}
+				wishUsers = append(wishUsers, wUID)
 			}
+			wishErr := wishRows.Err()
 			wishRows.Close()
+			if wishErr != nil {
+				return nil, wishErr
+			}
 			if len(wishUsers) > 0 {
 				embed.Color = 0xffd700
 				var mentions []string
@@ -161,7 +167,9 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 				Disabled: !r.Expires.After(time.Now()),
 			})
 		}
-		msg.Components = []discordgo.MessageComponent{discordgo.ActionsRow{Components: buttons}}
+		if len(buttons) > 0 {
+			msg.Components = []discordgo.MessageComponent{discordgo.ActionsRow{Components: buttons}}
+		}
 	case "harem", "harem_visual":
 		owner := user
 		isVisual := action == "harem_visual"
@@ -699,42 +707,79 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 			Title:       locale.Text("gacha.discord.your_wishlist"),
 			Description: b.String(),
 			Color:       0x9b59b6,
-			Footer:      &discordgo.MessageEmbedFooter{Text: locale.Plural("gacha.wishlist.count", count, locale.Data{"Count": count, "Limit": s.WishlistLimit()})},
+			Footer:      &discordgo.MessageEmbedFooter{Text: locale.Plural("gacha.wishlist.count", count, locale.Data{"Count": count, "Limit": s.PlayerWishlistLimit(ctx, guild, user)})},
 		}
 		msg.Embeds = []*discordgo.MessageEmbed{embed}
+	case "shop":
+		return s.RenderShop(ctx, guild, user)
+	case "inventory":
+		return s.RenderInventory(ctx, guild, user)
+	case "buy":
+		fields := strings.Fields(query)
+		if len(fields) == 0 {
+			return s.RenderShop(ctx, guild, user)
+		}
+		itemID := ItemID(strings.ToLower(fields[0]))
+		qty := 1
+		if len(fields) > 1 {
+			if parsed, err := strconv.Atoi(fields[1]); err == nil && parsed > 0 {
+				qty = parsed
+			}
+		}
+		buyRes, err := s.BuyItem(ctx, guild, user, itemID, qty)
+		if err != nil {
+			return nil, err
+		}
+		msg.Content = locale.Text("gacha.shop.buy_success", locale.Data{
+			"Quantity":   buyRes.Quantity,
+			"ItemName":   buyRes.Item.Name(),
+			"TotalCost":  buyRes.TotalCost,
+			"NewBalance": buyRes.NewBalance,
+		})
+		return msg, nil
+	case "use":
+		itemID := ItemID(strings.ToLower(strings.TrimSpace(query)))
+		if itemID == "" {
+			return s.RenderInventory(ctx, guild, user)
+		}
+		useRes, err := s.UseItem(ctx, guild, user, itemID)
+		if err != nil {
+			return nil, err
+		}
+		if useRes.LootReward != nil {
+			embed := &discordgo.MessageEmbed{
+				Title:       useRes.LootReward.Title,
+				Description: useRes.LootReward.Description,
+				Color:       0xe67e22,
+				Footer: &discordgo.MessageEmbedFooter{
+					Text: "Cosmic Chest Rewards • Pousadinha Gacha",
+				},
+			}
+			msg.Embeds = []*discordgo.MessageEmbed{embed}
+			return msg, nil
+		}
+		msg.Content = useRes.Message
+		return msg, nil
+	case "open":
+		reward, err := s.OpenLootbox(ctx, guild, user)
+		if err != nil {
+			return nil, err
+		}
+		embed := &discordgo.MessageEmbed{
+			Title:       reward.Title,
+			Description: reward.Description,
+			Color:       0xe67e22,
+			Footer: &discordgo.MessageEmbedFooter{
+				Text: "Cosmic Chest Rewards • Pousadinha Gacha",
+			},
+		}
+		msg.Embeds = []*discordgo.MessageEmbed{embed}
+		return msg, nil
 	default:
 		sch := s.GuildSchedule(ctx, guild)
 		msg.Content = locale.Text("gacha.discord.pousadinha_gacha_use_roll_top_info_harem.formatted", locale.Data{"RollsPerHour": sch.RollsPerHour, "ClaimHours": sch.ClaimHours})
 	}
 	return msg, nil
-}
-func HandleClaim(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	if Default == nil || i.Member == nil || i.Member.User == nil {
-		return
-	}
-	if e := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredChannelMessageWithSource, Data: &discordgo.InteractionResponseData{Flags: discordgo.MessageFlagsEphemeral}}); e != nil {
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
-	defer cancel()
-	e := Default.Claim(ctx, i.GuildID, i.ChannelID, i.Member.User.ID, strings.TrimPrefix(i.MessageComponentData().CustomID, "gacha_claim_"))
-	content := locale.Text("gacha.discord.character_claimed_check_your_harem")
-	if e != nil {
-		content = friendly(e)
-	}
-	_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &content})
-	if e == nil && i.Message != nil {
-		components := []discordgo.MessageComponent{discordgo.ActionsRow{Components: []discordgo.MessageComponent{discordgo.Button{Label: locale.Text("gacha.discord.claimed"), Style: discordgo.SecondaryButton, CustomID: "gacha_claim_done", Disabled: true}}}}
-		embeds := []*discordgo.MessageEmbed{}
-		for _, original := range i.Message.Embeds {
-			copyEmbed := *original
-			if !strings.Contains(copyEmbed.Description, locale.Text("gacha.discord.belongs_to_e5d9ee")) {
-				copyEmbed.Description += locale.Text("gacha.discord.belongs_to.formatted1", locale.Data{"ID": i.Member.User.ID})
-			}
-			embeds = append(embeds, &copyEmbed)
-		}
-		_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{ID: i.Message.ID, Channel: i.ChannelID, Components: &components, Embeds: &embeds, AllowedMentions: &discordgo.MessageAllowedMentions{}})
-	}
 }
 
 // updateComponentsWithClaimedGem safely handles both pointer and value ActionsRow/Button components.
@@ -803,20 +848,21 @@ func HandleClaimGem(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		return
 	}
 
+	if err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredChannelMessageWithSource, Data: &discordgo.InteractionResponseData{Flags: discordgo.MessageFlagsEphemeral}}); err != nil {
+		log.Printf("[gacha] gem acknowledgement failed roll=%s: %v", rollID, err)
+		return
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	res, err := Default.ClaimGemAtomic(ctx, i.GuildID, i.ChannelID, rollID, i.Member.User.ID)
 	if err != nil {
 		log.Printf("[HandleClaimGem] ClaimGemAtomic error: %v", err)
-		errContent := fmt.Sprintf("❌ %s", err.Error())
-		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Content: errContent,
-				Flags:   discordgo.MessageFlagsEphemeral,
-			},
-		})
+		errContent := friendly(err)
+		if _, deliveryErr := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &errContent}); deliveryErr != nil {
+			log.Printf("[gacha] gem error delivery failed roll=%s: %v", rollID, deliveryErr)
+		}
 		return
 	}
 
@@ -846,13 +892,7 @@ func HandleClaimGem(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		})
 	}
 
-	respErr := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Content: responseContent,
-			Flags:   discordgo.MessageFlagsEphemeral,
-		},
-	})
+	_, respErr := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &responseContent})
 	if respErr != nil {
 		log.Printf("[HandleClaimGem] InteractionRespond error: %v", respErr)
 	}
@@ -983,6 +1023,16 @@ func parseSlash(data discordgo.ApplicationCommandInteractionData) (string, strin
 			claimFilter = o.StringValue()
 		case "gender":
 			genderFilter = o.StringValue()
+		case "item":
+			if query == "" {
+				query = o.StringValue()
+			} else {
+				query = fmt.Sprintf("%s %s", o.StringValue(), query)
+			}
+		case "quantity":
+			if o.IntValue() > 0 {
+				query = fmt.Sprintf("%s %d", strings.TrimSpace(query), o.IntValue())
+			}
 		}
 	}
 	action = normalizeAction(action)
@@ -1067,7 +1117,7 @@ func (s *Store) validateChannel(ctx context.Context, guildID, channelID, action 
 	}
 
 	norm := normalizeAction(action)
-	if norm == "status" {
+	if norm == "status" || norm == "shop" || norm == "inventory" || norm == "buy" || norm == "use" || norm == "open" {
 		if (sch.RollChannelID != "" && channelID == sch.RollChannelID) || (sch.CmdChannelID != "" && channelID == sch.CmdChannelID) {
 			return nil
 		}
@@ -1095,4 +1145,3 @@ func (s *Store) validateChannel(ctx context.Context, guildID, channelID, action 
 	}
 	return nil
 }
-

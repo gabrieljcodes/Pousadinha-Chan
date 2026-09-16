@@ -1,10 +1,12 @@
 package gacha
 
 import (
+	"bot/internal/locale"
 	"context"
 	"errors"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -15,7 +17,9 @@ import (
 // PrefixCommand holds the parsed intent of a prefix roll command.
 type PrefixCommand struct {
 	Pool   string // gacha pool code ("w", "h", "wa", "roll", etc.)
-	SubCmd string // "roll" or "status"
+	SubCmd string // "roll", "status", "shop", "inventory", "buy", "use", "open"
+	Arg1   string
+	Arg2   int
 }
 
 // User concurrency lock map to serialize roll executions per user and prevent burst race conditions.
@@ -59,6 +63,60 @@ func parsePrefixCommand(content string) (PrefixCommand, bool) {
 	// Status shortcuts: !tu (time until), !rolls, !quota
 	if trigger == "!tu" || trigger == "!rolls" || trigger == "!quota" {
 		return PrefixCommand{SubCmd: "status"}, true
+	}
+
+	// Shop shortcuts: !shop, !store
+	if trigger == "!shop" || trigger == "!store" {
+		return PrefixCommand{SubCmd: "shop"}, true
+	}
+
+	// Inventory shortcuts: !inv, !inventory, !bag
+	if trigger == "!inv" || trigger == "!inventory" || trigger == "!bag" {
+		return PrefixCommand{SubCmd: "inventory"}, true
+	}
+
+	// Buy command: !buy <item> [qty]
+	if trigger == "!buy" && len(fields) > 1 {
+		qty := 1
+		if len(fields) > 2 {
+			if parsedQty, err := strconv.Atoi(fields[2]); err == nil && parsedQty > 0 {
+				qty = parsedQty
+			}
+		}
+		return PrefixCommand{SubCmd: "buy", Arg1: strings.ToLower(fields[1]), Arg2: qty}, true
+	}
+
+	// Use command: !use <item>
+	if trigger == "!use" && len(fields) > 1 {
+		return PrefixCommand{SubCmd: "use", Arg1: strings.ToLower(fields[1])}, true
+	}
+
+	// Quick use shortcuts: !rr (roll reset), !rc or !rt (claim reset), !shield (snipe shield), !battery, !flare
+	if trigger == "!rr" {
+		return PrefixCommand{SubCmd: "use", Arg1: string(ItemRollReset)}, true
+	}
+	if trigger == "!rc" || trigger == "!rt" {
+		return PrefixCommand{SubCmd: "use", Arg1: string(ItemClaimReset)}, true
+	}
+	if trigger == "!shield" {
+		return PrefixCommand{SubCmd: "use", Arg1: string(ItemSnipeShield)}, true
+	}
+	if trigger == "!battery" {
+		return PrefixCommand{SubCmd: "use", Arg1: string(ItemGemBattery)}, true
+	}
+	if trigger == "!flare" {
+		return PrefixCommand{SubCmd: "use", Arg1: string(ItemWishFlare)}, true
+	}
+
+	// Open lootbox: !open [qty], !chest
+	if trigger == "!open" || trigger == "!chest" {
+		qty := 1
+		if len(fields) > 1 {
+			if parsedQty, err := strconv.Atoi(fields[1]); err == nil && parsedQty > 0 {
+				qty = parsedQty
+			}
+		}
+		return PrefixCommand{SubCmd: "open", Arg1: string(ItemLootbox), Arg2: qty}, true
 	}
 
 	// Direct pool trigger: !w, !wa, !h, !ha, etc.
@@ -110,14 +168,97 @@ func PrefixHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	sch := Default.GuildSchedule(ctx, m.GuildID)
 
-	// Gacha channels must be configured and message must be in the designated roll channel
-	if sch.RollChannelID == "" || m.ChannelID != sch.RollChannelID {
-		return
+	// Channel permissions: rolls are strictly inside RollChannelID. Other gacha commands allowed in RollChannelID or CmdChannelID.
+	if cmd.SubCmd == "roll" {
+		if sch.RollChannelID != "" && m.ChannelID != sch.RollChannelID {
+			return
+		}
+	} else {
+		if (sch.RollChannelID != "" || sch.CmdChannelID != "") &&
+			(m.ChannelID != sch.RollChannelID && m.ChannelID != sch.CmdChannelID) {
+			return
+		}
 	}
 
-	// Fast status response inside the roll channel
-	if cmd.SubCmd == "status" {
+	switch cmd.SubCmd {
+	case "status":
 		handlePrefixStatus(ctx, s, m, sch)
+		return
+	case "shop":
+		msg, err := Default.RenderShop(ctx, m.GuildID, m.Author.ID)
+		if err != nil {
+			_, _ = s.ChannelMessageSendReply(m.ChannelID, friendly(err), m.Reference())
+			return
+		}
+		msg.Reference = m.Reference()
+		_, _ = s.ChannelMessageSendComplex(m.ChannelID, msg)
+		return
+	case "inventory":
+		msg, err := Default.RenderInventory(ctx, m.GuildID, m.Author.ID)
+		if err != nil {
+			_, _ = s.ChannelMessageSendReply(m.ChannelID, friendly(err), m.Reference())
+			return
+		}
+		msg.Reference = m.Reference()
+		_, _ = s.ChannelMessageSendComplex(m.ChannelID, msg)
+		return
+	case "buy":
+		buyRes, err := Default.BuyItem(ctx, m.GuildID, m.Author.ID, ItemID(cmd.Arg1), cmd.Arg2)
+		if err != nil {
+			_, _ = s.ChannelMessageSendReply(m.ChannelID, friendly(err), m.Reference())
+			return
+		}
+		content := locale.Text("gacha.shop.buy_success", locale.Data{
+			"Quantity":   buyRes.Quantity,
+			"ItemName":   buyRes.Item.Name(),
+			"TotalCost":  buyRes.TotalCost,
+			"NewBalance": buyRes.NewBalance,
+		})
+		_, _ = s.ChannelMessageSendReply(m.ChannelID, content, m.Reference())
+		return
+	case "use":
+		useRes, err := Default.UseItem(ctx, m.GuildID, m.Author.ID, ItemID(cmd.Arg1))
+		if err != nil {
+			_, _ = s.ChannelMessageSendReply(m.ChannelID, friendly(err), m.Reference())
+			return
+		}
+		if useRes.LootReward != nil {
+			embed := &discordgo.MessageEmbed{
+				Title:       useRes.LootReward.Title,
+				Description: useRes.LootReward.Description,
+				Color:       0xe67e22,
+				Footer: &discordgo.MessageEmbedFooter{
+					Text: "Cosmic Chest Rewards • Pousadinha Gacha",
+				},
+			}
+			msg := &discordgo.MessageSend{
+				Embeds:    []*discordgo.MessageEmbed{embed},
+				Reference: m.Reference(),
+			}
+			_, _ = s.ChannelMessageSendComplex(m.ChannelID, msg)
+			return
+		}
+		_, _ = s.ChannelMessageSendReply(m.ChannelID, useRes.Message, m.Reference())
+		return
+	case "open":
+		reward, err := Default.OpenLootbox(ctx, m.GuildID, m.Author.ID)
+		if err != nil {
+			_, _ = s.ChannelMessageSendReply(m.ChannelID, friendly(err), m.Reference())
+			return
+		}
+		embed := &discordgo.MessageEmbed{
+			Title:       reward.Title,
+			Description: reward.Description,
+			Color:       0xe67e22,
+			Footer: &discordgo.MessageEmbedFooter{
+				Text: "Cosmic Chest Rewards • Pousadinha Gacha",
+			},
+		}
+		msg := &discordgo.MessageSend{
+			Embeds:    []*discordgo.MessageEmbed{embed},
+			Reference: m.Reference(),
+		}
+		_, _ = s.ChannelMessageSendComplex(m.ChannelID, msg)
 		return
 	}
 

@@ -11,12 +11,6 @@
   "gacha.discord.belongs_to.formatted": {
     "other": "\nBelongs to <@{{printf \"%s\" .Owner}}>"
   },
-  "gacha.discord.belongs_to.formatted1": {
-    "other": "\nBelongs to <@{{printf \"%s\" .ID}}>"
-  },
-  "gacha.discord.belongs_to_e5d9ee": {
-    "other": "Belongs to"
-  },
   "gacha.discord.catalog": {
     "other": "Catalog"
   },
@@ -198,7 +192,7 @@
     "other": " • Waifus"
   },
   "gacha.discord.wished_by.formatted": {
-    "other": "\n⭐ **Wished!** Wished by {{printf \"%s\" .Users}}"
+    "other": "⭐ **Wishlisted in this server** by {{.Users}}"
   },
   "gacha.discord.work_genres": {
     "other": "Work genres"
@@ -222,7 +216,7 @@
     "other": "Enter an anime or series name or ID."
   },
   "gacha.game.no_enabled_characters_with_approved_images_match": {
-    "other": "Nenhum personagem habilitado com imagens aprovadas corresponde a este pool. Nenhum roll foi gasto."
+    "other": "No enabled characters with approved images match this pool. No roll was spent."
   },
   "gacha.game.no_rolls_left_in_this_hourly_window": {
     "other": "No rolls left in this hourly window. Check /profile for the reset."
@@ -587,5 +581,167 @@
   },
   "gacha.gems.absorbed_by.formatted": {
     "other": "{{printf \"%s\" .Emoji}} Gem absorbed by <@{{printf \"%s\" .User}}> (+{{printf \"%d\" .Value}} {{printf \"%s\" .Currency}})"
+  },
+  "gacha.claim.claimed_by": {
+    "other": "Claimed by"
+  },
+  "gacha.claim.receipt": {
+    "other": "💍 Claimed by <@{{.Owner}}>."
+  },
+  "gacha.claim.snipe_shield_active": {
+    "other": "🛡️ This character is protected by <@{{printf \"%s\" .Roller}}>'s Snipe Shield! Please wait **{{printf \"%d\" .Seconds}}s** before claiming."
+  },
+  "gacha.shop.title": {
+    "other": "🛒 **Gacha Astral Shop**"
+  },
+  "gacha.shop.description": {
+    "other": "Spend your server coins on powerful gacha consumables, chests, and upgrades!\n\nYour Balance: **{{printf \"%d\" .Balance}} coins** 🪙"
+  },
+  "gacha.shop.buy_success": {
+    "other": "✅ Purchased **{{printf \"%d\" .Quantity}}x {{printf \"%s\" .ItemName}}** for **{{printf \"%d\" .TotalCost}} coins** 🪙!\nNew balance: **{{printf \"%d\" .NewBalance}} coins**."
+  },
+  "gacha.shop.insufficient_funds": {
+    "other": "❌ Insufficient coins! You need **{{printf \"%d\" .Cost}} coins**, but only have **{{printf \"%d\" .Balance}} coins** 🪙."
+  },
+  "gacha.shop.invalid_item": {
+    "other": "❌ Unknown item `{{printf \"%s\" .ID}}`. Check `/gacha shop` or `!shop` for available items."
+  },
+  "gacha.shop.invalid_quantity": {
+    "other": "❌ Quantity must be between 1 and 100."
+  },
+  "gacha.shop.item_not_in_inventory": {
+    "other": "❌ You do not have any **{{printf \"%s\" .ItemName}}** in your inventory."
+  },
+  "gacha.shop.cannot_use_item": {
+    "other": "❌ This item cannot be used directly."
+  },
+  "gacha.shop.btn_inventory": {
+    "other": "🎒 View Inventory"
+  },
+  "gacha.shop.btn_open_box": {
+    "other": "📦 Open Cosmic Chest"
+  },
+  "gacha.inventory.title": {
+    "other": "🎒 **Gacha Inventory & Perks**"
+  },
+  "gacha.inventory.description": {
+    "other": "Items, active buffs, and permanent upgrades for <@{{printf \"%s\" .User}}>:\nServer Balance: **{{printf \"%d\" .Balance}} coins** 🪙"
+  },
+  "gacha.inventory.consumables_header": {
+    "other": "📦 **Consumables in Bag**"
+  },
+  "gacha.inventory.consumables_empty": {
+    "other": "• *No consumable items in inventory. Visit `!shop`!*"
+  },
+  "gacha.inventory.perks_header": {
+    "other": "✨ **Active Perks & Permanent Upgrades**"
+  },
+  "gacha.inventory.perm_rolls": {
+    "other": "• Permanent Extra Rolls: **+{{printf \"%d\" .Count}} rolls/hr**"
+  },
+  "gacha.inventory.perm_wish_slots": {
+    "other": "• Permanent Wishlist Slots: **+{{printf \"%d\" .Count}} slots**"
+  },
+  "gacha.inventory.perm_wish_bonus": {
+    "other": "• Permanent Wish Spawn Bonus: **+{{printf \"%.2f\" .Bonus}}%**"
+  },
+  "gacha.inventory.stored_rolls": {
+    "other": "• Stored Bonus Rolls: **{{printf \"%d\" .Count}} extra rolls available**"
+  },
+  "gacha.inventory.wish_flare": {
+    "other": "• Star Flare Active: **+15% wish chance for next {{printf \"%d\" .Count}} rolls**"
+  },
+  "gacha.inventory.snipe_shield_active": {
+    "other": "• Snipe Shield: **Active until <t:{{printf \"%d\" .Unix}}:f>** (<t:{{printf \"%d\" .Unix}}:R>)"
+  },
+  "gacha.inventory.snipe_shield_inactive": {
+    "other": "• Snipe Shield: *Inactive*"
+  },
+  "gacha.item.lootbox.name": {
+    "other": "Cosmic Chest"
+  },
+  "gacha.item.lootbox.desc": {
+    "other": "A mystical chest containing rare drops: permanent wishlist spawn bonus (+1%), permanent rolls (+1/hr), permanent wish slots (+1), resets, or bonus rolls!"
+  },
+  "gacha.item.roll_reset.name": {
+    "other": "Time Hourglass"
+  },
+  "gacha.item.roll_reset.desc": {
+    "other": "Consumable: Instantly resets your rolls used in the current hour back to 0."
+  },
+  "gacha.item.claim_reset.name": {
+    "other": "Bond Orb"
+  },
+  "gacha.item.claim_reset.desc": {
+    "other": "Consumable: Instantly resets your claim cooldown, allowing you to claim another character immediately."
+  },
+  "gacha.item.snipe_shield.name": {
+    "other": "Snipe Shield"
+  },
+  "gacha.item.snipe_shield.desc": {
+    "other": "Protection Seal: Shields any wished character you roll from other users for 15 seconds! Lasts for 3 claim resets."
+  },
+  "gacha.item.wish_flare.name": {
+    "other": "Star Flare"
+  },
+  "gacha.item.wish_flare.desc": {
+    "other": "Consumable: Grants +15% wish spawn bonus chance on your next 10 rolls."
+  },
+  "gacha.item.gem_battery.name": {
+    "other": "Astral Battery"
+  },
+  "gacha.item.gem_battery.desc": {
+    "other": "Consumable: Instantly restores your gem absorption power to 100%."
+  },
+  "gacha.use.roll_reset_success": {
+    "other": "⏳ **Time Hourglass used!** Your hourly roll counter was reset to **0**! You have full rolls available."
+  },
+  "gacha.use.roll_reset_already_full": {
+    "other": "⚠️ Your rolls are already at maximum for this hour."
+  },
+  "gacha.use.claim_reset_success": {
+    "other": "💍 **Bond Orb used!** Your claim cooldown has been reset! You can claim a character right now."
+  },
+  "gacha.use.claim_reset_already_ready": {
+    "other": "⚠️ Your claim is already ready! You don't need to use a claim reset right now."
+  },
+  "gacha.use.snipe_shield_success": {
+    "other": "🛡️ **Snipe Shield activated!** For the next 3 claim resets (until <t:{{printf \"%d\" .Unix}}:f>), any wished character you roll is protected from other users for 15 seconds!"
+  },
+  "gacha.use.wish_flare_success": {
+    "other": "🌟 **Star Flare ignited!** You have +15% extra chance to roll wished characters for your next **{{printf \"%d\" .Total}} rolls**!"
+  },
+  "gacha.use.gem_battery_success": {
+    "other": "🔋 **Astral Battery used!** Your gem power has been restored to **100%**!"
+  },
+  "gacha.use.gem_battery_already_full": {
+    "other": "⚠️ Your gem power is already at 100%."
+  },
+  "gacha.lootbox.open_title": {
+    "other": "📦 **Cosmic Chest Opened!**"
+  },
+  "gacha.lootbox.reward_wish_bonus": {
+    "other": "🌟 **LEGENDARY DROP!** You got a permanent **+1% Wishlist Spawn Bonus**! (Current total: +{{printf \"%.2f\" .Total}}%)"
+  },
+  "gacha.lootbox.reward_perm_roll": {
+    "other": "⚡ **MYTHIC DROP!** You got **+1 Permanent Roll per Hour**! (Current total: +{{printf \"%d\" .Total}} rolls/hr)"
+  },
+  "gacha.lootbox.reward_wish_slot": {
+    "other": "✨ **RARE DROP!** You unlocked **+1 Permanent Wishlist Slot**! (Current total: +{{printf \"%d\" .Total}} slots)"
+  },
+  "gacha.lootbox.reward_claim_reset": {
+    "other": "💍 **RARE DROP!** You received a **Bond Orb** (Claim Reset) in your inventory!"
+  },
+  "gacha.lootbox.reward_roll_reset": {
+    "other": "⏳ **UNCOMMON DROP!** You received a **Time Hourglass** (Roll Reset) in your inventory!"
+  },
+  "gacha.lootbox.reward_snipe_shield": {
+    "other": "🛡️ **UNCOMMON DROP!** You received a **Snipe Shield** in your inventory!"
+  },
+  "gacha.lootbox.reward_stored_rolls": {
+    "other": "🎲 **COMMON DROP!** You received **+3 Bonus Stored Rolls**! (Current stored: {{printf \"%d\" .Total}})"
+  },
+  "gacha.lootbox.reward_wish_flare": {
+    "other": "🌠 **COMMON DROP!** You received **Star Flare** (+15% wish chance on next 10 rolls)!"
   }
 }

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/google/uuid"
+	"math"
 	"math/big"
 	"strconv"
 	"strings"
@@ -103,9 +104,10 @@ func (s *Store) rollPoolSnapshot(ctx context.Context, guild, channel, user, requ
 		}
 		e = priceCards(ctx, tx, guild, &r.Card)
 		schedule := s.GuildSchedule(ctx, guild)
-		var usedReplay int
-		_ = tx.QueryRowContext(ctx, `SELECT rolls_used FROM gacha_players WHERE guild_id=$1 AND user_id=$2`, guild, user).Scan(&usedReplay)
-		r.RollsLeft = max(0, schedule.RollsPerHour-usedReplay)
+		var usedReplay, extraPermRolls, storedExtraRolls int
+		_ = tx.QueryRowContext(ctx, `SELECT rolls_used, extra_permanent_rolls, stored_extra_rolls FROM gacha_players WHERE guild_id=$1 AND user_id=$2`, guild, user).Scan(&usedReplay, &extraPermRolls, &storedExtraRolls)
+		effMax := schedule.RollsPerHour + extraPermRolls
+		r.RollsLeft = max(0, effMax-usedReplay) + storedExtraRolls
 		return r, e
 	}
 	if e != sql.ErrNoRows {
@@ -117,14 +119,33 @@ func (s *Store) rollPoolSnapshot(ctx context.Context, guild, channel, user, requ
 	if e != nil {
 		return r, e
 	}
-	e = tx.QueryRowContext(ctx, `UPDATE gacha_players SET rolls_used=rolls_used+1 WHERE guild_id=$1 AND user_id=$2 AND rolls_used<$3 RETURNING rolls_used`, guild, user, schedule.RollsPerHour).Scan(&used)
-	if e == sql.ErrNoRows {
-		return r, ErrLimit
-	}
+	var rollsUsed, extraPermRolls, storedExtraRolls, wishFlareRolls int
+	var permWishBonus float64
+	e = tx.QueryRowContext(ctx, `
+		SELECT rolls_used, extra_permanent_rolls, stored_extra_rolls, wish_flare_rolls, permanent_wish_bonus
+		FROM gacha_players
+		WHERE guild_id=$1 AND user_id=$2 FOR UPDATE
+	`, guild, user).Scan(&rollsUsed, &extraPermRolls, &storedExtraRolls, &wishFlareRolls, &permWishBonus)
 	if e != nil {
 		return r, e
 	}
-	r.RollsLeft = max(0, schedule.RollsPerHour-used)
+	effectiveMaxRolls := schedule.RollsPerHour + extraPermRolls
+	if rollsUsed < effectiveMaxRolls {
+		rollsUsed++
+		_, e = tx.ExecContext(ctx, `UPDATE gacha_players SET rolls_used=$3 WHERE guild_id=$1 AND user_id=$2`, guild, user, rollsUsed)
+		if e != nil {
+			return r, e
+		}
+	} else if storedExtraRolls > 0 {
+		storedExtraRolls--
+		_, e = tx.ExecContext(ctx, `UPDATE gacha_players SET stored_extra_rolls=$3 WHERE guild_id=$1 AND user_id=$2`, guild, user, storedExtraRolls)
+		if e != nil {
+			return r, e
+		}
+	} else {
+		return r, ErrLimit
+	}
+	r.RollsLeft = max(0, effectiveMaxRolls-rollsUsed) + storedExtraRolls
 	if cacheErr != nil {
 		return r, cacheErr
 	}
@@ -132,9 +153,14 @@ func (s *Store) rollPoolSnapshot(ctx context.Context, guild, channel, user, requ
 	found := false
 
 	// Wish bonus: if enabled, roller has a bonus percent chance to drop one of their eligible wished characters.
-	if s.Config.WishBonusPercent > 0 {
+	totalWishBonus := s.Config.WishBonusPercent + permWishBonus
+	if wishFlareRolls > 0 {
+		totalWishBonus += 15.0
+		_, _ = tx.ExecContext(ctx, `UPDATE gacha_players SET wish_flare_rolls=wish_flare_rolls-1 WHERE guild_id=$1 AND user_id=$2`, guild, user)
+	}
+	if totalWishBonus > 0 {
 		n, randErr := rand.Int(rand.Reader, big.NewInt(10000))
-		if randErr == nil && float64(n.Int64())/100.0 < s.Config.WishBonusPercent {
+		if randErr == nil && float64(n.Int64())/100.0 < totalWishBonus {
 			const wishEligibleSQL = `
 SELECT w.character_id
 FROM gacha_wishes w
@@ -203,7 +229,7 @@ WHERE w.guild_id = $1 AND w.user_id = $2
 		}
 	}
 	r.ID = uuid.NewString()
-	e = tx.QueryRowContext(ctx, `INSERT INTO gacha_rolls(id,guild_id,channel_id,user_id,character_id,expires_at,request_id) VALUES($1,$2,$3,$4,$5,now()+interval '45 seconds',$6) RETURNING expires_at`, r.ID, guild, channel, user, r.Card.ID, request).Scan(&r.Expires)
+	e = tx.QueryRowContext(ctx, `INSERT INTO gacha_rolls(id,guild_id,channel_id,user_id,character_id,expires_at,request_id,wish_spawn) VALUES($1,$2,$3,$4,$5,now()+interval '45 seconds',$6,$7) RETURNING expires_at`, r.ID, guild, channel, user, r.Card.ID, request, r.WishSpawn).Scan(&r.Expires)
 	if e != nil {
 		return r, e
 	}
@@ -229,6 +255,8 @@ WHERE w.guild_id = $1 AND w.user_id = $2
 	return r, tx.Commit()
 }
 func (s *Store) Claim(ctx context.Context, guild, channel, user, roll string) error {
+	// Resolve configuration before holding transactional locks/connections.
+	schedule := s.GuildSchedule(ctx, guild)
 	tx, e := s.DB.BeginTx(ctx, nil)
 	if e != nil {
 		return e
@@ -246,12 +274,44 @@ func (s *Store) Claim(ctx context.Context, guild, channel, user, roll string) er
 		return ErrClaim
 	}
 	var cid int64
-	e = tx.QueryRowContext(ctx, `UPDATE gacha_rolls SET claimed_by=$1 WHERE id=$2 AND guild_id=$3 AND channel_id=$4 AND expires_at>clock_timestamp() AND claimed_by IS NULL RETURNING character_id`, user, roll, guild, channel).Scan(&cid)
+	var rollerID string
+	var rollCreatedAt time.Time
+	var isWishSpawn bool
+	e = tx.QueryRowContext(ctx, `
+		SELECT character_id, user_id, created_at, COALESCE(wish_spawn, false)
+		FROM gacha_rolls
+		WHERE id=$1 AND guild_id=$2 AND channel_id=$3 AND expires_at>clock_timestamp() AND claimed_by IS NULL AND COALESCE(gem_type,'')=''
+		FOR UPDATE
+	`, roll, guild, channel).Scan(&cid, &rollerID, &rollCreatedAt, &isWishSpawn)
 	if e == sql.ErrNoRows {
 		return ErrClaim
 	}
 	if e != nil {
 		return e
+	}
+
+	// Snipe Shield protection check
+	if isWishSpawn && rollerID != user {
+		var snipeUntil sql.NullTime
+		_ = tx.QueryRowContext(ctx, `SELECT snipe_shield_until FROM gacha_players WHERE guild_id=$1 AND user_id=$2`, guild, rollerID).Scan(&snipeUntil)
+		if snipeUntil.Valid && snipeUntil.Time.After(time.Now()) {
+			protectUntil := rollCreatedAt.Add(15 * time.Second)
+			if time.Now().Before(protectUntil) {
+				remaining := math.Ceil(time.Until(protectUntil).Seconds())
+				if remaining < 1 {
+					remaining = 1
+				}
+				return userError(locale.Text("gacha.claim.snipe_shield_active", locale.Data{
+					"Roller":  rollerID,
+					"Seconds": int(remaining),
+				}))
+			}
+		}
+	}
+
+	e = tx.QueryRowContext(ctx, `UPDATE gacha_rolls SET claimed_by=$1 WHERE id=$2 RETURNING character_id`, user, roll).Scan(&cid)
+	if e != nil {
+		return ErrClaim
 	}
 	res, e := tx.ExecContext(ctx, `INSERT INTO gacha_collection(guild_id,character_id,user_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING`, guild, cid, user)
 	if e != nil {
@@ -264,7 +324,6 @@ func (s *Store) Claim(ctx context.Context, guild, channel, user, roll string) er
 	if n == 0 {
 		return ErrClaim
 	}
-	schedule := s.GuildSchedule(ctx, guild)
 	claimWin := schedule.ClaimWindow(time.Now())
 	_, e = tx.ExecContext(ctx, `UPDATE gacha_players SET claim_after=$3 WHERE guild_id=$1 AND user_id=$2`, guild, user, claimWin.NextReset)
 	if e != nil {
@@ -542,6 +601,17 @@ func (s *Store) WishlistLimit() int {
 	return 5
 }
 
+// PlayerWishlistLimit returns the effective wishlist limit for a user, including permanent extra slots.
+func (s *Store) PlayerWishlistLimit(ctx context.Context, guild, user string) int {
+	base := s.WishlistLimit()
+	if s == nil || s.DB == nil || guild == "" || user == "" {
+		return base
+	}
+	var extra int
+	_ = s.DB.QueryRowContext(ctx, `SELECT extra_wish_slots FROM gacha_players WHERE guild_id=$1 AND user_id=$2`, guild, user).Scan(&extra)
+	return base + extra
+}
+
 func (s *Store) Wish(ctx context.Context, guild, user string, id int64, remove bool) error {
 	tx, e := s.DB.BeginTx(ctx, nil)
 	if e != nil {
@@ -551,8 +621,8 @@ func (s *Store) Wish(ctx context.Context, guild, user string, id int64, remove b
 	if e = ensurePlayer(ctx, tx, guild, user); e != nil {
 		return e
 	}
-	var n int
-	e = tx.QueryRowContext(ctx, `SELECT rolls_used FROM gacha_players WHERE guild_id=$1 AND user_id=$2 FOR UPDATE`, guild, user).Scan(&n)
+	var n, extraSlots int
+	e = tx.QueryRowContext(ctx, `SELECT rolls_used, extra_wish_slots FROM gacha_players WHERE guild_id=$1 AND user_id=$2 FOR UPDATE`, guild, user).Scan(&n, &extraSlots)
 	if e != nil {
 		return e
 	}
@@ -563,7 +633,7 @@ func (s *Store) Wish(ctx context.Context, guild, user string, id int64, remove b
 		if e != nil {
 			return e
 		}
-		limit := s.WishlistLimit()
+		limit := s.WishlistLimit() + extraSlots
 		if n >= limit {
 			return userError(locale.Text("gacha.game.your_wishlist_is_full_characters_remove_a", locale.Data{"Limit": limit}))
 		}

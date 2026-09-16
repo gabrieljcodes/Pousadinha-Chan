@@ -224,5 +224,80 @@ func init() {
 				},
 			},
 		},
+
+		// 12. /gachashop
+		&discordgo.ApplicationCommand{
+			Name:         "gachashop",
+			Description:  locale.Text("commands.gacha.gachashop"),
+			DMPermission: &dm,
+		},
+
+		// 13. /inventory
+		&discordgo.ApplicationCommand{
+			Name:         "inventory",
+			Description:  locale.Text("commands.gacha.inventory"),
+			DMPermission: &dm,
+		},
+
+		// 14. /gachabuy
+		&discordgo.ApplicationCommand{
+			Name:         "gachabuy",
+			Description:  locale.Text("commands.gacha.gachabuy"),
+			DMPermission: &dm,
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "item",
+					Description: locale.Text("commands.gacha.item_to_buy"),
+					Required:    true,
+					Choices: []*discordgo.ApplicationCommandOptionChoice{
+						{Name: "📦 Cosmic Chest (5,000 coins)", Value: "lootbox"},
+						{Name: "⏳ Time Hourglass / Roll Reset (2,500 coins)", Value: "roll_reset"},
+						{Name: "💍 Bond Orb / Claim Reset (8,000 coins)", Value: "claim_reset"},
+						{Name: "🛡️ Snipe Shield / 3 Resets (10,000 coins)", Value: "snipe_shield"},
+						{Name: "🌟 Star Flare / +15% Wish (4,000 coins)", Value: "wish_flare"},
+						{Name: "🔋 Astral Battery / 100% Gem Power (1,000 coins)", Value: "gem_battery"},
+					},
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionInteger,
+					Name:        "quantity",
+					Description: locale.Text("commands.gacha.quantity_to_buy"),
+					Required:    false,
+					MinValue:    &min,
+					MaxValue:    100,
+				},
+			},
+		},
+
+		// 15. /use
+		&discordgo.ApplicationCommand{
+			Name:         "use",
+			Description:  locale.Text("commands.gacha.use"),
+			DMPermission: &dm,
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "item",
+					Description: locale.Text("commands.gacha.item_to_use"),
+					Required:    true,
+					Choices: []*discordgo.ApplicationCommandOptionChoice{
+						{Name: "📦 Cosmic Chest", Value: "lootbox"},
+						{Name: "⏳ Time Hourglass (Roll Reset)", Value: "roll_reset"},
+						{Name: "💍 Bond Orb (Claim Reset)", Value: "claim_reset"},
+						{Name: "🛡️ Snipe Shield (3 Resets)", Value: "snipe_shield"},
+						{Name: "🌟 Star Flare (+15% Wish)", Value: "wish_flare"},
+						{Name: "🔋 Astral Battery (100% Gem Power)", Value: "gem_battery"},
+					},
+				},
+			},
+		},
+
+		// 16. /open
+		&discordgo.ApplicationCommand{
+			Name:         "open",
+			Description:  locale.Text("commands.gacha.open"),
+			DMPermission: &dm,
+		},
 	)
 }

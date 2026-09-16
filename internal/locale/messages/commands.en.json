@@ -1474,5 +1474,29 @@
   },
   "commands.gacha.wishlist_characters": {
     "other": "Character IDs or names; separate multiple entries with commas or semicolons"
+  },
+  "commands.gacha.gachashop": {
+    "other": "Browse the Gacha Astral Shop and purchase items"
+  },
+  "commands.gacha.inventory": {
+    "other": "View your gacha inventory, items, active buffs, and perks"
+  },
+  "commands.gacha.gachabuy": {
+    "other": "Purchase an item from the Gacha Astral Shop"
+  },
+  "commands.gacha.use": {
+    "other": "Use a consumable item from your gacha inventory"
+  },
+  "commands.gacha.open": {
+    "other": "Open a Cosmic Chest from your inventory"
+  },
+  "commands.gacha.item_to_buy": {
+    "other": "The shop item to buy"
+  },
+  "commands.gacha.item_to_use": {
+    "other": "The inventory item to use"
+  },
+  "commands.gacha.quantity_to_buy": {
+    "other": "Quantity to purchase (1-100)"
   }
 }

@@ -355,6 +355,7 @@ func TestPostgresGame(t *testing.T) {
 		t.Fatal("rejected asset served")
 	}
 	t.Run("social", func(t *testing.T) { testSocial(t, store) })
+	t.Run("claim_message_repair", func(t *testing.T) { testClaimMessageRepair(t, store) })
 	t.Run("wishlist_regression", func(t *testing.T) { testWishlistRegression(t, store) })
 	t.Run("progression", func(t *testing.T) { testProgression(t, store) })
 	t.Run("batch", func(t *testing.T) { testBatch(t, store); testBatchCache(t, store) })
@@ -510,5 +511,3 @@ func TestRollButtonExclusivity(t *testing.T) {
 		t.Fatalf("expected claim button, got %s", bNoGem.CustomID)
 	}
 }
-
-

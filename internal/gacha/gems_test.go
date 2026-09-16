@@ -108,6 +108,12 @@ func testGemsIntegration(t *testing.T, store *Store) {
 		t.Fatalf("failed inserting roll: %v", err)
 	}
 
+	if _, err := store.ClaimGemAtomic(ctx, guildID, "other-channel", rollID, userClicker1); err == nil {
+		t.Fatal("gem could be claimed from another channel")
+	}
+	if err := store.Claim(ctx, guildID, channelID, userClicker1, rollID); err != ErrClaim {
+		t.Fatalf("gem roll accepted character claim: %v", err)
+	}
 	// Test concurrent claiming by clicker1 and clicker2
 	var successCount int64
 	var alreadyClaimedCount int64

@@ -47,3 +47,6 @@ var GachaChannels string
 //go:embed 018_gacha_gems.sql
 var GachaGems string
 
+//go:embed 019_gacha_shop.sql
+var GachaShop string
+

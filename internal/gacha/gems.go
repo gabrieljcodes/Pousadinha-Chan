@@ -150,8 +150,8 @@ var (
 		},
 	}
 
-	gemMap   map[GemType]Gem
-	gemInit  sync.Once
+	gemMap         map[GemType]Gem
+	gemInit        sync.Once
 	totalGemWeight int
 )
 
@@ -235,7 +235,7 @@ type GemClaimResult struct {
 // ClaimGemAtomic executes an atomic, concurrency-safe claim of a roll's gem.
 // Exactly one user can successfully claim a gem.
 func (s *Store) ClaimGemAtomic(ctx context.Context, guildID, channelID, rollID, userID string) (*GemClaimResult, error) {
-	if guildID == "" || rollID == "" || userID == "" {
+	if guildID == "" || channelID == "" || rollID == "" || userID == "" {
 		return nil, fmt.Errorf("invalid parameters for gem claim")
 	}
 
@@ -249,14 +249,16 @@ func (s *Store) ClaimGemAtomic(ctx context.Context, guildID, channelID, rollID, 
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	// Ensure parent user exists
-	_, _ = tx.ExecContext(ctx, `INSERT INTO users(id, balance) VALUES($1, 0) ON CONFLICT(id) DO NOTHING`, userID)
-	_, _ = tx.ExecContext(ctx, `INSERT INTO guild_members(guild_id, user_id, balance) VALUES($1, $2, 0) ON CONFLICT(guild_id, user_id) DO NOTHING`, guildID, userID)
-	_, _ = tx.ExecContext(ctx, `
-		INSERT INTO gacha_players(guild_id, user_id, window_start, rolls_used, gem_power)
-		VALUES($1, $2, $3, 0, 100)
-		ON CONFLICT(guild_id, user_id) DO NOTHING
-	`, guildID, userID, rWin.CurrentStart)
+	if err = ensurePlayer(ctx, tx, guildID, userID); err != nil {
+		return nil, err
+	}
+	// Use the same player-then-roll lock order as character claims and rolls.
+	var playerWindowStart time.Time
+	var userPower int
+	err = tx.QueryRowContext(ctx, `SELECT window_start,gem_power FROM gacha_players WHERE guild_id=$1 AND user_id=$2 FOR UPDATE`, guildID, userID).Scan(&playerWindowStart, &userPower)
+	if err != nil {
+		return nil, err
+	}
 
 	// 1. Lock the roll row to verify gem availability
 	var gemTypeCode string
@@ -267,15 +269,19 @@ func (s *Store) ClaimGemAtomic(ctx context.Context, guildID, channelID, rollID, 
 	err = tx.QueryRowContext(ctx, `
 		SELECT gem_type, gem_value, gem_power_cost, expires_at, gem_claimed_by
 		FROM gacha_rolls
-		WHERE id = $1 AND guild_id = $2
+		WHERE id = $1 AND guild_id = $2 AND channel_id = $3
 		FOR UPDATE
-	`, rollID, guildID).Scan(&gemTypeCode, &gemValue, &powerCost, &expiresAt, &claimedBy)
+	`, rollID, guildID, channelID).Scan(&gemTypeCode, &gemValue, &powerCost, &expiresAt, &claimedBy)
 
-	if err == sql.ErrNoRows || gemTypeCode == "" {
+	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("this roll does not contain a gem")
 	}
 	if err != nil {
 		return nil, err
+	}
+
+	if gemTypeCode == "" {
+		return nil, fmt.Errorf("this roll does not contain a gem")
 	}
 
 	gem, ok := FindGem(GemType(gemTypeCode))
@@ -298,7 +304,7 @@ func (s *Store) ClaimGemAtomic(ctx context.Context, guildID, channelID, rollID, 
 		}, nil
 	}
 
-	if now.After(expiresAt) {
+	if !time.Now().Before(expiresAt) {
 		return &GemClaimResult{
 			Gem:       gem,
 			Expired:   true,
@@ -306,21 +312,8 @@ func (s *Store) ClaimGemAtomic(ctx context.Context, guildID, channelID, rollID, 
 		}, nil
 	}
 
-	// 2. Lock user's player record to verify & deduct/restore gem power
-	var playerWindowStart time.Time
-	var userPower int
-	err = tx.QueryRowContext(ctx, `
-		SELECT window_start, gem_power
-		FROM gacha_players
-		WHERE guild_id = $1 AND user_id = $2
-		FOR UPDATE
-	`, guildID, userID).Scan(&playerWindowStart, &userPower)
-	if err != nil && err != sql.ErrNoRows {
-		return nil, err
-	}
-
 	currentPower := MaxGemPower
-	if err == nil && !playerWindowStart.Before(rWin.CurrentStart) {
+	if !playerWindowStart.Before(rWin.CurrentStart) {
 		currentPower = max(0, min(MaxGemPower, userPower))
 	}
 

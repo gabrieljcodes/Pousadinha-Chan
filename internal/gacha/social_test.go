@@ -420,10 +420,10 @@ func testSocial(t *testing.T, s *Store) {
 
 	// Test Wish Drop mechanics (gold embed, mentions, and wish bonus drop)
 	s.Config.WishBonusPercent = 100.0
-	must(s.Wish(ctx, "social", "social-bob", ids[0], false))
-	must(s.Wish(ctx, "social", "social-alice", ids[0], false))
+	must(s.Wish(ctx, "wish-notifications", "social-bob", ids[0], false))
+	must(s.Wish(ctx, "wish-notifications", "social-alice", ids[0], false))
 
-	rollWishMsg, e := s.Execute(ctx, "social", "channel", "social-alice", "wish-roll-test", "wa", "", 1)
+	rollWishMsg, e := s.Execute(ctx, "wish-notifications", "channel", "social-alice", "wish-roll-test", "wa", "", 1)
 	must(e)
 	if len(rollWishMsg.Embeds) == 0 {
 		t.Fatal("expected roll embed")
@@ -437,7 +437,7 @@ func testSocial(t *testing.T, s *Store) {
 	if rollWishMsg.AllowedMentions == nil || len(rollWishMsg.AllowedMentions.Users) < 2 {
 		t.Fatalf("expected AllowedMentions with wish users, got %+v", rollWishMsg.AllowedMentions)
 	}
-	if !strings.Contains(rollWishMsg.Embeds[0].Description, "Wished!") {
+	if !strings.Contains(rollWishMsg.Embeds[0].Description, "Wishlisted in this server") {
 		t.Fatalf("expected Wished banner in embed description, got %q", rollWishMsg.Embeds[0].Description)
 	}
 

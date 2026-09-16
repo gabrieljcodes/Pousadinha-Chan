@@ -168,6 +168,9 @@ func (s *Store) UpdateWishlist(ctx context.Context, guild, user string, inputs [
 	if err = lockWishlist(ctx, tx, guild, user); err != nil {
 		return result, err
 	}
+	var extraWishSlots int
+	_ = tx.QueryRowContext(ctx, `SELECT extra_wish_slots FROM gacha_players WHERE guild_id=$1 AND user_id=$2`, guild, user).Scan(&extraWishSlots)
+	result.Limit = s.WishlistLimit() + extraWishSlots
 	if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM gacha_wishes WHERE guild_id=$1 AND user_id=$2`, guild, user).Scan(&result.Count); err != nil {
 		return result, err
 	}

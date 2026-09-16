@@ -49,7 +49,7 @@ func respondDeferredEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, 
 
 func isGachaCommand(name string) bool {
 	switch name {
-	case "roll", "rolls", "top", "info", "harem", "profile", "gallery", "wishlist", "wish", "unwish", "wishclear", "trade", "gift", "divorce", "keys", "offers", "search", "harem-ranking", "alias", "series":
+	case "roll", "rolls", "top", "info", "harem", "profile", "gallery", "wishlist", "wish", "unwish", "wishclear", "trade", "gift", "divorce", "keys", "offers", "search", "harem-ranking", "alias", "series", "gachashop", "inventory", "gachabuy", "use", "open":
 		return true
 	default:
 		return false
