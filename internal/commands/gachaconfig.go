@@ -81,6 +81,19 @@ func init() {
 				},
 				{
 					Type:        discordgo.ApplicationCommandOptionSubCommand,
+					Name:        "autoapprove",
+					Description: locale.Text("commands.gacha.config_autoapprove"),
+					Options: []*discordgo.ApplicationCommandOption{
+						{
+							Type:        discordgo.ApplicationCommandOptionBoolean,
+							Name:        "enabled",
+							Description: locale.Text("commands.gacha.config_autoapprove_enabled"),
+							Required:    true,
+						},
+					},
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionSubCommand,
 					Name:        "reset",
 					Description: locale.Text("commands.gacha.restore_default_gacha_settings"),
 				},

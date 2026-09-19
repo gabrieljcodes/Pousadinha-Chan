@@ -37,6 +37,7 @@ func normalizeAction(action string) string {
 		"top": "topchar", "harem-ranking": "ranking",
 		"work": "series", "clear": "wishclear", "rolls": "status",
 		"store": "shop", "inv": "inventory", "bag": "inventory", "chest": "open",
+		"build": "builds", "skills": "builds", "tree": "builds", "learn": "learnskill",
 	}
 	if a, ok := aliases[action]; ok {
 		return a

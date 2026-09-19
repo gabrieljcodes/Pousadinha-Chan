@@ -240,7 +240,11 @@ func (s *Store) ResolveAction(ctx context.Context, guild, channel, user, id, dec
 		if _, e = tx.ExecContext(ctx, `DELETE FROM gacha_collection WHERE guild_id=$1 AND character_id=$2`, guild, a.Offered); e != nil {
 			return a, e
 		}
-		if _, e = tx.ExecContext(ctx, `UPDATE guild_members SET balance=balance+$3,updated_at=now() WHERE guild_id=$1 AND user_id=$2`, guild, a.Proposer, a.Payout); e != nil {
+		payout := a.Payout
+		if s.HasPlayerSkill(ctx, guild, a.Proposer, "merchant_t2_exchange") {
+			payout += a.Payout / 2
+		}
+		if _, e = tx.ExecContext(ctx, `UPDATE guild_members SET balance=balance+$3,updated_at=now() WHERE guild_id=$1 AND user_id=$2`, guild, a.Proposer, payout); e != nil {
 			return a, e
 		}
 	} else {

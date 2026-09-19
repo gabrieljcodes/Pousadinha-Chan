@@ -27,14 +27,20 @@ type Card struct {
 	Favourites                                    int
 }
 type Roll struct {
-	KeyEarned bool
-	WishSpawn bool
-	ID        string
-	Card      Card
-	Expires   time.Time
-	Gem       *Gem
-	RollsLeft int
+	KeyEarned       bool
+	WishSpawn       bool
+	ID              string
+	Card            Card
+	Expires         time.Time
+	Gem             *Gem
+	RollsLeft       int
+	IsTrap          bool
+	FakeCard        *Card
+	BonusCoins      int
+	BonusRollRefund bool
 }
+
+var ErrTrapRollerClick = errors.New("trap roller click")
 
 const cardSelect = `SELECT c.id,c.name,c.favourites,COALESCE((SELECT w.title FROM gacha_character_works cw JOIN gacha_works w ON w.id=cw.work_id WHERE cw.character_id=c.id ORDER BY CASE cw.role WHEN 'MAIN' THEN 0 ELSE 1 END,w.id LIMIT 1), 'Original'),COALESCE(a.path,''),COALESCE(a.source_url,''),COALESCE(a.attribution,'') FROM gacha_characters c LEFT JOIN LATERAL (SELECT path,source_url,attribution FROM gacha_assets WHERE character_id=c.id AND status='approved' ORDER BY is_primary DESC,id LIMIT 1) a ON true `
 
@@ -130,6 +136,9 @@ func (s *Store) rollPoolSnapshot(ctx context.Context, guild, channel, user, requ
 		return r, e
 	}
 	effectiveMaxRolls := schedule.RollsPerHour + extraPermRolls
+	if s.HasPlayerSkill(ctx, guild, user, "guardian_t2_endurance") {
+		effectiveMaxRolls++
+	}
 	if rollsUsed < effectiveMaxRolls {
 		rollsUsed++
 		_, e = tx.ExecContext(ctx, `UPDATE gacha_players SET rolls_used=$3 WHERE guild_id=$1 AND user_id=$2`, guild, user, rollsUsed)
@@ -154,6 +163,9 @@ func (s *Store) rollPoolSnapshot(ctx context.Context, guild, channel, user, requ
 
 	// Wish bonus: if enabled, roller has a bonus percent chance to drop one of their eligible wished characters.
 	totalWishBonus := s.Config.WishBonusPercent + permWishBonus
+	if s.HasPlayerSkill(ctx, guild, user, "oracle_t1_gaze") {
+		totalWishBonus += 4.0
+	}
 	if wishFlareRolls > 0 {
 		totalWishBonus += 15.0
 		_, _ = tx.ExecContext(ctx, `UPDATE gacha_players SET wish_flare_rolls=wish_flare_rolls-1 WHERE guild_id=$1 AND user_id=$2`, guild, user)
@@ -228,16 +240,78 @@ WHERE w.guild_id = $1 AND w.user_id = $2
 			r.WishSpawn = true
 		}
 	}
+	// Masquerade Trap: Trickster T3
+	var fakeCharID sql.NullInt64
+	if s.HasPlayerSkill(ctx, guild, user, "trickster_t3_clone") {
+		n, rErr := rand.Int(rand.Reader, big.NewInt(100))
+		if rErr == nil && n.Int64() < 12 {
+			var pickedID int64
+			wErr := tx.QueryRowContext(ctx, `
+				SELECT w.character_id FROM gacha_wishes w
+				JOIN gacha_characters c ON c.id = w.character_id
+				WHERE w.guild_id = $1 AND c.enabled AND c.id != $2
+				  AND EXISTS (SELECT 1 FROM gacha_assets a WHERE a.character_id = c.id AND a.status = 'approved')
+				ORDER BY random() LIMIT 1
+			`, guild, r.Card.ID).Scan(&pickedID)
+			if wErr == nil && pickedID > 0 {
+				fakeCard, cErr := scanCard(tx.QueryRowContext(ctx, cardSelect+` WHERE c.id=$1`, pickedID))
+				if cErr == nil {
+					_ = priceCards(ctx, tx, guild, &fakeCard)
+					s.applyGuildImage(ctx, guild, &fakeCard)
+					r.IsTrap = true
+					r.FakeCard = &fakeCard
+					fakeCharID = sql.NullInt64{Int64: pickedID, Valid: true}
+				}
+			}
+		}
+	}
+
+	expiryInterval := "45 seconds"
+	if s.HasPlayerSkill(ctx, guild, user, "guardian_t4_aegis") {
+		expiryInterval = "75 seconds"
+	}
+
 	r.ID = uuid.NewString()
-	e = tx.QueryRowContext(ctx, `INSERT INTO gacha_rolls(id,guild_id,channel_id,user_id,character_id,expires_at,request_id,wish_spawn) VALUES($1,$2,$3,$4,$5,now()+interval '45 seconds',$6,$7) RETURNING expires_at`, r.ID, guild, channel, user, r.Card.ID, request, r.WishSpawn).Scan(&r.Expires)
+	insertSQL := fmt.Sprintf(`INSERT INTO gacha_rolls(id,guild_id,channel_id,user_id,character_id,fake_character_id,is_trap,expires_at,request_id,wish_spawn) VALUES($1,$2,$3,$4,$5,$6,$7,now()+interval '%s',$8,$9) RETURNING expires_at`, expiryInterval)
+	e = tx.QueryRowContext(ctx, insertSQL, r.ID, guild, channel, user, r.Card.ID, fakeCharID, r.IsTrap, request, r.WishSpawn).Scan(&r.Expires)
 	if e != nil {
 		return r, e
 	}
 	if e = awardKey(ctx, tx, guild, user, &r); e != nil {
 		return r, e
 	}
+	s.applyGuildImage(ctx, guild, &r.Card)
 	if e = priceCards(ctx, tx, guild, &r.Card); e != nil {
 		return r, e
+	}
+
+	// Auto snipe shield for Oracle T4 or Guardian T1
+	if r.WishSpawn && s.HasPlayerSkill(ctx, guild, user, "oracle_t4_decree") {
+		_, _ = tx.ExecContext(ctx, `UPDATE gacha_players SET snipe_shield_until = GREATEST(COALESCE(snipe_shield_until, now()), now()) + interval '20 seconds' WHERE guild_id=$1 AND user_id=$2`, guild, user)
+	}
+	if s.HasPlayerSkill(ctx, guild, user, "guardian_t1_draw") {
+		_, _ = tx.ExecContext(ctx, `UPDATE gacha_players SET snipe_shield_until = GREATEST(COALESCE(snipe_shield_until, now()), now()) + interval '15 seconds' WHERE guild_id=$1 AND user_id=$2`, guild, user)
+	}
+
+	// Trickster T1: Mãos Leves (coin pouch)
+	if s.HasPlayerSkill(ctx, guild, user, "trickster_t1_pocket") {
+		n, rErr := rand.Int(rand.Reader, big.NewInt(100))
+		if rErr == nil && n.Int64() < 20 {
+			coinAmt, _ := rand.Int(rand.Reader, big.NewInt(61))
+			bonus := int(coinAmt.Int64()) + 30
+			_, _ = tx.ExecContext(ctx, `UPDATE guild_members SET balance = balance + $3, updated_at = now() WHERE guild_id=$1 AND user_id=$2`, guild, user, bonus)
+			r.BonusCoins = bonus
+		}
+	}
+
+	// Oracle T2: Sexto Sentido (roll refund if value < 70)
+	if r.Card.Value < 70 && s.HasPlayerSkill(ctx, guild, user, "oracle_t2_foresight") {
+		n, rErr := rand.Int(rand.Reader, big.NewInt(100))
+		if rErr == nil && n.Int64() < 15 {
+			_, _ = tx.ExecContext(ctx, `UPDATE gacha_players SET stored_extra_rolls = stored_extra_rolls + 1 WHERE guild_id=$1 AND user_id=$2`, guild, user)
+			r.BonusRollRefund = true
+			r.RollsLeft++
+		}
 	}
 	if r.Card.Owner != "" {
 		if gem, spawned := RollGem(true); spawned {
@@ -277,12 +351,15 @@ func (s *Store) Claim(ctx context.Context, guild, channel, user, roll string) er
 	var rollerID string
 	var rollCreatedAt time.Time
 	var isWishSpawn bool
+	var isTrap bool
+	var trapRevealed bool
 	e = tx.QueryRowContext(ctx, `
-		SELECT character_id, user_id, created_at, COALESCE(wish_spawn, false)
+		SELECT character_id, user_id, created_at, COALESCE(wish_spawn, false),
+		       COALESCE(is_trap, false), COALESCE(trap_revealed, false)
 		FROM gacha_rolls
 		WHERE id=$1 AND guild_id=$2 AND channel_id=$3 AND expires_at>clock_timestamp() AND claimed_by IS NULL AND COALESCE(gem_type,'')=''
 		FOR UPDATE
-	`, roll, guild, channel).Scan(&cid, &rollerID, &rollCreatedAt, &isWishSpawn)
+	`, roll, guild, channel).Scan(&cid, &rollerID, &rollCreatedAt, &isWishSpawn, &isTrap, &trapRevealed)
 	if e == sql.ErrNoRows {
 		return ErrClaim
 	}
@@ -290,13 +367,32 @@ func (s *Store) Claim(ctx context.Context, guild, channel, user, roll string) er
 		return e
 	}
 
+	// Trap check:
+	if isTrap && !trapRevealed {
+		if user == rollerID {
+			// Roller clicked their own trap: inform them and don't consume claim
+			return ErrTrapRollerClick
+		}
+		// Sniper clicked: reveal trap so sniper claims real underlying character (cid)
+		_, _ = tx.ExecContext(ctx, `UPDATE gacha_rolls SET trap_revealed=true WHERE id=$1`, roll)
+	}
+
 	// Snipe Shield protection check
-	if isWishSpawn && rollerID != user {
+	hasGuardianShield := s.HasPlayerSkill(ctx, guild, rollerID, "guardian_t1_draw")
+	if (isWishSpawn || hasGuardianShield) && rollerID != user {
 		var snipeUntil sql.NullTime
 		_ = tx.QueryRowContext(ctx, `SELECT snipe_shield_until FROM gacha_players WHERE guild_id=$1 AND user_id=$2`, guild, rollerID).Scan(&snipeUntil)
+		isProtected := hasGuardianShield
 		if snipeUntil.Valid && snipeUntil.Time.After(time.Now()) {
+			isProtected = true
+		}
+		if isProtected {
 			protectUntil := rollCreatedAt.Add(15 * time.Second)
 			if time.Now().Before(protectUntil) {
+				if s.HasPlayerSkill(ctx, guild, rollerID, "guardian_t4_aegis") {
+					_, _ = tx.ExecContext(ctx, `UPDATE guild_members SET balance = GREATEST(0, balance - 100) WHERE guild_id=$1 AND user_id=$2`, guild, user)
+					_, _ = tx.ExecContext(ctx, `UPDATE guild_members SET balance = balance + 100 WHERE guild_id=$1 AND user_id=$2`, guild, rollerID)
+				}
 				remaining := math.Ceil(time.Until(protectUntil).Seconds())
 				if remaining < 1 {
 					remaining = 1
@@ -325,9 +421,36 @@ func (s *Store) Claim(ctx context.Context, guild, channel, user, roll string) er
 		return ErrClaim
 	}
 	claimWin := schedule.ClaimWindow(time.Now())
-	_, e = tx.ExecContext(ctx, `UPDATE gacha_players SET claim_after=$3 WHERE guild_id=$1 AND user_id=$2`, guild, user, claimWin.NextReset)
-	if e != nil {
-		return e
+	resetTime := claimWin.NextReset
+
+	if s.HasPlayerSkill(ctx, guild, user, "trickster_t2_stride") {
+		resetTime = resetTime.Add(-10 * time.Minute)
+	}
+
+	skipClaimReset := false
+	if isWishSpawn && s.HasPlayerSkill(ctx, guild, user, "oracle_t4_decree") {
+		n, randErr := rand.Int(rand.Reader, big.NewInt(100))
+		if randErr == nil && n.Int64() < 20 {
+			skipClaimReset = true
+		}
+	}
+
+	if !skipClaimReset {
+		_, e = tx.ExecContext(ctx, `UPDATE gacha_players SET claim_after=$3 WHERE guild_id=$1 AND user_id=$2`, guild, user, resetTime)
+		if e != nil {
+			return e
+		}
+	}
+
+	if s.HasPlayerSkill(ctx, guild, user, "merchant_t1_touch") {
+		_, _ = tx.ExecContext(ctx, `UPDATE guild_members SET balance = balance + 50 WHERE guild_id=$1 AND user_id=$2`, guild, user)
+	}
+
+	if s.HasPlayerSkill(ctx, guild, user, "trickster_t4_bamboozle") {
+		n, randErr := rand.Int(rand.Reader, big.NewInt(100))
+		if randErr == nil && n.Int64() < 15 {
+			_, _ = tx.ExecContext(ctx, `UPDATE gacha_players SET stored_extra_rolls = stored_extra_rolls + 1 WHERE guild_id=$1 AND user_id=$2`, guild, user)
+		}
 	}
 	return tx.Commit()
 }
@@ -609,6 +732,9 @@ func (s *Store) PlayerWishlistLimit(ctx context.Context, guild, user string) int
 	}
 	var extra int
 	_ = s.DB.QueryRowContext(ctx, `SELECT extra_wish_slots FROM gacha_players WHERE guild_id=$1 AND user_id=$2`, guild, user).Scan(&extra)
+	if s.HasPlayerSkill(ctx, guild, user, "guardian_t3_tracker") {
+		extra += 2
+	}
 	return base + extra
 }
 
@@ -625,6 +751,9 @@ func (s *Store) Wish(ctx context.Context, guild, user string, id int64, remove b
 	e = tx.QueryRowContext(ctx, `SELECT rolls_used, extra_wish_slots FROM gacha_players WHERE guild_id=$1 AND user_id=$2 FOR UPDATE`, guild, user).Scan(&n, &extraSlots)
 	if e != nil {
 		return e
+	}
+	if s.HasPlayerSkill(ctx, guild, user, "guardian_t3_tracker") {
+		extraSlots += 2
 	}
 	if remove {
 		_, e = tx.ExecContext(ctx, `DELETE FROM gacha_wishes WHERE guild_id=$1 AND user_id=$2 AND character_id=$3`, guild, user, id)
@@ -714,6 +843,7 @@ func (s *Store) FindCharacter(ctx context.Context, guild string, query string) (
 			return Card{}, nil, err
 		}
 		_ = s.DB.QueryRowContext(ctx, `SELECT user_id FROM gacha_collection WHERE guild_id=$1 AND character_id=$2`, guild, c.ID).Scan(&c.Owner)
+		s.applyGuildImage(ctx, guild, &c)
 		if err := priceCards(ctx, s.DB, guild, &c); err != nil {
 			return Card{}, nil, err
 		}
@@ -759,6 +889,7 @@ LIMIT 5`
 	cards := make([]*Card, len(matches))
 	for n := range matches {
 		cards[n] = &matches[n]
+		s.applyGuildImage(ctx, guild, cards[n])
 	}
 	if err := priceCards(ctx, s.DB, guild, cards...); err != nil {
 		return Card{}, nil, err
@@ -766,6 +897,30 @@ LIMIT 5`
 
 	_ = s.DB.QueryRowContext(ctx, `SELECT user_id FROM gacha_collection WHERE guild_id=$1 AND character_id=$2`, guild, matches[0].ID).Scan(&matches[0].Owner)
 	return matches[0], matches[1:], nil
+}
+
+func (s *Store) applyGuildImage(ctx context.Context, guild string, c *Card) {
+	if s.DB == nil || guild == "" || c == nil || c.ID == 0 {
+		return
+	}
+	var imgPath, sourceURL, attr sql.NullString
+	err := s.DB.QueryRowContext(ctx, `
+		SELECT a.path, a.source_url, a.attribution 
+		FROM gacha_guild_character_images gci 
+		JOIN gacha_assets a ON a.id = gci.asset_id 
+		WHERE gci.guild_id = $1 AND gci.character_id = $2 AND a.status = 'approved' AND a.archived_at IS NULL
+	`, guild, c.ID).Scan(&imgPath, &sourceURL, &attr)
+	if err == nil {
+		if imgPath.Valid && imgPath.String != "" {
+			c.Image = imgPath.String
+		}
+		if sourceURL.Valid && sourceURL.String != "" {
+			c.Source = sourceURL.String
+		}
+		if attr.Valid {
+			c.Attribution = attr.String
+		}
+	}
 }
 
 type TopCharEntry struct {

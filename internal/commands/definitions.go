@@ -82,6 +82,52 @@ var SlashCommands = []*discordgo.ApplicationCommand{
 		Description: locale.Text("commands.definitions.view_available_items_in_the_shop"),
 	},
 	{
+		Name:        "builds",
+		Description: locale.Text("commands.definitions.view_and_customize_your_gacha_build_tree"),
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Type:        discordgo.ApplicationCommandOptionString,
+				Name:        "class",
+				Description: locale.Text("commands.definitions.filter_by_class_trickster_oracle_merchant_guardian"),
+				Required:    false,
+				Choices: []*discordgo.ApplicationCommandOptionChoice{
+					{
+						Name:  "🃏 Trapaceiro (Trickster)",
+						Value: "trickster",
+					},
+					{
+						Name:  "🔮 Oráculo (Oracle)",
+						Value: "oracle",
+					},
+					{
+						Name:  "⚖️ Mercador (Merchant)",
+						Value: "merchant",
+					},
+					{
+						Name:  "🛡️ Guardião (Guardian)",
+						Value: "guardian",
+					},
+				},
+			},
+		},
+	},
+	{
+		Name:        "learnskill",
+		Description: locale.Text("commands.definitions.learn_a_skill_from_your_build_tree"),
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Type:        discordgo.ApplicationCommandOptionString,
+				Name:        "skill",
+				Description: locale.Text("commands.definitions.the_id_of_the_skill_to_learn"),
+				Required:    true,
+			},
+		},
+	},
+	{
+		Name:        "respec",
+		Description: locale.Text("commands.definitions.reset_your_build_tree_and_refund_points"),
+	},
+	{
 		Name:        "buy",
 		Description: locale.Text("commands.definitions.buy_items_from_the_shop"),
 		Options: []*discordgo.ApplicationCommandOption{

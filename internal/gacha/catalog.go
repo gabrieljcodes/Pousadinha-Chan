@@ -73,6 +73,12 @@ func (s *Store) Migrate(ctx context.Context) error {
 	if _, e = tx.ExecContext(ctx, migrations.GachaShop); e != nil {
 		return e
 	}
+	if _, e = tx.ExecContext(ctx, migrations.GachaCustomImages); e != nil {
+		return e
+	}
+	if _, e = tx.ExecContext(ctx, migrations.GachaBuildTrees); e != nil {
+		return e
+	}
 	return tx.Commit()
 }
 

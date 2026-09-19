@@ -96,9 +96,19 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 		if e != nil {
 			return nil, e
 		}
-		embed := s.cardEmbed(r.Card)
+		displayCard := r.Card
+		if r.IsTrap && r.FakeCard != nil {
+			displayCard = *r.FakeCard
+		}
+		embed := s.cardEmbed(displayCard)
 		if r.KeyEarned {
 			embed.Description += locale.Text("gacha.discord.key_total.formatted", locale.Data{"Keys": r.Card.Keys})
+		}
+		if r.BonusCoins > 0 {
+			embed.Description += "\n" + locale.Text("gacha.roll.bonus_coins", locale.Data{"Coins": r.BonusCoins})
+		}
+		if r.BonusRollRefund {
+			embed.Description += "\n" + locale.Text("gacha.roll.bonus_refund")
 		}
 		if embed.Footer != nil {
 			if r.RollsLeft == 2 {
@@ -110,8 +120,9 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 			}
 		}
 		// Only notify wish users if the character is unclaimed
-		if r.Card.Owner == "" {
-			wishRows, qErr := s.DB.QueryContext(ctx, `SELECT user_id FROM gacha_wishes WHERE guild_id=$1 AND character_id=$2 ORDER BY (user_id=$3) DESC, user_id ASC`, guild, r.Card.ID, user)
+		if displayCard.Owner == "" {
+			targetCID := displayCard.ID
+			wishRows, qErr := s.DB.QueryContext(ctx, `SELECT user_id FROM gacha_wishes WHERE guild_id=$1 AND character_id=$2 ORDER BY (user_id=$3) DESC, user_id ASC`, guild, targetCID, user)
 			if qErr != nil {
 				return nil, qErr
 			}
@@ -775,6 +786,30 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 		}
 		msg.Embeds = []*discordgo.MessageEmbed{embed}
 		return msg, nil
+	case "mycustoms":
+		return HandleMyCustoms(ctx, guild, user)
+	case "builds", "build", "skills", "tree":
+		if query != "" {
+			return s.RenderClassTree(ctx, guild, user, SkillClassID(query))
+		}
+		return s.RenderBuildOverview(ctx, guild, user)
+	case "learnskill", "learn":
+		_, err := s.UnlockSkill(ctx, guild, user, query)
+		if err != nil {
+			return nil, err
+		}
+		sk, _ := s.GetSkillDef(query)
+		return s.RenderClassTree(ctx, guild, user, sk.ClassID)
+	case "respec":
+		_, err := s.RespecBuild(ctx, guild, user)
+		if err != nil {
+			return nil, err
+		}
+		m, err := s.RenderBuildOverview(ctx, guild, user)
+		if err == nil {
+			m.Content = locale.Text("gacha.builds.respec_success")
+		}
+		return m, err
 	default:
 		sch := s.GuildSchedule(ctx, guild)
 		msg.Content = locale.Text("gacha.discord.pousadinha_gacha_use_roll_top_info_harem.formatted", locale.Data{"RollsPerHour": sch.RollsPerHour, "ClaimHours": sch.ClaimHours})
@@ -1033,6 +1068,8 @@ func parseSlash(data discordgo.ApplicationCommandInteractionData) (string, strin
 			if o.IntValue() > 0 {
 				query = fmt.Sprintf("%s %d", strings.TrimSpace(query), o.IntValue())
 			}
+		case "class", "skill":
+			query = o.StringValue()
 		}
 	}
 	action = normalizeAction(action)
@@ -1117,7 +1154,7 @@ func (s *Store) validateChannel(ctx context.Context, guildID, channelID, action 
 	}
 
 	norm := normalizeAction(action)
-	if norm == "status" || norm == "shop" || norm == "inventory" || norm == "buy" || norm == "use" || norm == "open" {
+	if norm == "status" || norm == "shop" || norm == "inventory" || norm == "buy" || norm == "use" || norm == "open" || norm == "mycustoms" || norm == "addcustom" || norm == "removecustom" || norm == "customimage" || norm == "builds" || norm == "learnskill" || norm == "respec" {
 		if (sch.RollChannelID != "" && channelID == sch.RollChannelID) || (sch.CmdChannelID != "" && channelID == sch.CmdChannelID) {
 			return nil
 		}

@@ -427,7 +427,7 @@ func (s *Store) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var mime string
-	e := s.DB.QueryRowContext(ctx, `SELECT media_type FROM gacha_assets WHERE path=$1 AND status='approved'`, rel).Scan(&mime)
+	e := s.DB.QueryRowContext(ctx, `SELECT media_type FROM gacha_assets WHERE path=$1 AND status IN ('approved', 'pending')`, rel).Scan(&mime)
 	if e != nil {
 		http.NotFound(w, r)
 		return

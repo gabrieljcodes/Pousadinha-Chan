@@ -19,6 +19,7 @@ const (
 	ItemSnipeShield ItemID = "snipe_shield"
 	ItemWishFlare   ItemID = "wish_flare"
 	ItemGemBattery  ItemID = "gem_battery"
+	ItemArcaneTome  ItemID = "arcane_tome"
 )
 
 // ShopItem represents an item offered in the Astral Shop.
@@ -44,6 +45,8 @@ func (i ShopItem) Name() string {
 		return locale.Text("gacha.item.wish_flare.name")
 	case ItemGemBattery:
 		return locale.Text("gacha.item.gem_battery.name")
+	case ItemArcaneTome:
+		return locale.Text("gacha.item.arcane_tome.name")
 	default:
 		return string(i.ID)
 	}
@@ -64,6 +67,8 @@ func (i ShopItem) Description() string {
 		return locale.Text("gacha.item.wish_flare.desc")
 	case ItemGemBattery:
 		return locale.Text("gacha.item.gem_battery.desc")
+	case ItemArcaneTome:
+		return locale.Text("gacha.item.arcane_tome.desc")
 	default:
 		return ""
 	}
@@ -104,6 +109,12 @@ var shopCatalog = []ShopItem{
 		ID:         ItemGemBattery,
 		Price:      1000,
 		Emoji:      "🔋",
+		Consumable: true,
+	},
+	{
+		ID:         ItemArcaneTome,
+		Price:      5000,
+		Emoji:      "📖",
 		Consumable: true,
 	},
 }
@@ -177,6 +188,9 @@ func (s *Store) BuyItem(ctx context.Context, guildID, userID string, itemID Item
 	}
 
 	totalCost := item.Price * int64(quantity)
+	if s.HasPlayerSkill(ctx, guildID, userID, "merchant_t4_tycoon") {
+		totalCost = totalCost * 80 / 100
+	}
 
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
@@ -186,6 +200,14 @@ func (s *Store) BuyItem(ctx context.Context, guildID, userID string, itemID Item
 
 	if err = ensurePlayer(ctx, tx, guildID, userID); err != nil {
 		return nil, err
+	}
+
+	if itemID == ItemArcaneTome {
+		var count int
+		_ = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM gacha_shop_logs WHERE guild_id=$1 AND user_id=$2 AND item_id='arcane_tome' AND action='buy'`, guildID, userID).Scan(&count)
+		if count+quantity > 3 {
+			return nil, userError(locale.Text("gacha.shop.tome_limit_reached"))
+		}
 	}
 
 	var currentBalance int64
@@ -368,6 +390,9 @@ func (s *Store) UseItem(ctx context.Context, guildID, userID string, itemID Item
 		}
 		resultMsg = locale.Text("gacha.use.gem_battery_success")
 
+	case ItemArcaneTome:
+		resultMsg = locale.Text("gacha.use.arcane_tome_success")
+
 	default:
 		return nil, userError(locale.Text("gacha.shop.cannot_use_item"))
 	}
@@ -379,6 +404,10 @@ func (s *Store) UseItem(ctx context.Context, guildID, userID string, itemID Item
 
 	if err = tx.Commit(); err != nil {
 		return nil, err
+	}
+
+	if itemID == ItemArcaneTome {
+		_, _ = s.SyncPlayerBuildPoints(ctx, guildID, userID)
 	}
 
 	return &UseResult{

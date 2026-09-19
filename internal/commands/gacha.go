@@ -299,5 +299,67 @@ func init() {
 			Description:  locale.Text("commands.gacha.open"),
 			DMPermission: &dm,
 		},
+
+		// 17. /addcustom
+		&discordgo.ApplicationCommand{
+			Name:         "addcustom",
+			Description:  locale.Text("commands.gacha.addcustom"),
+			DMPermission: &dm,
+			Options: []*discordgo.ApplicationCommandOption{
+				character("character", locale.Text("commands.gacha.addcustom_char"), true),
+				{
+					Type:        discordgo.ApplicationCommandOptionAttachment,
+					Name:        "image_file",
+					Description: locale.Text("commands.gacha.addcustom_file"),
+					Required:    false,
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "image_url",
+					Description: locale.Text("commands.gacha.addcustom_url"),
+					Required:    false,
+				},
+			},
+		},
+
+		// 18. /mycustoms
+		&discordgo.ApplicationCommand{
+			Name:         "mycustoms",
+			Description:  locale.Text("commands.gacha.mycustoms"),
+			DMPermission: &dm,
+		},
+
+		// 19. /removecustom
+		&discordgo.ApplicationCommand{
+			Name:         "removecustom",
+			Description:  locale.Text("commands.gacha.removecustom"),
+			DMPermission: &dm,
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionInteger,
+					Name:        "asset_id",
+					Description: locale.Text("commands.gacha.removecustom_id"),
+					Required:    true,
+					MinValue:    &min,
+				},
+			},
+		},
+
+		// 20. /customimage
+		&discordgo.ApplicationCommand{
+			Name:         "customimage",
+			Description:  locale.Text("commands.gacha.customimage"),
+			DMPermission: &dm,
+			Options: []*discordgo.ApplicationCommandOption{
+				character("character", locale.Text("commands.gacha.customimage_char"), true),
+				{
+					Type:        discordgo.ApplicationCommandOptionInteger,
+					Name:        "image_index",
+					Description: locale.Text("commands.gacha.customimage_index"),
+					Required:    true,
+					MinValue:    &min,
+				},
+			},
+		},
 	)
 }

@@ -17,9 +17,10 @@ import (
 // PrefixCommand holds the parsed intent of a prefix roll command.
 type PrefixCommand struct {
 	Pool   string // gacha pool code ("w", "h", "wa", "roll", etc.)
-	SubCmd string // "roll", "status", "shop", "inventory", "buy", "use", "open"
+	SubCmd string // "roll", "status", "shop", "inventory", "buy", "use", "open", "addcustom", "mycustoms", "removecustom", "customimage", "autoapprove"
 	Arg1   string
 	Arg2   int
+	Arg3   string
 }
 
 // User concurrency lock map to serialize roll executions per user and prevent burst race conditions.
@@ -117,6 +118,64 @@ func parsePrefixCommand(content string) (PrefixCommand, bool) {
 			}
 		}
 		return PrefixCommand{SubCmd: "open", Arg1: string(ItemLootbox), Arg2: qty}, true
+	}
+
+	// Custom image submission: !addcustom <character> [url], !aic, !aig, !addimage
+	if (trigger == "!addcustom" || trigger == "!aic" || trigger == "!aig" || trigger == "!addimage") && len(fields) > 1 {
+		charName := ""
+		mediaURL := ""
+		lastField := fields[len(fields)-1]
+		if len(fields) > 2 && (strings.HasPrefix(lastField, "http://") || strings.HasPrefix(lastField, "https://")) {
+			charName = strings.Join(fields[1:len(fields)-1], " ")
+			mediaURL = lastField
+		} else {
+			charName = strings.Join(fields[1:], " ")
+		}
+		return PrefixCommand{SubCmd: "addcustom", Arg1: charName, Arg3: mediaURL}, true
+	}
+
+	// View user custom images: !mycustoms
+	if trigger == "!mycustoms" {
+		return PrefixCommand{SubCmd: "mycustoms"}, true
+	}
+
+	// Build system shortcuts: !builds, !build, !skills, !tree
+	if trigger == "!builds" || trigger == "!build" || trigger == "!skills" || trigger == "!tree" {
+		return PrefixCommand{SubCmd: "builds"}, true
+	}
+	if (trigger == "!learnskill" || trigger == "!learn") && len(fields) > 1 {
+		return PrefixCommand{SubCmd: "learnskill", Arg1: strings.ToLower(fields[1])}, true
+	}
+	if trigger == "!respec" || trigger == "!resetbuild" {
+		return PrefixCommand{SubCmd: "respec"}, true
+	}
+
+	// Remove custom image: !removecustom <asset_id>
+	if trigger == "!removecustom" && len(fields) > 1 {
+		if id, err := strconv.ParseInt(fields[1], 10, 64); err == nil {
+			return PrefixCommand{SubCmd: "removecustom", Arg2: int(id)}, true
+		}
+	}
+
+	// Set active character image: !ci <character> [index], !customimage <character> [index]
+	if (trigger == "!ci" || trigger == "!customimage") && len(fields) > 1 {
+		idx := 1
+		charName := strings.Join(fields[1:], " ")
+		if len(fields) > 2 {
+			if parsedIdx, err := strconv.Atoi(fields[len(fields)-1]); err == nil && parsedIdx > 0 {
+				idx = parsedIdx
+				charName = strings.Join(fields[1:len(fields)-1], " ")
+			}
+		}
+		return PrefixCommand{SubCmd: "customimage", Arg1: charName, Arg2: idx}, true
+	}
+
+	// Autoapprove toggle: !autoapprove <on|off|true|false>, !gachaconfig autoapprove <on|off|true|false>
+	if trigger == "!autoapprove" && len(fields) > 1 {
+		return PrefixCommand{SubCmd: "autoapprove", Arg1: strings.ToLower(fields[1])}, true
+	}
+	if trigger == "!gachaconfig" && len(fields) > 2 && strings.ToLower(fields[1]) == "autoapprove" {
+		return PrefixCommand{SubCmd: "autoapprove", Arg1: strings.ToLower(fields[2])}, true
 	}
 
 	// Direct pool trigger: !w, !wa, !h, !ha, etc.
@@ -258,6 +317,110 @@ func PrefixHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 			Embeds:    []*discordgo.MessageEmbed{embed},
 			Reference: m.Reference(),
 		}
+		_, _ = s.ChannelMessageSendComplex(m.ChannelID, msg)
+		return
+	case "addcustom":
+		var att *discordgo.MessageAttachment
+		if len(m.Attachments) > 0 {
+			att = m.Attachments[0]
+		}
+		isAdmin := false
+		if m.Member != nil {
+			isAdmin = (m.Member.Permissions & (discordgo.PermissionAdministrator | discordgo.PermissionManageServer)) != 0
+		}
+		res, err := HandleAddCustom(ctx, s, m.GuildID, m.ChannelID, m.Author.ID, m.Author.Username, cmd.Arg1, cmd.Arg3, att, isAdmin)
+		if err != nil {
+			_, _ = s.ChannelMessageSendReply(m.ChannelID, friendly(err), m.Reference())
+			return
+		}
+		res.Reference = m.Reference()
+		_, _ = s.ChannelMessageSendComplex(m.ChannelID, res)
+		return
+	case "mycustoms":
+		res, err := HandleMyCustoms(ctx, m.GuildID, m.Author.ID)
+		if err != nil {
+			_, _ = s.ChannelMessageSendReply(m.ChannelID, friendly(err), m.Reference())
+			return
+		}
+		res.Reference = m.Reference()
+		_, _ = s.ChannelMessageSendComplex(m.ChannelID, res)
+		return
+	case "removecustom":
+		isAdmin := false
+		if m.Member != nil {
+			isAdmin = (m.Member.Permissions & (discordgo.PermissionAdministrator | discordgo.PermissionManageServer)) != 0
+		}
+		res, err := HandleRemoveCustom(ctx, m.GuildID, m.Author.ID, int64(cmd.Arg2), isAdmin)
+		if err != nil {
+			_, _ = s.ChannelMessageSendReply(m.ChannelID, friendly(err), m.Reference())
+			return
+		}
+		res.Reference = m.Reference()
+		_, _ = s.ChannelMessageSendComplex(m.ChannelID, res)
+		return
+	case "customimage":
+		isAdmin := false
+		if m.Member != nil {
+			isAdmin = (m.Member.Permissions & (discordgo.PermissionAdministrator | discordgo.PermissionManageServer)) != 0
+		}
+		res, err := HandleCustomImageSelect(ctx, m.GuildID, m.Author.ID, cmd.Arg1, cmd.Arg2, isAdmin)
+		if err != nil {
+			_, _ = s.ChannelMessageSendReply(m.ChannelID, friendly(err), m.Reference())
+			return
+		}
+		res.Reference = m.Reference()
+		_, _ = s.ChannelMessageSendComplex(m.ChannelID, res)
+		return
+	case "autoapprove":
+		isAdmin := false
+		if m.Member != nil {
+			isAdmin = (m.Member.Permissions & (discordgo.PermissionAdministrator | discordgo.PermissionManageServer)) != 0
+		}
+		if !isAdmin {
+			_, _ = s.ChannelMessageSendReply(m.ChannelID, locale.Text("gacha.config.admin_only"), m.Reference())
+			return
+		}
+		enabled := (cmd.Arg1 == "on" || cmd.Arg1 == "true" || cmd.Arg1 == "1" || cmd.Arg1 == "yes")
+		if err := Default.SetGuildAutoApprove(ctx, m.GuildID, enabled); err != nil {
+			_, _ = s.ChannelMessageSendReply(m.ChannelID, fmt.Sprintf("❌ %s", err.Error()), m.Reference())
+			return
+		}
+		statusText := "Enabled"
+		if !enabled {
+			statusText = "Disabled"
+		}
+		msg := locale.Text("gacha.config.autoapprove_updated.formatted", locale.Data{"Status": statusText})
+		_, _ = s.ChannelMessageSendReply(m.ChannelID, "✅ "+msg, m.Reference())
+		return
+	case "builds":
+		msg, err := Default.RenderBuildOverview(ctx, m.GuildID, m.Author.ID)
+		if err != nil {
+			_, _ = s.ChannelMessageSendReply(m.ChannelID, friendly(err), m.Reference())
+			return
+		}
+		msg.Reference = m.Reference()
+		_, _ = s.ChannelMessageSendComplex(m.ChannelID, msg)
+		return
+	case "learnskill":
+		_, err := Default.UnlockSkill(ctx, m.GuildID, m.Author.ID, cmd.Arg1)
+		if err != nil {
+			_, _ = s.ChannelMessageSendReply(m.ChannelID, friendly(err), m.Reference())
+			return
+		}
+		sk, _ := Default.GetSkillDef(cmd.Arg1)
+		msg, _ := Default.RenderClassTree(ctx, m.GuildID, m.Author.ID, sk.ClassID)
+		msg.Reference = m.Reference()
+		_, _ = s.ChannelMessageSendComplex(m.ChannelID, msg)
+		return
+	case "respec":
+		_, err := Default.RespecBuild(ctx, m.GuildID, m.Author.ID)
+		if err != nil {
+			_, _ = s.ChannelMessageSendReply(m.ChannelID, friendly(err), m.Reference())
+			return
+		}
+		msg, _ := Default.RenderBuildOverview(ctx, m.GuildID, m.Author.ID)
+		msg.Reference = m.Reference()
+		msg.Content = locale.Text("gacha.builds.respec_success")
 		_, _ = s.ChannelMessageSendComplex(m.ChannelID, msg)
 		return
 	}

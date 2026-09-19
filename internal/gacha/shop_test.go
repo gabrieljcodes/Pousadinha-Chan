@@ -14,8 +14,16 @@ import (
 func TestShopCatalog(t *testing.T) {
 	store := &Store{}
 	catalog := store.GetShopCatalog()
-	if len(catalog) != 6 {
-		t.Fatalf("expected 6 shop items, got %d", len(catalog))
+	if len(catalog) != 7 {
+		t.Fatalf("expected 7 shop items, got %d", len(catalog))
+	}
+
+	tome, ok := store.FindShopItem(ItemArcaneTome)
+	if !ok {
+		t.Fatalf("expected Arcane Tome in catalog")
+	}
+	if tome.Price != 5000 {
+		t.Fatalf("expected Arcane Tome price to be 5000, got %d", tome.Price)
 	}
 
 	shield, ok := store.FindShopItem(ItemSnipeShield)

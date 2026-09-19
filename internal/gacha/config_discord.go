@@ -55,6 +55,7 @@ func HandleConfigSlash(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	data := i.ApplicationCommandData()
 	subcmd := "view"
 	var resetMinuteOpt, rollsOpt, claimOpt *int
+	var autoApproveOpt *bool
 
 	if len(data.Options) > 0 {
 		subcmd = data.Options[0].Name
@@ -70,6 +71,13 @@ func HandleConfigSlash(s *discordgo.Session, i *discordgo.InteractionCreate) {
 					case "claim_interval":
 						claimOpt = &v
 					}
+				}
+			}
+		} else if subcmd == "autoapprove" {
+			for _, o := range data.Options[0].Options {
+				if o.Type == discordgo.ApplicationCommandOptionBoolean && o.Name == "enabled" {
+					v := o.BoolValue()
+					autoApproveOpt = &v
 				}
 			}
 		}
@@ -190,6 +198,36 @@ func HandleConfigSlash(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			},
 		})
 
+	case "autoapprove":
+		if autoApproveOpt == nil {
+			_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Content: locale.Text("gacha.config.autoapprove_no_options"),
+					Flags:   discordgo.MessageFlagsEphemeral,
+				},
+			})
+			return
+		}
+		if err := Default.SetGuildAutoApprove(ctx, i.GuildID, *autoApproveOpt); err != nil {
+			_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Content: fmt.Sprintf("❌ %s", err.Error()),
+					Flags:   discordgo.MessageFlagsEphemeral,
+				},
+			})
+			return
+		}
+
+		embed := renderScheduleEmbed(Default.GuildSchedule(ctx, i.GuildID), locale.Text("gacha.config.autoapprove_title"))
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Embeds: []*discordgo.MessageEmbed{embed},
+			},
+		})
+
 	default: // "view"
 		embed := renderScheduleEmbed(Default.GuildSchedule(ctx, i.GuildID), locale.Text("gacha.config.view_title"))
 		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
@@ -216,6 +254,12 @@ func renderScheduleEmbed(sch ResetSchedule, title string) *discordgo.MessageEmbe
 	b.WriteString(locale.Text("gacha.config.roll_channel_info.formatted", locale.Data{"Channel": sch.RollChannelID}))
 	b.WriteString("\n")
 	b.WriteString(locale.Text("gacha.config.command_channel_info.formatted", locale.Data{"Channel": sch.CmdChannelID}))
+	b.WriteString("\n\n")
+	autoStatus := "Enabled"
+	if !sch.CustomImageAutoApprove {
+		autoStatus = "Disabled (Requires Review)"
+	}
+	b.WriteString(locale.Text("gacha.config.autoapprove_info.formatted", locale.Data{"Status": autoStatus}))
 	b.WriteString("\n\n")
 	b.WriteString(locale.Text("gacha.config.next_roll_reset.formatted", locale.Data{"Unix": rWin.NextReset.Unix()}))
 	b.WriteString("\n")

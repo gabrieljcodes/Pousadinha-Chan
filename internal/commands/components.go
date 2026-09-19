@@ -63,6 +63,10 @@ func ComponentsHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		gacha.HandleClaimGem(s, i)
 	} else if strings.HasPrefix(customID, "gacha_shop_") {
 		gacha.HandleShopComponent(s, i)
+	} else if strings.HasPrefix(customID, "gacha_build_") {
+		gacha.HandleBuildComponent(s, i)
+	} else if strings.HasPrefix(customID, "gacha_asset_") {
+		gacha.HandleAssetReviewButton(s, i, customID)
 	} else if strings.HasPrefix(customID, "aviator_stop_") {
 		games.HandleButton(s, i)
 	} else if strings.HasPrefix(customID, "cup_") {

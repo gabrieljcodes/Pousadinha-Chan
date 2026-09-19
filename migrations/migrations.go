@@ -50,3 +50,9 @@ var GachaGems string
 //go:embed 019_gacha_shop.sql
 var GachaShop string
 
+//go:embed 020_gacha_custom_images.sql
+var GachaCustomImages string
+
+//go:embed 021_gacha_build_trees.sql
+var GachaBuildTrees string
+

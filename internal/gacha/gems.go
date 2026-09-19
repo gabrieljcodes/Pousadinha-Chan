@@ -357,13 +357,17 @@ func (s *Store) ClaimGemAtomic(ctx context.Context, guildID, channelID, rollID, 
 	}
 
 	// 5. Credit coins to user balance
+	awardValue := int64(gemValue)
+	if s.HasPlayerSkill(ctx, guildID, userID, "merchant_t1_touch") {
+		awardValue = awardValue * 135 / 100
+	}
 	var newBalance int64
 	err = tx.QueryRowContext(ctx, `
 		UPDATE guild_members
 		SET balance = balance + $1, updated_at = $2
 		WHERE guild_id = $3 AND user_id = $4
 		RETURNING balance
-	`, gemValue, now, guildID, userID).Scan(&newBalance)
+	`, awardValue, now, guildID, userID).Scan(&newBalance)
 	if err != nil {
 		return nil, err
 	}

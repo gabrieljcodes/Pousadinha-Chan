@@ -500,6 +500,21 @@
   "commands.definitions.user_to_challenge": {
     "other": "User to challenge"
   },
+  "commands.definitions.filter_by_class_trickster_oracle_merchant_guardian": {
+    "other": "Filter by class: trickster, oracle, merchant, guardian"
+  },
+  "commands.definitions.learn_a_skill_from_your_build_tree": {
+    "other": "Learn a skill from your build tree using build points"
+  },
+  "commands.definitions.reset_your_build_tree_and_refund_points": {
+    "other": "Reset your build tree and refund all spent build points"
+  },
+  "commands.definitions.the_id_of_the_skill_to_learn": {
+    "other": "The ID of the skill to learn"
+  },
+  "commands.definitions.view_and_customize_your_gacha_build_tree": {
+    "other": "View and customize your gacha build tree, classes, and skills"
+  },
   "commands.definitions.view_available_items_in_the_shop": {
     "other": "View available items in the shop"
   },
@@ -1498,5 +1513,41 @@
   },
   "commands.gacha.quantity_to_buy": {
     "other": "Quantity to purchase (1-100)"
+  },
+  "commands.gacha.addcustom": {
+    "other": "Submit a custom photo or GIF for a character (up to 20 per user)"
+  },
+  "commands.gacha.addcustom_char": {
+    "other": "Character name or ID to add the image to"
+  },
+  "commands.gacha.addcustom_file": {
+    "other": "Image or GIF file to upload"
+  },
+  "commands.gacha.addcustom_url": {
+    "other": "Direct URL link to an image or GIF"
+  },
+  "commands.gacha.mycustoms": {
+    "other": "View all your submitted custom character images and current quota"
+  },
+  "commands.gacha.removecustom": {
+    "other": "Remove a custom character image you submitted to free up quota"
+  },
+  "commands.gacha.removecustom_id": {
+    "other": "Asset ID of the custom image to remove"
+  },
+  "commands.gacha.customimage": {
+    "other": "Select which gallery image is actively displayed for a character"
+  },
+  "commands.gacha.customimage_char": {
+    "other": "Character name or ID"
+  },
+  "commands.gacha.customimage_index": {
+    "other": "Image number from character's /gallery (e.g. 1, 2, 3...)"
+  },
+  "commands.gacha.config_autoapprove": {
+    "other": "Toggle automatic approval of user-submitted custom images"
+  },
+  "commands.gacha.config_autoapprove_enabled": {
+    "other": "Whether custom images are automatically approved (true) or require review (false)"
   }
 }

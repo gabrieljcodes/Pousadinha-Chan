@@ -591,6 +591,48 @@
   "gacha.claim.snipe_shield_active": {
     "other": "🛡️ This character is protected by <@{{printf \"%s\" .Roller}}>'s Snipe Shield! Please wait **{{printf \"%d\" .Seconds}}s** before claiming."
   },
+  "gacha.claim.trap_revealed_notice": {
+    "other": "🎭 *The Masquerade Clone dissolved! The true character has been revealed.*"
+  },
+  "gacha.claim.trap_roller_warning": {
+    "other": "🎭 **Masquerade Clone!** This is a fake wish created by your own Trickster trick! Do not worry, your claim was not consumed. The real character will be revealed in 3 seconds..."
+  },
+  "gacha.claim.trap_sniper_bamboozled": {
+    "other": "🎭 **Bamboozled by the Jester!** That wish was an illusory clone trap! You claimed the underlying original character instead!"
+  },
+  "gacha.roll.bonus_coins": {
+    "other": "💰 **Sleight of Hand:** You pickpocketed the gacha and found +{{printf \"%d\" .Coins}} 🪙!"
+  },
+  "gacha.roll.bonus_refund": {
+    "other": "👁️ **Cosmic Foresight:** The oracle foresaw the low value card and refunded +1 roll!"
+  },
+  "gacha.builds.btn_info": {
+    "other": "How to Earn Points"
+  },
+  "gacha.builds.btn_respec": {
+    "other": "Reset Build (Respec)"
+  },
+  "gacha.builds.desc": {
+    "other": "Customize your playstyle with progressive class skills!\n\n🎯 **Available Points:** `{{printf \"%d\" .Available}} / {{printf \"%d\" .Total}}` (Spent: `{{printf \"%d\" .Spent}}`)\n─────────────────────────"
+  },
+  "gacha.builds.footer": {
+    "other": "Click a class button below to view its skill tree and learn abilities."
+  },
+  "gacha.builds.info_desc": {
+    "other": "Earn Build Points by playing the gacha and reaching progression milestones:"
+  },
+  "gacha.builds.info_title": {
+    "other": "📜 How to Earn Build Points (BP)"
+  },
+  "gacha.builds.not_started": {
+    "other": "Not Started"
+  },
+  "gacha.builds.respec_success": {
+    "other": "🔄 Your build tree has been reset! All spent points have been refunded."
+  },
+  "gacha.builds.title": {
+    "other": "⚔️ Gacha Build Trees & Classes"
+  },
   "gacha.shop.title": {
     "other": "🛒 **Gacha Astral Shop**"
   },
@@ -693,6 +735,18 @@
   "gacha.item.gem_battery.desc": {
     "other": "Consumable: Instantly restores your gem absorption power to 100%."
   },
+  "gacha.item.arcane_tome.name": {
+    "other": "Arcane Tome"
+  },
+  "gacha.item.arcane_tome.desc": {
+    "other": "Consumable: Grants +1 permanent Build Point (BP) to your build tree (Max 3)."
+  },
+  "gacha.shop.tome_limit_reached": {
+    "other": "⚠️ You have already reached the maximum lifetime limit of 3 Arcane Tomes!"
+  },
+  "gacha.use.arcane_tome_success": {
+    "other": "📖 **Arcane Tome absorbed!** Your build tree has gained +1 permanent Build Point!"
+  },
   "gacha.use.roll_reset_success": {
     "other": "⏳ **Time Hourglass used!** Your hourly roll counter was reset to **0**! You have full rolls available."
   },
@@ -743,5 +797,107 @@
   },
   "gacha.lootbox.reward_wish_flare": {
     "other": "🌠 **COMMON DROP!** You received **Star Flare** (+15% wish chance on next 10 rolls)!"
+  },
+  "gacha.custom.quota_exceeded": {
+    "other": "You have reached your limit of 20 active custom images/GIFs (20/20). Remove an existing submission using /removecustom before adding a new one."
+  },
+  "gacha.custom.character_not_found": {
+    "other": "Character not found. Please verify the name or ID."
+  },
+  "gacha.custom.missing_url_or_file": {
+    "other": "Please provide an image/GIF URL or upload a file."
+  },
+  "gacha.custom.invalid_url": {
+    "other": "Invalid URL. Please provide a valid HTTP or HTTPS link."
+  },
+  "gacha.custom.download_failed": {
+    "other": "Failed to download image from the provided URL."
+  },
+  "gacha.custom.download_http_error": {
+    "other": "Failed to download image: remote server returned an error."
+  },
+  "gacha.custom.file_too_large": {
+    "other": "The image or GIF exceeds the 25 MiB file size limit."
+  },
+  "gacha.custom.file_too_small": {
+    "other": "The provided file is too small or empty."
+  },
+  "gacha.custom.unsupported_format": {
+    "other": "Unsupported file format. Please upload a PNG, JPEG, WEBP, or GIF."
+  },
+  "gacha.custom.asset_not_found_or_not_owner": {
+    "other": "Custom image not found, or you do not have permission to delete it."
+  },
+  "gacha.custom.asset_not_pending": {
+    "other": "This custom image is no longer pending review."
+  },
+  "gacha.custom.invalid_image_index": {
+    "other": "Invalid image number. Must be 1 or higher."
+  },
+  "gacha.custom.only_owner_can_set_image": {
+    "other": "Only the character's owner or a server administrator can set the active image."
+  },
+  "gacha.custom.image_index_not_found": {
+    "other": "Image number not found in character's approved gallery."
+  },
+  "gacha.custom.usage_footer.formatted": {
+    "other": "Custom Images: {{.Used}}/20 • Pousadinha Gacha"
+  },
+  "gacha.custom.submitted_approved_title": {
+    "other": "✅ Custom Image Approved"
+  },
+  "gacha.custom.submitted_approved_desc.formatted": {
+    "other": "Successfully added custom photo/GIF for **{{.Character}}**!"
+  },
+  "gacha.custom.submitted_pending_title": {
+    "other": "⏳ Custom Image Submitted"
+  },
+  "gacha.custom.submitted_pending_desc.formatted": {
+    "other": "Custom photo/GIF for **{{.Character}}** has been submitted and is pending moderator review!"
+  },
+  "gacha.custom.review_title": {
+    "other": "🖼️ Custom Image Pending Review"
+  },
+  "gacha.custom.review_desc.formatted": {
+    "other": "**Character:** {{.Character}} (`#{{.CharID}}`)\n**Submitted By:** <@{{.User}}>\n**Asset ID:** `{{.AssetID}}`"
+  },
+  "gacha.custom.mycustoms_title.formatted": {
+    "other": "🖼️ Your Custom Images ({{.Count}}/20)"
+  },
+  "gacha.custom.mycustoms_empty": {
+    "other": "You have not submitted any custom images yet. Use `/addcustom` to submit up to 20 photos or GIFs!"
+  },
+  "gacha.custom.removed_title": {
+    "other": "🗑️ Custom Image Removed"
+  },
+  "gacha.custom.removed_desc.formatted": {
+    "other": "Successfully removed custom image `#{{.AssetID}}`. Your slot has been freed ({{.Used}}/20)!"
+  },
+  "gacha.custom.active_image_set_title": {
+    "other": "✨ Active Image Updated"
+  },
+  "gacha.custom.active_image_set_desc.formatted": {
+    "other": "Set active image for **{{.Character}}** to gallery image #{{.Index}} in this server!"
+  },
+  "gacha.custom.review_admin_only": {
+    "other": "Only server administrators or moderators can review custom images."
+  },
+  "gacha.custom.review_approved.formatted": {
+    "other": "✅ Approved by <@{{.User}}>"
+  },
+  "gacha.custom.review_rejected.formatted": {
+    "other": "❌ Rejected by <@{{.User}}>"
+  },
+  "gacha.config.autoapprove_no_options": {
+    "other": "Please specify whether auto-approve is enabled (true/false)."
+  },
+  "gacha.config.autoapprove_title": {
+    "other": "⚙️ Auto-Approve Settings Updated"
+  },
+  "gacha.config.autoapprove_info.formatted": {
+    "other": "🖼️ **Custom Image Auto-Approve:** {{.Status}}"
+  },
+  "gacha.config.autoapprove_updated.formatted": {
+    "other": "Custom image auto-approval has been set to **{{.Status}}**."
   }
 }

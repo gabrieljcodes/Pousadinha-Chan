@@ -12,8 +12,9 @@ type ResetSchedule struct {
 	ResetMinute   int    // 0..59: minute past the hour when rolls reset
 	RollsPerHour  int    // 1..100: rolls allocated per hourly window
 	ClaimHours    int    // 1..24: interval in hours/resets between claims
-	RollChannelID string // channel where rolls are allowed
-	CmdChannelID  string // channel where other gacha commands are allowed
+	RollChannelID          string // channel where rolls are allowed
+	CmdChannelID           string // channel where other gacha commands are allowed
+	CustomImageAutoApprove bool   // whether user-submitted custom photos/GIFs are automatically approved
 }
 
 // WindowInfo contains the exact boundaries of a reset window.
@@ -115,9 +116,10 @@ func (s *Store) DefaultSchedule() ResetSchedule {
 		minute = 0
 	}
 	return ResetSchedule{
-		ResetMinute:  minute,
-		RollsPerHour: rolls,
-		ClaimHours:   claims,
+		ResetMinute:            minute,
+		RollsPerHour:           rolls,
+		ClaimHours:             claims,
+		CustomImageAutoApprove: true,
 	}
 }
 
@@ -134,14 +136,20 @@ func (s *Store) GuildSchedule(ctx context.Context, guildID string) ResetSchedule
 
 	var minute, rolls, claimHours int
 	var rollChannel, cmdChannel sql.NullString
-	err := s.DB.QueryRowContext(ctx, `SELECT reset_minute, rolls_per_hour, claim_hours, roll_channel_id, cmd_channel_id FROM gacha_guild_settings WHERE guild_id=$1`, guildID).Scan(&minute, &rolls, &claimHours, &rollChannel, &cmdChannel)
+	var autoApprove sql.NullBool
+	err := s.DB.QueryRowContext(ctx, `SELECT reset_minute, rolls_per_hour, claim_hours, roll_channel_id, cmd_channel_id, custom_image_auto_approve FROM gacha_guild_settings WHERE guild_id=$1`, guildID).Scan(&minute, &rolls, &claimHours, &rollChannel, &cmdChannel, &autoApprove)
 	if err == nil {
+		isAutoApprove := true
+		if autoApprove.Valid {
+			isAutoApprove = autoApprove.Bool
+		}
 		sch := ResetSchedule{
-			ResetMinute:   minute,
-			RollsPerHour:  rolls,
-			ClaimHours:    claimHours,
-			RollChannelID: rollChannel.String,
-			CmdChannelID:  cmdChannel.String,
+			ResetMinute:            minute,
+			RollsPerHour:           rolls,
+			ClaimHours:             claimHours,
+			RollChannelID:          rollChannel.String,
+			CmdChannelID:           cmdChannel.String,
+			CustomImageAutoApprove: isAutoApprove,
 		}
 		s.setCachedSchedule(guildID, sch)
 		return sch
@@ -151,7 +159,7 @@ func (s *Store) GuildSchedule(ctx context.Context, guildID string) ResetSchedule
 	return def
 }
 
-// SetGuildSchedule persists custom reset settings for a guild while preserving channel configurations.
+// SetGuildSchedule persists custom reset settings for a guild while preserving channel configurations and auto-approve.
 func (s *Store) SetGuildSchedule(ctx context.Context, guildID string, resetMinute, rollsPerHour, claimHours int) error {
 	if guildID == "" {
 		return fmt.Errorf("guild ID cannot be empty")
@@ -168,24 +176,25 @@ func (s *Store) SetGuildSchedule(ctx context.Context, guildID string, resetMinut
 
 	current := s.GuildSchedule(ctx, guildID)
 	_, err := s.DB.ExecContext(ctx, `
-INSERT INTO gacha_guild_settings(guild_id, reset_minute, rolls_per_hour, claim_hours, roll_channel_id, cmd_channel_id, updated_at)
-VALUES($1, $2, $3, $4, $5, $6, now())
+INSERT INTO gacha_guild_settings(guild_id, reset_minute, rolls_per_hour, claim_hours, roll_channel_id, cmd_channel_id, custom_image_auto_approve, updated_at)
+VALUES($1, $2, $3, $4, $5, $6, $7, now())
 ON CONFLICT(guild_id) DO UPDATE SET
     reset_minute = EXCLUDED.reset_minute,
     rolls_per_hour = EXCLUDED.rolls_per_hour,
     claim_hours = EXCLUDED.claim_hours,
     updated_at = now()
-`, guildID, resetMinute, rollsPerHour, claimHours, current.RollChannelID, current.CmdChannelID)
+`, guildID, resetMinute, rollsPerHour, claimHours, current.RollChannelID, current.CmdChannelID, current.CustomImageAutoApprove)
 	if err != nil {
 		return err
 	}
 
 	s.setCachedSchedule(guildID, ResetSchedule{
-		ResetMinute:   resetMinute,
-		RollsPerHour:  rollsPerHour,
-		ClaimHours:    claimHours,
-		RollChannelID: current.RollChannelID,
-		CmdChannelID:  current.CmdChannelID,
+		ResetMinute:            resetMinute,
+		RollsPerHour:           rollsPerHour,
+		ClaimHours:             claimHours,
+		RollChannelID:          current.RollChannelID,
+		CmdChannelID:           current.CmdChannelID,
+		CustomImageAutoApprove: current.CustomImageAutoApprove,
 	})
 	return nil
 }
@@ -207,25 +216,63 @@ func (s *Store) SetGuildChannels(ctx context.Context, guildID, rollChannelID, cm
 	}
 
 	_, err := s.DB.ExecContext(ctx, `
-INSERT INTO gacha_guild_settings(guild_id, reset_minute, rolls_per_hour, claim_hours, roll_channel_id, cmd_channel_id, updated_at)
-VALUES($1, $2, $3, $4, $5, $6, now())
+INSERT INTO gacha_guild_settings(guild_id, reset_minute, rolls_per_hour, claim_hours, roll_channel_id, cmd_channel_id, custom_image_auto_approve, updated_at)
+VALUES($1, $2, $3, $4, $5, $6, $7, now())
 ON CONFLICT(guild_id) DO UPDATE SET
     roll_channel_id = EXCLUDED.roll_channel_id,
     cmd_channel_id = EXCLUDED.cmd_channel_id,
     updated_at = now()
-`, guildID, current.ResetMinute, current.RollsPerHour, current.ClaimHours, newRoll, newCmd)
+`, guildID, current.ResetMinute, current.RollsPerHour, current.ClaimHours, newRoll, newCmd, current.CustomImageAutoApprove)
 	if err != nil {
 		return err
 	}
 
 	s.setCachedSchedule(guildID, ResetSchedule{
-		ResetMinute:   current.ResetMinute,
-		RollsPerHour:  current.RollsPerHour,
-		ClaimHours:    current.ClaimHours,
-		RollChannelID: newRoll,
-		CmdChannelID:  newCmd,
+		ResetMinute:            current.ResetMinute,
+		RollsPerHour:           rollsPerHourOrDefault(current.RollsPerHour),
+		ClaimHours:             claimHoursOrDefault(current.ClaimHours),
+		RollChannelID:          newRoll,
+		CmdChannelID:           newCmd,
+		CustomImageAutoApprove: current.CustomImageAutoApprove,
 	})
 	return nil
+}
+
+// SetGuildAutoApprove toggles automatic approval of user-submitted custom photos/GIFs.
+func (s *Store) SetGuildAutoApprove(ctx context.Context, guildID string, enabled bool) error {
+	if guildID == "" {
+		return fmt.Errorf("guild ID cannot be empty")
+	}
+
+	current := s.GuildSchedule(ctx, guildID)
+	_, err := s.DB.ExecContext(ctx, `
+INSERT INTO gacha_guild_settings(guild_id, reset_minute, rolls_per_hour, claim_hours, roll_channel_id, cmd_channel_id, custom_image_auto_approve, updated_at)
+VALUES($1, $2, $3, $4, $5, $6, $7, now())
+ON CONFLICT(guild_id) DO UPDATE SET
+    custom_image_auto_approve = EXCLUDED.custom_image_auto_approve,
+    updated_at = now()
+`, guildID, current.ResetMinute, current.RollsPerHour, current.ClaimHours, current.RollChannelID, current.CmdChannelID, enabled)
+	if err != nil {
+		return err
+	}
+
+	current.CustomImageAutoApprove = enabled
+	s.setCachedSchedule(guildID, current)
+	return nil
+}
+
+func rollsPerHourOrDefault(v int) int {
+	if v < 1 {
+		return 10
+	}
+	return v
+}
+
+func claimHoursOrDefault(v int) int {
+	if v < 1 {
+		return 3
+	}
+	return v
 }
 
 // ResetGuildSchedule deletes custom settings for a guild, restoring server defaults.

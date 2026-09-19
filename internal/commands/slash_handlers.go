@@ -10,8 +10,10 @@ import (
 	"bot/internal/webhook"
 	"bot/pkg/config"
 	"bot/pkg/utils"
+	"context"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -49,7 +51,7 @@ func respondDeferredEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, 
 
 func isGachaCommand(name string) bool {
 	switch name {
-	case "roll", "rolls", "top", "info", "harem", "profile", "gallery", "wishlist", "wish", "unwish", "wishclear", "trade", "gift", "divorce", "keys", "offers", "search", "harem-ranking", "alias", "series", "gachashop", "inventory", "gachabuy", "use", "open":
+	case "roll", "rolls", "top", "info", "harem", "profile", "gallery", "wishlist", "wish", "unwish", "wishclear", "trade", "gift", "divorce", "keys", "offers", "search", "harem-ranking", "alias", "series", "gachashop", "inventory", "gachabuy", "use", "open", "addcustom", "mycustoms", "removecustom", "customimage":
 		return true
 	default:
 		return false
@@ -73,9 +75,9 @@ func SlashHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	}
 
 	// Check if channel is allowed
+	cmdName := i.ApplicationCommandData().Name
 	if !config.Bot.IsChannelAllowed(i.ChannelID) {
 		allowedInSpecial := false
-		cmdName := i.ApplicationCommandData().Name
 		if isGachaCommand(cmdName) {
 			allowedInSpecial = true
 		}
@@ -107,8 +109,14 @@ func SlashHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	}
 
 	switch i.ApplicationCommandData().Name {
-	case "roll", "rolls", "top", "info", "harem", "profile", "gallery", "wishlist", "wish", "unwish", "wishclear", "trade", "gift", "divorce", "keys", "offers", "search", "harem-ranking", "alias", "series":
+	case "roll", "rolls", "top", "info", "harem", "profile", "gallery", "wishlist", "wish", "unwish", "wishclear", "trade", "gift", "divorce", "keys", "offers", "search", "harem-ranking", "alias", "series", "gachashop", "inventory", "gachabuy", "use", "open", "mycustoms", "builds", "learnskill", "respec":
 		gacha.Slash(s, i)
+	case "addcustom":
+		handleAddCustomSlash(s, i)
+	case "removecustom":
+		handleRemoveCustomSlash(s, i)
+	case "customimage":
+		handleCustomImageSlash(s, i)
 	case "gachaconfig":
 		gacha.HandleConfigSlash(s, i)
 	case "event":
@@ -553,4 +561,118 @@ func handleSlashCrypto(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	case "portfolio":
 		respondEmbed(s, i, crypto.ExecuteCryptoPortfolio(i.GuildID, userID))
 	}
+}
+
+func handleAddCustomSlash(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	if i.Member == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
+	defer cancel()
+
+	data := i.ApplicationCommandData()
+	var charQuery string
+	var imageURL string
+	var attachment *discordgo.MessageAttachment
+
+	for _, opt := range data.Options {
+		switch opt.Name {
+		case "character":
+			charQuery = opt.StringValue()
+		case "image_url":
+			imageURL = opt.StringValue()
+		case "image_file":
+			if attID, ok := opt.Value.(string); ok {
+				if data.Resolved != nil && data.Resolved.Attachments != nil {
+					attachment = data.Resolved.Attachments[attID]
+				}
+			}
+		}
+	}
+
+	isAdmin := (i.Member.Permissions & (discordgo.PermissionAdministrator | discordgo.PermissionManageServer)) != 0
+
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+	})
+
+	res, err := gacha.HandleAddCustom(ctx, s, i.GuildID, i.ChannelID, i.Member.User.ID, i.Member.User.Username, charQuery, imageURL, attachment, isAdmin)
+	if err != nil {
+		content := err.Error()
+		_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &content})
+		return
+	}
+
+	_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+		Embeds:     &res.Embeds,
+		Components: &res.Components,
+	})
+}
+
+func handleRemoveCustomSlash(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	if i.Member == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	var assetID int64
+	for _, opt := range i.ApplicationCommandData().Options {
+		if opt.Name == "asset_id" {
+			assetID = opt.IntValue()
+		}
+	}
+
+	isAdmin := (i.Member.Permissions & (discordgo.PermissionAdministrator | discordgo.PermissionManageServer)) != 0
+
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+	})
+
+	res, err := gacha.HandleRemoveCustom(ctx, i.GuildID, i.Member.User.ID, assetID, isAdmin)
+	if err != nil {
+		content := err.Error()
+		_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &content})
+		return
+	}
+
+	_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+		Embeds: &res.Embeds,
+	})
+}
+
+func handleCustomImageSlash(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	if i.Member == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	var charQuery string
+	imageIndex := 1
+	for _, opt := range i.ApplicationCommandData().Options {
+		switch opt.Name {
+		case "character":
+			charQuery = opt.StringValue()
+		case "image_index":
+			imageIndex = int(opt.IntValue())
+		}
+	}
+
+	isAdmin := (i.Member.Permissions & (discordgo.PermissionAdministrator | discordgo.PermissionManageServer)) != 0
+
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+	})
+
+	res, err := gacha.HandleCustomImageSelect(ctx, i.GuildID, i.Member.User.ID, charQuery, imageIndex, isAdmin)
+	if err != nil {
+		content := err.Error()
+		_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &content})
+		return
+	}
+
+	_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+		Embeds: &res.Embeds,
+	})
 }
