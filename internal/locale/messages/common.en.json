@@ -4,5 +4,8 @@
   },
   "common.server_only": {
     "other": "Use this command in a server."
+  },
+  "common.admin_only": {
+    "other": "Only server administrators can use this command."
   }
 }

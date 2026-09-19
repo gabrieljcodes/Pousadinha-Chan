@@ -49,15 +49,6 @@ func respondDeferredEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, 
 	}
 }
 
-func isGachaCommand(name string) bool {
-	switch name {
-	case "roll", "rolls", "top", "info", "harem", "profile", "gallery", "wishlist", "wish", "unwish", "wishclear", "trade", "gift", "divorce", "keys", "offers", "search", "harem-ranking", "alias", "series", "gachashop", "inventory", "gachabuy", "use", "open", "addcustom", "mycustoms", "removecustom", "customimage":
-		return true
-	default:
-		return false
-	}
-}
-
 func SlashHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if i.Type != discordgo.InteractionApplicationCommand {
 		return
@@ -74,96 +65,37 @@ func SlashHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		return
 	}
 
-	// Check if channel is allowed
 	cmdName := i.ApplicationCommandData().Name
-	if !config.Bot.IsChannelAllowed(i.ChannelID) {
-		allowedInSpecial := false
-		if isGachaCommand(cmdName) {
-			allowedInSpecial = true
-		}
-		if cmdName == "poly" && i.GuildID != "" {
-			settings, _ := database.GetGuildPolymarketSettings(i.GuildID)
-			if settings != nil && settings.ChannelID == i.ChannelID {
-				allowedInSpecial = true
-			}
-		}
-		if cmdName == "bicho" && i.GuildID != "" {
-			bichoSettings, _ := database.GetBichoSettings(i.GuildID)
-			if bichoSettings != nil && bichoSettings.ChannelID == i.ChannelID {
-				allowedInSpecial = true
-			}
-		}
-		if cmdName == "gachaconfig" && i.Member != nil && (i.Member.Permissions&(discordgo.PermissionAdministrator|discordgo.PermissionManageServer) != 0) {
-			allowedInSpecial = true
-		}
-		if !allowedInSpecial {
-			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{
-					Embeds: []*discordgo.MessageEmbed{utils.ErrorEmbed(loc.Text("commands.components.this_bot_can_only_be_used_in"))},
-					Flags:  discordgo.MessageFlagsEphemeral,
-				},
-			})
-			return
-		}
+	route, found := GetSlashRoute(cmdName)
+	if !found {
+		log.Printf("[commands] unhandled or unknown slash command: %s", cmdName)
+		return
 	}
 
-	switch i.ApplicationCommandData().Name {
-	case "roll", "rolls", "top", "info", "harem", "profile", "gallery", "wishlist", "wish", "unwish", "wishclear", "trade", "gift", "divorce", "keys", "offers", "search", "harem-ranking", "alias", "series", "gachashop", "inventory", "gachabuy", "use", "open", "mycustoms", "builds", "learnskill", "respec":
-		gacha.Slash(s, i)
-	case "addcustom":
-		handleAddCustomSlash(s, i)
-	case "removecustom":
-		handleRemoveCustomSlash(s, i)
-	case "customimage":
-		handleCustomImageSlash(s, i)
-	case "gachaconfig":
-		gacha.HandleConfigSlash(s, i)
-	case "event":
-		games.HandleEventCommand(s, i)
-	case "help":
-		HandleSlashHelp(s, i)
-	case "daily":
-		handleSlashDaily(s, i)
-	case "balance":
-		handleSlashBalance(s, i)
-	case "leaderboard":
-		handleSlashLeaderboard(s, i)
-	case "pay":
-		handleSlashPay(s, i)
-	case "shop":
-		handleSlashShop(s, i)
-	case "buy":
-		handleSlashBuy(s, i)
-	case "apikey":
-		HandleSlashApiKey(s, i)
-	case "webhook":
-		HandleSlashWebhook(s, i)
-	case "bet":
-		handleSlashBet(s, i)
-	case "slots":
-		handleSlashSlots(s, i)
-	case "wheel":
-		handleSlashWheel(s, i)
-	case "roulette":
-		handleSlashRoulette(s, i)
-	case "blackjack":
-		handleSlashBlackjack(s, i)
-	case "mines":
-		handleSlashMines(s, i)
-	case "loan":
-		handleSlashLoan(s, i)
-	case "stock":
-		handleSlashStock(s, i)
-	case "crypto":
-		handleSlashCrypto(s, i)
-	case "poly":
-		HandleSlashPolymarket(s, i)
-	case "bicho":
-		HandleSlashBicho(s, i)
-	case "language":
-		HandleSlashLanguage(s, i)
+	if route.AdminOnly && !isAdmin(i.Member) {
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Embeds: []*discordgo.MessageEmbed{utils.ErrorEmbed(loc.Text("common.admin_only"))},
+				Flags:  discordgo.MessageFlagsEphemeral,
+			},
+		})
+		return
 	}
+
+	// Channel permission check: verified against global config or domain-specific channel rules
+	if !isChannelAuthorized(i, route) {
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Embeds: []*discordgo.MessageEmbed{utils.ErrorEmbed(loc.Text("commands.components.this_bot_can_only_be_used_in"))},
+				Flags:  discordgo.MessageFlagsEphemeral,
+			},
+		})
+		return
+	}
+
+	route.Handler(s, i)
 }
 
 func handleSlashRoulette(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -596,6 +528,12 @@ func handleAddCustomSlash(s *discordgo.Session, i *discordgo.InteractionCreate) 
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 	})
 
+	if err := gacha.ValidateChannel(ctx, i.GuildID, i.ChannelID, "addcustom"); err != nil {
+		content := err.Error()
+		_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &content})
+		return
+	}
+
 	res, err := gacha.HandleAddCustom(ctx, s, i.GuildID, i.ChannelID, i.Member.User.ID, i.Member.User.Username, charQuery, imageURL, attachment, isAdmin)
 	if err != nil {
 		content := err.Error()
@@ -628,6 +566,12 @@ func handleRemoveCustomSlash(s *discordgo.Session, i *discordgo.InteractionCreat
 	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 	})
+
+	if err := gacha.ValidateChannel(ctx, i.GuildID, i.ChannelID, "removecustom"); err != nil {
+		content := err.Error()
+		_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &content})
+		return
+	}
 
 	res, err := gacha.HandleRemoveCustom(ctx, i.GuildID, i.Member.User.ID, assetID, isAdmin)
 	if err != nil {
@@ -664,6 +608,12 @@ func handleCustomImageSlash(s *discordgo.Session, i *discordgo.InteractionCreate
 	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 	})
+
+	if err := gacha.ValidateChannel(ctx, i.GuildID, i.ChannelID, "customimage"); err != nil {
+		content := err.Error()
+		_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &content})
+		return
+	}
 
 	res, err := gacha.HandleCustomImageSelect(ctx, i.GuildID, i.Member.User.ID, charQuery, imageIndex, isAdmin)
 	if err != nil {

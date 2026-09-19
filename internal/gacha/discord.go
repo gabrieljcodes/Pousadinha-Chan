@@ -1143,6 +1143,14 @@ func isRollAction(action string) bool {
 	}
 }
 
+// ValidateChannel checks whether the given action is allowed in channelID for guildID.
+func ValidateChannel(ctx context.Context, guildID, channelID, action string) error {
+	if Default == nil {
+		return nil
+	}
+	return Default.validateChannel(ctx, guildID, channelID, action)
+}
+
 func (s *Store) validateChannel(ctx context.Context, guildID, channelID, action string) error {
 	if guildID == "" || channelID == "" || action == "gachaconfig" {
 		return nil
@@ -1173,11 +1181,15 @@ func (s *Store) validateChannel(ctx context.Context, guildID, channelID, action 
 			return userError(locale.Text("gacha.channels.rolls_only_in.formatted", locale.Data{"Channel": sch.RollChannelID}))
 		}
 	} else {
-		if sch.CmdChannelID == "" {
+		target := sch.CmdChannelID
+		if target == "" {
+			target = sch.RollChannelID
+		}
+		if target == "" {
 			return userError(locale.Text("gacha.channels.cmd_channel_not_configured"))
 		}
-		if channelID != sch.CmdChannelID {
-			return userError(locale.Text("gacha.channels.commands_only_in.formatted", locale.Data{"Channel": sch.CmdChannelID}))
+		if channelID != target {
+			return userError(locale.Text("gacha.channels.commands_only_in.formatted", locale.Data{"Channel": target}))
 		}
 	}
 	return nil

@@ -166,6 +166,25 @@ func TestChannelValidation(t *testing.T) {
 		t.Errorf("expected harem in random channel to be rejected, got nil")
 	}
 
+	// Utility / Build commands (builds, learnskill, respec, addcustom, customimage) allowed in cmd channel and roll channel
+	for _, act := range []string{"builds", "learnskill", "respec", "addcustom", "customimage", "mycustoms", "shop"} {
+		if err := store.validateChannel(ctx, guildID, cmdCh, act); err != nil {
+			t.Errorf("expected %s in command channel to be allowed, got: %v", act, err)
+		}
+		if err := store.validateChannel(ctx, guildID, rollCh, act); err != nil {
+			t.Errorf("expected %s in roll channel to be allowed, got: %v", act, err)
+		}
+		if err := store.validateChannel(ctx, guildID, "random-channel", act); err == nil {
+			t.Errorf("expected %s in random channel to be rejected, got nil", act)
+		}
+	}
+
+	// ValidateChannel package-level helper
+	Default = store
+	if err := ValidateChannel(ctx, guildID, cmdCh, "builds"); err != nil {
+		t.Errorf("expected ValidateChannel to allow builds in cmd channel, got: %v", err)
+	}
+
 	// gachaconfig admin command -> always allowed everywhere
 	if err := store.validateChannel(ctx, guildID, "random-channel", "gachaconfig"); err != nil {
 		t.Errorf("expected gachaconfig to be allowed anywhere, got error: %v", err)
