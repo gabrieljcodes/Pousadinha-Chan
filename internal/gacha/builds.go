@@ -80,7 +80,7 @@ var classes = []ClassInfo{
 		Name:        "Guardião",
 		Emoji:       "🛡️",
 		Title:       "O Caçador e Protetor Implacável",
-		Description: "Especializado em escudos anti-snipe em todos os rolls, tempo estendido de rolagem, capacidade de rolls e punição de invasores.",
+		Description: "Especializado em reflexo defensivo anti-snipe em seus rolls, tempo estendido de rolagem, capacidade de rolls e dissuasão de invasores.",
 	},
 }
 
@@ -216,7 +216,7 @@ var skillCatalog = []SkillDef{
 		PointsCost:  1,
 		Name:        "Reflexo Rápido",
 		Emoji:       "⚡",
-		Description: "Concede 15 segundos de proteção Snipe Shield em TODOS os seus rolls (não apenas wishes).",
+		Description: "Concede 5 segundos de proteção Snipe Shield nos seus rolls (uma breve janela de reação para você reivindicar antes dos snipers).",
 	},
 	{
 		ID:          "guardian_t2_endurance",
@@ -245,7 +245,7 @@ var skillCatalog = []SkillDef{
 		PointsCost:  5,
 		Name:        "Fortaleza Inabalável",
 		Emoji:       "🏰",
-		Description: "Seus rolls duram 75s no chat antes de expirar. Se alguém tentar dar snipe enquanto protegido, o agressor paga 100 moedas de multa para você!",
+		Description: "Seus rolls duram 55s no chat antes de expirar. Se alguém tentar dar snipe enquanto você estiver protegido, o invasor é repelido e paga uma taxa defensiva de 15 moedas para você.",
 		PrereqID:    "guardian_t3_tracker",
 	},
 }

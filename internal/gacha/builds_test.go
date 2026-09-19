@@ -2,6 +2,7 @@ package gacha
 
 import (
 	"context"
+	"strings"
 	"testing"
 )
 
@@ -122,3 +123,31 @@ func TestHasPlayerSkillCache(t *testing.T) {
 		t.Fatal("expected false without DB connection")
 	}
 }
+
+func TestGuardianNerfedSkills(t *testing.T) {
+	store := &Store{}
+	t1, ok1 := store.GetSkillDef("guardian_t1_draw")
+	if !ok1 {
+		t.Fatal("guardian_t1_draw must exist")
+	}
+	if t1.Tier != 1 || t1.PointsCost != 1 {
+		t.Errorf("guardian_t1_draw tier=%d cost=%d", t1.Tier, t1.PointsCost)
+	}
+	// Verify description mentions 5 seconds
+	if len(t1.Description) == 0 || !strings.Contains(t1.Description, "5 segundos") {
+		t.Errorf("guardian_t1_draw description should mention 5 seconds: %s", t1.Description)
+	}
+
+	t4, ok4 := store.GetSkillDef("guardian_t4_aegis")
+	if !ok4 {
+		t.Fatal("guardian_t4_aegis must exist")
+	}
+	if t4.Tier != 4 || t4.PointsCost != 5 {
+		t.Errorf("guardian_t4_aegis tier=%d cost=%d", t4.Tier, t4.PointsCost)
+	}
+	// Verify description mentions 55s and 15 moedas
+	if !strings.Contains(t4.Description, "55s") || !strings.Contains(t4.Description, "15 moedas") {
+		t.Errorf("guardian_t4_aegis description should mention 55s and 15 moedas: %s", t4.Description)
+	}
+}
+

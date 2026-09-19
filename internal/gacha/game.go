@@ -268,7 +268,7 @@ WHERE w.guild_id = $1 AND w.user_id = $2
 
 	expiryInterval := "45 seconds"
 	if s.HasPlayerSkill(ctx, guild, user, "guardian_t4_aegis") {
-		expiryInterval = "75 seconds"
+		expiryInterval = "55 seconds"
 	}
 
 	r.ID = uuid.NewString()
@@ -285,12 +285,9 @@ WHERE w.guild_id = $1 AND w.user_id = $2
 		return r, e
 	}
 
-	// Auto snipe shield for Oracle T4 or Guardian T1
+	// Auto snipe shield for Oracle T4 on Wish spawn
 	if r.WishSpawn && s.HasPlayerSkill(ctx, guild, user, "oracle_t4_decree") {
 		_, _ = tx.ExecContext(ctx, `UPDATE gacha_players SET snipe_shield_until = GREATEST(COALESCE(snipe_shield_until, now()), now()) + interval '20 seconds' WHERE guild_id=$1 AND user_id=$2`, guild, user)
-	}
-	if s.HasPlayerSkill(ctx, guild, user, "guardian_t1_draw") {
-		_, _ = tx.ExecContext(ctx, `UPDATE gacha_players SET snipe_shield_until = GREATEST(COALESCE(snipe_shield_until, now()), now()) + interval '15 seconds' WHERE guild_id=$1 AND user_id=$2`, guild, user)
 	}
 
 	// Trickster T1: Mãos Leves (coin pouch)
@@ -328,6 +325,8 @@ WHERE w.guild_id = $1 AND w.user_id = $2
 	}
 	return r, tx.Commit()
 }
+
+// Claim transfers ownership of the rolled card to the claiming player.
 func (s *Store) Claim(ctx context.Context, guild, channel, user, roll string) error {
 	// Resolve configuration before holding transactional locks/connections.
 	schedule := s.GuildSchedule(ctx, guild)
@@ -367,10 +366,10 @@ func (s *Store) Claim(ctx context.Context, guild, channel, user, roll string) er
 		return e
 	}
 
-	// Trap check:
+	// Trickster T3 Masquerade Trap check
 	if isTrap && !trapRevealed {
 		if user == rollerID {
-			// Roller clicked their own trap: inform them and don't consume claim
+			// Roller clicked: notify that it's a trap, don't claim, reveal after 3s
 			return ErrTrapRollerClick
 		}
 		// Sniper clicked: reveal trap so sniper claims real underlying character (cid)
@@ -382,16 +381,42 @@ func (s *Store) Claim(ctx context.Context, guild, channel, user, roll string) er
 	if (isWishSpawn || hasGuardianShield) && rollerID != user {
 		var snipeUntil sql.NullTime
 		_ = tx.QueryRowContext(ctx, `SELECT snipe_shield_until FROM gacha_players WHERE guild_id=$1 AND user_id=$2`, guild, rollerID).Scan(&snipeUntil)
-		isProtected := hasGuardianShield
-		if snipeUntil.Valid && snipeUntil.Time.After(time.Now()) {
+		isProtected := false
+		protectSeconds := 0
+		if isWishSpawn {
+			protectSeconds = 15
+			if s.HasPlayerSkill(ctx, guild, rollerID, "oracle_t4_decree") {
+				protectSeconds = 20
+			}
 			isProtected = true
 		}
+		if snipeUntil.Valid && snipeUntil.Time.After(time.Now()) {
+			isProtected = true
+			if itemSeconds := int(math.Ceil(time.Until(snipeUntil.Time).Seconds())); itemSeconds > protectSeconds {
+				protectSeconds = itemSeconds
+			}
+		}
+		if hasGuardianShield {
+			isProtected = true
+			if protectSeconds < 5 {
+				protectSeconds = 5
+			}
+		}
 		if isProtected {
-			protectUntil := rollCreatedAt.Add(15 * time.Second)
+			protectUntil := rollCreatedAt.Add(time.Duration(protectSeconds) * time.Second)
 			if time.Now().Before(protectUntil) {
 				if s.HasPlayerSkill(ctx, guild, rollerID, "guardian_t4_aegis") {
-					_, _ = tx.ExecContext(ctx, `UPDATE guild_members SET balance = GREATEST(0, balance - 100) WHERE guild_id=$1 AND user_id=$2`, guild, user)
-					_, _ = tx.ExecContext(ctx, `UPDATE guild_members SET balance = balance + 100 WHERE guild_id=$1 AND user_id=$2`, guild, rollerID)
+					fine := 15
+					var sniperBal int
+					_ = tx.QueryRowContext(ctx, `SELECT balance FROM guild_members WHERE guild_id=$1 AND user_id=$2`, guild, user).Scan(&sniperBal)
+					if sniperBal > 0 {
+						actualFine := fine
+						if sniperBal < actualFine {
+							actualFine = sniperBal
+						}
+						_, _ = tx.ExecContext(ctx, `UPDATE guild_members SET balance = balance - $3, updated_at = now() WHERE guild_id=$1 AND user_id=$2`, guild, user, actualFine)
+						_, _ = tx.ExecContext(ctx, `UPDATE guild_members SET balance = balance + $3, updated_at = now() WHERE guild_id=$1 AND user_id=$2`, guild, rollerID, actualFine)
+					}
 				}
 				remaining := math.Ceil(time.Until(protectUntil).Seconds())
 				if remaining < 1 {
