@@ -33,3 +33,9 @@ CREATE INDEX IF NOT EXISTS idx_gacha_player_skills_user ON gacha_player_skills (
 
 ALTER TABLE gacha_player_builds ENABLE ROW LEVEL SECURITY;
 ALTER TABLE gacha_player_skills ENABLE ROW LEVEL SECURITY;
+
+-- Swap legacy Guardian T1 draw to T1 endurance
+UPDATE gacha_player_skills
+SET skill_id = 'guardian_t1_endurance'
+WHERE skill_id = 'guardian_t1_draw' AND tier = 1;
+

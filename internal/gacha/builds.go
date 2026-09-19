@@ -80,7 +80,7 @@ var classes = []ClassInfo{
 		Name:        "Guardião",
 		Emoji:       "🛡️",
 		Title:       "O Caçador e Protetor Implacável",
-		Description: "Especializado em reflexo defensivo anti-snipe em seus rolls, tempo estendido de rolagem, capacidade de rolls e dissuasão de invasores.",
+		Description: "Especializado em capacidade de rolls, proteção anti-snipe em seus wishes, tempo estendido de rolagem e dissuasão de invasores.",
 	},
 }
 
@@ -210,23 +210,23 @@ var skillCatalog = []SkillDef{
 
 	// Class: Guardian (🛡️)
 	{
-		ID:          "guardian_t1_draw",
+		ID:          "guardian_t1_endurance",
 		ClassID:     ClassGuardian,
 		Tier:        1,
 		PointsCost:  1,
-		Name:        "Reflexo Rápido",
-		Emoji:       "⚡",
-		Description: "Concede 5 segundos de proteção Snipe Shield nos seus rolls (uma breve janela de reação para você reivindicar antes dos snipers).",
-	},
-	{
-		ID:          "guardian_t2_endurance",
-		ClassID:     ClassGuardian,
-		Tier:        2,
-		PointsCost:  2,
 		Name:        "Vigor do Caçador",
 		Emoji:       "🏹",
 		Description: "Aumenta permanentemente sua capacidade de rolls em +1 roll por hora.",
-		PrereqID:    "guardian_t1_draw",
+	},
+	{
+		ID:          "guardian_t2_draw",
+		ClassID:     ClassGuardian,
+		Tier:        2,
+		PointsCost:  2,
+		Name:        "Reflexo Rápido",
+		Emoji:       "⚡",
+		Description: "Concede 0.5 segundos de proteção Snipe Shield nos seus wishes.",
+		PrereqID:    "guardian_t1_endurance",
 	},
 	{
 		ID:          "guardian_t3_tracker",
@@ -236,7 +236,7 @@ var skillCatalog = []SkillDef{
 		Name:        "Rastreador Implacável",
 		Emoji:       "🎯",
 		Description: "Concede +2 slots permanentes extras na sua Wishlist sem gastar itens da loja.",
-		PrereqID:    "guardian_t2_endurance",
+		PrereqID:    "guardian_t2_draw",
 	},
 	{
 		ID:          "guardian_t4_aegis",
@@ -245,7 +245,7 @@ var skillCatalog = []SkillDef{
 		PointsCost:  5,
 		Name:        "Fortaleza Inabalável",
 		Emoji:       "🏰",
-		Description: "Seus rolls duram 55s no chat antes de expirar. Se alguém tentar dar snipe enquanto você estiver protegido, o invasor é repelido e paga uma taxa defensiva de 15 moedas para você.",
+		Description: "Seus rolls duram 75s no chat antes de expirar. Se alguém tentar dar snipe enquanto você estiver protegido no wish (0.5s), o invasor é repelido e paga 100 moedas de multa para você!",
 		PrereqID:    "guardian_t3_tracker",
 	},
 }

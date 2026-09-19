@@ -126,16 +126,38 @@ func TestHasPlayerSkillCache(t *testing.T) {
 
 func TestGuardianNerfedSkills(t *testing.T) {
 	store := &Store{}
-	t1, ok1 := store.GetSkillDef("guardian_t1_draw")
+	t1, ok1 := store.GetSkillDef("guardian_t1_endurance")
 	if !ok1 {
-		t.Fatal("guardian_t1_draw must exist")
+		t.Fatal("guardian_t1_endurance must exist")
 	}
 	if t1.Tier != 1 || t1.PointsCost != 1 {
-		t.Errorf("guardian_t1_draw tier=%d cost=%d", t1.Tier, t1.PointsCost)
+		t.Errorf("guardian_t1_endurance tier=%d cost=%d", t1.Tier, t1.PointsCost)
 	}
-	// Verify description mentions 5 seconds
-	if len(t1.Description) == 0 || !strings.Contains(t1.Description, "5 segundos") {
-		t.Errorf("guardian_t1_draw description should mention 5 seconds: %s", t1.Description)
+	if !strings.Contains(t1.Description, "+1 roll por hora") {
+		t.Errorf("guardian_t1_endurance description should mention +1 roll por hora: %s", t1.Description)
+	}
+
+	t2, ok2 := store.GetSkillDef("guardian_t2_draw")
+	if !ok2 {
+		t.Fatal("guardian_t2_draw must exist")
+	}
+	if t2.Tier != 2 || t2.PointsCost != 2 {
+		t.Errorf("guardian_t2_draw tier=%d cost=%d", t2.Tier, t2.PointsCost)
+	}
+	if t2.PrereqID != "guardian_t1_endurance" {
+		t.Errorf("guardian_t2_draw prereq=%s, want guardian_t1_endurance", t2.PrereqID)
+	}
+	// Verify description mentions 0.5 segundos and wishes
+	if !strings.Contains(t2.Description, "0.5 segundos") || !strings.Contains(t2.Description, "wishes") {
+		t.Errorf("guardian_t2_draw description should mention 0.5 segundos and wishes: %s", t2.Description)
+	}
+
+	t3, ok3 := store.GetSkillDef("guardian_t3_tracker")
+	if !ok3 {
+		t.Fatal("guardian_t3_tracker must exist")
+	}
+	if t3.PrereqID != "guardian_t2_draw" {
+		t.Errorf("guardian_t3_tracker prereq=%s, want guardian_t2_draw", t3.PrereqID)
 	}
 
 	t4, ok4 := store.GetSkillDef("guardian_t4_aegis")
@@ -145,9 +167,12 @@ func TestGuardianNerfedSkills(t *testing.T) {
 	if t4.Tier != 4 || t4.PointsCost != 5 {
 		t.Errorf("guardian_t4_aegis tier=%d cost=%d", t4.Tier, t4.PointsCost)
 	}
-	// Verify description mentions 55s and 15 moedas
-	if !strings.Contains(t4.Description, "55s") || !strings.Contains(t4.Description, "15 moedas") {
-		t.Errorf("guardian_t4_aegis description should mention 55s and 15 moedas: %s", t4.Description)
+	if t4.PrereqID != "guardian_t3_tracker" {
+		t.Errorf("guardian_t4_aegis prereq=%s, want guardian_t3_tracker", t4.PrereqID)
+	}
+	// Verify description mentions 75s and 100 moedas
+	if !strings.Contains(t4.Description, "75s") || !strings.Contains(t4.Description, "100 moedas") {
+		t.Errorf("guardian_t4_aegis description should mention 75s and 100 moedas: %s", t4.Description)
 	}
 }
 

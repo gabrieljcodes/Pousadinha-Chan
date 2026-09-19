@@ -136,7 +136,7 @@ func (s *Store) rollPoolSnapshot(ctx context.Context, guild, channel, user, requ
 		return r, e
 	}
 	effectiveMaxRolls := schedule.RollsPerHour + extraPermRolls
-	if s.HasPlayerSkill(ctx, guild, user, "guardian_t2_endurance") {
+	if s.HasPlayerSkill(ctx, guild, user, "guardian_t1_endurance") || s.HasPlayerSkill(ctx, guild, user, "guardian_t2_endurance") {
 		effectiveMaxRolls++
 	}
 	if rollsUsed < effectiveMaxRolls {
@@ -268,7 +268,7 @@ WHERE w.guild_id = $1 AND w.user_id = $2
 
 	expiryInterval := "45 seconds"
 	if s.HasPlayerSkill(ctx, guild, user, "guardian_t4_aegis") {
-		expiryInterval = "55 seconds"
+		expiryInterval = "75 seconds"
 	}
 
 	r.ID = uuid.NewString()
@@ -376,57 +376,65 @@ func (s *Store) Claim(ctx context.Context, guild, channel, user, roll string) er
 		_, _ = tx.ExecContext(ctx, `UPDATE gacha_rolls SET trap_revealed=true WHERE id=$1`, roll)
 	}
 
-	// Snipe Shield protection check
-	hasGuardianShield := s.HasPlayerSkill(ctx, guild, rollerID, "guardian_t1_draw")
-	if (isWishSpawn || hasGuardianShield) && rollerID != user {
+	// Snipe Shield protection check (wishes only)
+	if isWishSpawn && rollerID != user {
 		var snipeUntil sql.NullTime
 		_ = tx.QueryRowContext(ctx, `SELECT snipe_shield_until FROM gacha_players WHERE guild_id=$1 AND user_id=$2`, guild, rollerID).Scan(&snipeUntil)
+
+		hasGuardianT2 := s.HasPlayerSkill(ctx, guild, rollerID, "guardian_t2_draw")
+		hasOracleT4 := s.HasPlayerSkill(ctx, guild, rollerID, "oracle_t4_decree")
+		hasShopShield := snipeUntil.Valid && snipeUntil.Time.After(time.Now())
+
+		var protectUntil time.Time
 		isProtected := false
-		protectSeconds := 0
-		if isWishSpawn {
-			protectSeconds = 15
-			if s.HasPlayerSkill(ctx, guild, rollerID, "oracle_t4_decree") {
-				protectSeconds = 20
-			}
-			isProtected = true
-		}
-		if snipeUntil.Valid && snipeUntil.Time.After(time.Now()) {
-			isProtected = true
-			if itemSeconds := int(math.Ceil(time.Until(snipeUntil.Time).Seconds())); itemSeconds > protectSeconds {
-				protectSeconds = itemSeconds
+
+		if hasOracleT4 {
+			t := rollCreatedAt.Add(20 * time.Second)
+			if t.After(protectUntil) {
+				protectUntil = t
+				isProtected = true
 			}
 		}
-		if hasGuardianShield {
-			isProtected = true
-			if protectSeconds < 5 {
-				protectSeconds = 5
+		if hasShopShield {
+			t := rollCreatedAt.Add(15 * time.Second)
+			if t.After(protectUntil) {
+				protectUntil = t
+				isProtected = true
 			}
 		}
-		if isProtected {
-			protectUntil := rollCreatedAt.Add(time.Duration(protectSeconds) * time.Second)
-			if time.Now().Before(protectUntil) {
-				if s.HasPlayerSkill(ctx, guild, rollerID, "guardian_t4_aegis") {
-					fine := 15
-					var sniperBal int
-					_ = tx.QueryRowContext(ctx, `SELECT balance FROM guild_members WHERE guild_id=$1 AND user_id=$2`, guild, user).Scan(&sniperBal)
-					if sniperBal > 0 {
-						actualFine := fine
-						if sniperBal < actualFine {
-							actualFine = sniperBal
-						}
-						_, _ = tx.ExecContext(ctx, `UPDATE guild_members SET balance = balance - $3, updated_at = now() WHERE guild_id=$1 AND user_id=$2`, guild, user, actualFine)
-						_, _ = tx.ExecContext(ctx, `UPDATE guild_members SET balance = balance + $3, updated_at = now() WHERE guild_id=$1 AND user_id=$2`, guild, rollerID, actualFine)
+		if hasGuardianT2 {
+			t := rollCreatedAt.Add(500 * time.Millisecond)
+			if t.After(protectUntil) {
+				protectUntil = t
+				isProtected = true
+			}
+		}
+
+		if isProtected && time.Now().Before(protectUntil) {
+			// Guardian T4 fine: only triggers if someone attempts to snipe during the 0.5s shield window
+			guardianShieldUntil := rollCreatedAt.Add(500 * time.Millisecond)
+			if hasGuardianT2 && time.Now().Before(guardianShieldUntil) && s.HasPlayerSkill(ctx, guild, rollerID, "guardian_t4_aegis") {
+				fine := 100
+				var sniperBal int
+				_ = tx.QueryRowContext(ctx, `SELECT balance FROM guild_members WHERE guild_id=$1 AND user_id=$2`, guild, user).Scan(&sniperBal)
+				if sniperBal > 0 {
+					actualFine := fine
+					if sniperBal < actualFine {
+						actualFine = sniperBal
 					}
+					_, _ = tx.ExecContext(ctx, `UPDATE guild_members SET balance = balance - $3, updated_at = now() WHERE guild_id=$1 AND user_id=$2`, guild, user, actualFine)
+					_, _ = tx.ExecContext(ctx, `UPDATE guild_members SET balance = balance + $3, updated_at = now() WHERE guild_id=$1 AND user_id=$2`, guild, rollerID, actualFine)
 				}
-				remaining := math.Ceil(time.Until(protectUntil).Seconds())
-				if remaining < 1 {
-					remaining = 1
-				}
-				return userError(locale.Text("gacha.claim.snipe_shield_active", locale.Data{
-					"Roller":  rollerID,
-					"Seconds": int(remaining),
-				}))
 			}
+
+			remaining := math.Ceil(time.Until(protectUntil).Seconds())
+			if remaining < 1 {
+				remaining = 1
+			}
+			return userError(locale.Text("gacha.claim.snipe_shield_active", locale.Data{
+				"Roller":  rollerID,
+				"Seconds": int(remaining),
+			}))
 		}
 	}
 
