@@ -113,6 +113,9 @@ func (s *Store) rollPoolSnapshot(ctx context.Context, guild, channel, user, requ
 		var usedReplay, extraPermRolls, storedExtraRolls int
 		_ = tx.QueryRowContext(ctx, `SELECT rolls_used, extra_permanent_rolls, stored_extra_rolls FROM gacha_players WHERE guild_id=$1 AND user_id=$2`, guild, user).Scan(&usedReplay, &extraPermRolls, &storedExtraRolls)
 		effMax := schedule.RollsPerHour + extraPermRolls
+		if s.HasPlayerSkill(ctx, guild, user, "guardian_t1_endurance") || s.HasPlayerSkill(ctx, guild, user, "guardian_t2_endurance") {
+			effMax++
+		}
 		r.RollsLeft = max(0, effMax-usedReplay) + storedExtraRolls
 		return r, e
 	}
@@ -139,6 +142,15 @@ func (s *Store) rollPoolSnapshot(ctx context.Context, guild, channel, user, requ
 	if s.HasPlayerSkill(ctx, guild, user, "guardian_t1_endurance") || s.HasPlayerSkill(ctx, guild, user, "guardian_t2_endurance") {
 		effectiveMaxRolls++
 	}
+
+	// Self-heal: ensure rollsUsed in DB never exceeds actual rolls recorded in gacha_rolls for the current window
+	var actualRollsInWin int
+	_ = tx.QueryRowContext(ctx, `SELECT count(*) FROM gacha_rolls WHERE guild_id=$1 AND user_id=$2 AND created_at >= $3`, guild, user, rollWin.CurrentStart).Scan(&actualRollsInWin)
+	if rollsUsed > actualRollsInWin {
+		rollsUsed = actualRollsInWin
+		_, _ = tx.ExecContext(ctx, `UPDATE gacha_players SET rolls_used=$3 WHERE guild_id=$1 AND user_id=$2`, guild, user, rollsUsed)
+	}
+
 	if rollsUsed < effectiveMaxRolls {
 		rollsUsed++
 		_, e = tx.ExecContext(ctx, `UPDATE gacha_players SET rolls_used=$3 WHERE guild_id=$1 AND user_id=$2`, guild, user, rollsUsed)
@@ -769,6 +781,69 @@ func (s *Store) PlayerWishlistLimit(ctx context.Context, guild, user string) int
 		extra += 2
 	}
 	return base + extra
+}
+
+// PlayerMaxRollsPerHour returns the effective rolls per hour for a player,
+// taking into account the guild's base rate, permanent extra rolls from shop/lootboxes,
+// and class build bonuses (Guardian Tier 1).
+func (s *Store) PlayerMaxRollsPerHour(ctx context.Context, guild, user string) int {
+	schedule := s.GuildSchedule(ctx, guild)
+	maxRolls := schedule.RollsPerHour
+	if s == nil || s.DB == nil || guild == "" || user == "" {
+		return maxRolls
+	}
+	var extraPerm int
+	_ = s.DB.QueryRowContext(ctx, `SELECT extra_permanent_rolls FROM gacha_players WHERE guild_id=$1 AND user_id=$2`, guild, user).Scan(&extraPerm)
+	maxRolls += extraPerm
+	if s.HasPlayerSkill(ctx, guild, user, "guardian_t1_endurance") || s.HasPlayerSkill(ctx, guild, user, "guardian_t2_endurance") {
+		maxRolls++
+	}
+	return maxRolls
+}
+
+// PlayerRollStatus computes the player's current rolls left, effective max rolls, stored extra rolls,
+// and the next window reset timestamp.
+func (s *Store) PlayerRollStatus(ctx context.Context, guild, user string, now time.Time) (rollsLeft, maxRolls, storedRolls int, nextReset time.Time, err error) {
+	schedule := s.GuildSchedule(ctx, guild)
+	rWin := schedule.RollWindow(now)
+	nextReset = rWin.NextReset
+	maxRolls = schedule.RollsPerHour
+	if s == nil || s.DB == nil || guild == "" || user == "" {
+		return maxRolls, maxRolls, 0, nextReset, nil
+	}
+
+	var rollsUsed, extraPerm, stored int
+	var windowStart time.Time
+	err = s.DB.QueryRowContext(ctx, `
+		SELECT rolls_used, window_start, extra_permanent_rolls, stored_extra_rolls
+		FROM gacha_players
+		WHERE guild_id=$1 AND user_id=$2
+	`, guild, user).Scan(&rollsUsed, &windowStart, &extraPerm, &stored)
+
+	if err != nil && err != sql.ErrNoRows {
+		return 0, maxRolls, 0, nextReset, err
+	}
+
+	maxRolls += extraPerm
+	if s.HasPlayerSkill(ctx, guild, user, "guardian_t1_endurance") || s.HasPlayerSkill(ctx, guild, user, "guardian_t2_endurance") {
+		maxRolls++
+	}
+
+	if err == sql.ErrNoRows || windowStart.Before(rWin.CurrentStart) {
+		rollsLeft = maxRolls + stored
+		return rollsLeft, maxRolls, stored, nextReset, nil
+	}
+
+	// Reconcile if rolls_used in DB exceeds actual rolls recorded in gacha_rolls for this window
+	var actualRollsInWin int
+	_ = s.DB.QueryRowContext(ctx, `SELECT count(*) FROM gacha_rolls WHERE guild_id=$1 AND user_id=$2 AND created_at >= $3`, guild, user, rWin.CurrentStart).Scan(&actualRollsInWin)
+	if rollsUsed > actualRollsInWin {
+		rollsUsed = actualRollsInWin
+	}
+
+	rollsLeft = max(0, maxRolls-rollsUsed) + stored
+	storedRolls = stored
+	return rollsLeft, maxRolls, storedRolls, nextReset, nil
 }
 
 func (s *Store) Wish(ctx context.Context, guild, user string, id int64, remove bool) error {

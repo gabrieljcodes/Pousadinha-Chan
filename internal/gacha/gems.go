@@ -346,10 +346,12 @@ func (s *Store) ClaimGemAtomic(ctx context.Context, guildID, channelID, rollID, 
 		return nil, err
 	}
 
-	// 4. Update player's gem power and current window
+	// 4. Update player's gem power and current window (resetting rolls_used if entering a new window)
 	_, err = tx.ExecContext(ctx, `
 		UPDATE gacha_players
-		SET window_start = $3, gem_power = $4
+		SET window_start = $3, 
+		    gem_power = $4,
+		    rolls_used = CASE WHEN window_start < $3 THEN 0 ELSE rolls_used END
 		WHERE guild_id = $1 AND user_id = $2
 	`, guildID, userID, rWin.CurrentStart, newPower)
 	if err != nil {

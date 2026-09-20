@@ -235,5 +235,59 @@ func testScheduleIntegration(t *testing.T, s *Store) {
 	if rollsUsed != 1 {
 		t.Fatalf("rolls_used in new window should be 1, got %d", rollsUsed)
 	}
+
+	// 6. Test Gem Claim in new window should NOT block rolling (bug fix verification)
+	// Simulate: player used all rolls, then next window arrives. Player claims a gem (or window_start is advanced).
+	// Set rolls_used=10, window_start=rWin.CurrentStart (as happened in the bug)
+	_, err = s.DB.ExecContext(ctx, `UPDATE gacha_players SET rolls_used=10, window_start=$1 WHERE guild_id='guild-roll-win' AND user_id='bob'`, rWin.CurrentStart)
+	if err != nil {
+		t.Fatalf("failed setting up bug scenario: %v", err)
+	}
+
+	// Check PlayerRollStatus: since actual rolls in current window is only 1 (from req-new-win),
+	// PlayerRollStatus must reconcile rolls_used to 1, leaving sch.RollsPerHour-1 rolls left!
+	rLeft, maxR, _, _, err := s.PlayerRollStatus(ctx, "guild-roll-win", "bob", time.Now())
+	if err != nil {
+		t.Fatalf("PlayerRollStatus failed: %v", err)
+	}
+	if maxR != sch.RollsPerHour {
+		t.Fatalf("expected maxRolls=%d, got %d", sch.RollsPerHour, maxR)
+	}
+	if rLeft != sch.RollsPerHour-1 {
+		t.Fatalf("expected rollsLeft=%d after reconciliation, got %d", sch.RollsPerHour-1, rLeft)
+	}
+
+	// Roll must succeed and NOT return ErrLimit!
+	_, err = s.Roll(ctx, "guild-roll-win", "channel", "bob", "req-healed-roll")
+	if err != nil {
+		t.Fatalf("roll after gem claim in new window must succeed, got: %v", err)
+	}
+
+	// 7. Test PlayerMaxRollsPerHour and PlayerRollStatus with lootbox extra_permanent_rolls and stored rolls
+	_, err = s.DB.ExecContext(ctx, `UPDATE gacha_players SET extra_permanent_rolls=2, stored_extra_rolls=3 WHERE guild_id='guild-roll-win' AND user_id='bob'`)
+	if err != nil {
+		t.Fatalf("failed setting extra_permanent_rolls: %v", err)
+	}
+
+	maxRollsPerHour := s.PlayerMaxRollsPerHour(ctx, "guild-roll-win", "bob")
+	if maxRollsPerHour != sch.RollsPerHour+2 {
+		t.Fatalf("expected PlayerMaxRollsPerHour=%d, got %d", sch.RollsPerHour+2, maxRollsPerHour)
+	}
+
+	rLeft2, maxR2, stored2, _, err := s.PlayerRollStatus(ctx, "guild-roll-win", "bob", time.Now())
+	if err != nil {
+		t.Fatalf("PlayerRollStatus failed: %v", err)
+	}
+	if maxR2 != sch.RollsPerHour+2 {
+		t.Fatalf("expected maxRolls=%d, got %d", sch.RollsPerHour+2, maxR2)
+	}
+	if stored2 != 3 {
+		t.Fatalf("expected storedRolls=3, got %d", stored2)
+	}
+	// actual rolls in window so far: 2 (req-new-win, req-healed-roll)
+	expectedLeft := (maxR2 - 2) + 3
+	if rLeft2 != expectedLeft {
+		t.Fatalf("expected rollsLeft=%d, got %d", expectedLeft, rLeft2)
+	}
 }
 

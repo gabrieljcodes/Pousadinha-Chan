@@ -565,25 +565,12 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 		now := time.Now()
 		rollWin := schedule.RollWindow(now)
 
-		var used int
-		var windowStart, claimReset time.Time
-		var claimActive bool
-		var gemPower int
-		e := s.DB.QueryRowContext(ctx, `SELECT rolls_used, window_start, CASE WHEN claim_after > now() THEN claim_after ELSE now() END, claim_after > now(), COALESCE(gem_power, 100) FROM gacha_players WHERE guild_id=$1 AND user_id=$2`, guild, user).Scan(&used, &windowStart, &claimReset, &claimActive, &gemPower)
+		rollsLeft, maxRolls, _, nextReset, _ := s.PlayerRollStatus(ctx, guild, user, now)
+		effectiveGemPower, _ := s.GetEffectiveGemPower(ctx, guild, user, now)
 
-		rollsLeft := schedule.RollsPerHour
-		effectiveGemPower := MaxGemPower
-		if e == nil {
-			if windowStart.Before(rollWin.CurrentStart) {
-				rollsLeft = schedule.RollsPerHour
-				effectiveGemPower = MaxGemPower
-			} else {
-				rollsLeft = max(0, schedule.RollsPerHour-used)
-				effectiveGemPower = max(0, min(MaxGemPower, gemPower))
-			}
-		} else if e != sql.ErrNoRows {
-			return nil, e
-		}
+		var claimReset time.Time
+		var claimActive bool
+		e := s.DB.QueryRowContext(ctx, `SELECT CASE WHEN claim_after > now() THEN claim_after ELSE now() END, claim_after > now() FROM gacha_players WHERE guild_id=$1 AND user_id=$2`, guild, user).Scan(&claimReset, &claimActive)
 
 		canClaim := true
 		resetsLeft := 0
@@ -613,7 +600,7 @@ func (s *Store) Execute(ctx context.Context, guild, channel, user, request, acti
 		_ = s.DB.QueryRowContext(ctx, `SELECT gacha_claimed_count($1)`, guild).Scan(&claimedTotal)
 
 		var desc strings.Builder
-		desc.WriteString(locale.Text("gacha.discord.rolls_resets_t_r.formatted", locale.Data{"RollsLeft": rollsLeft, "RollsPerHour": schedule.RollsPerHour, "Reset": rollWin.NextReset.Unix()}))
+		desc.WriteString(locale.Text("gacha.discord.rolls_resets_t_r.formatted", locale.Data{"RollsLeft": rollsLeft, "RollsPerHour": maxRolls, "Reset": nextReset.Unix()}))
 		desc.WriteString(locale.Text("gacha.discord.marry_claim.formatted", locale.Data{"ClaimStatus": claimStatus}))
 		if effectiveGemPower >= MaxGemPower {
 			desc.WriteString(locale.Text("gacha.discord.gem_power_full.formatted", locale.Data{"Power": effectiveGemPower, "Max": MaxGemPower}))

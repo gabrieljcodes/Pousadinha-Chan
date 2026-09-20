@@ -458,16 +458,18 @@ func handlePrefixStatus(ctx context.Context, s *discordgo.Session, m *discordgo.
 	now := time.Now()
 	rWin := sch.RollWindow(now)
 
-	var count int
-	_ = Default.DB.QueryRowContext(ctx, `SELECT count(*) FROM gacha_rolls WHERE guild_id=$1 AND user_id=$2 AND created_at >= $3`, m.GuildID, m.Author.ID, rWin.CurrentStart).Scan(&count)
-	remaining := max(0, sch.RollsPerHour-count)
+	rollsLeft, maxRolls, storedRolls, nextReset, _ := Default.PlayerRollStatus(ctx, m.GuildID, m.Author.ID, now)
 	gemPower, _ := Default.GetEffectiveGemPower(ctx, m.GuildID, m.Author.ID, now)
 
 	var claimAfter time.Time
 	_ = Default.DB.QueryRowContext(ctx, `SELECT claim_after FROM gacha_players WHERE guild_id=$1 AND user_id=$2`, m.GuildID, m.Author.ID).Scan(&claimAfter)
 
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("🎲 **Rolls:** **%d** / %d left • Next reset <t:%d:R>\n", remaining, sch.RollsPerHour, rWin.NextReset.Unix()))
+	if storedRolls > 0 {
+		b.WriteString(fmt.Sprintf("🎲 **Rolls:** **%d** / %d left (+%d stored) • Next reset <t:%d:R>\n", rollsLeft, maxRolls, storedRolls, nextReset.Unix()))
+	} else {
+		b.WriteString(fmt.Sprintf("🎲 **Rolls:** **%d** / %d left • Next reset <t:%d:R>\n", rollsLeft, maxRolls, nextReset.Unix()))
+	}
 
 	if claimAfter.IsZero() || !claimAfter.After(now) {
 		b.WriteString("💍 **Claim:** ✅ Available now!\n")
